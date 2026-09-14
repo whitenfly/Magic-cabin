@@ -38,6 +38,7 @@ import { createPointLightSource } from '../core/lighting/PointLightSource.js'
 import { createInteractionSystem, makeTarget } from '../systems/interaction/InteractionSystem.js'
 import { createHintUI } from '../systems/interaction/HintUI.js'
 import { createCameraRig } from '../core/render/CameraRig.js'
+import { createEnvironment } from '../systems/weather/environment.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -7454,7 +7455,10 @@ export function installCabin(app) {
             const wxChipsBox = document.getElementById('wxChips'), wxRandToggle = document.getElementById('wxRandToggle'), timeSlider = document.getElementById('timeSlider'), speedSlider = document.getElementById('speedSlider'), clockEl = document.getElementById('clock');
             const chipEls = [];
             for (const t of WX_LIST) { const b = document.createElement('div'); b.className = 'wxChip'; b.textContent = WX_NAME[t]; b.addEventListener('click', () => { SND.play('ui'); setWeather(t); }); wxChipsBox.appendChild(b); chipEls.push(b); }
-            function setWeather(t) { wx.type = t; chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
+            // J2.10：环境量（天气 / 时间 / 采光）有了唯一持有者，并通过 bus 广播 env:change。
+            // 需要响应环境的东西改为**订阅事件**，而不是去读 wx.type / uDaylight（不变量 N1）。
+            const environment = createEnvironment({ bus, fillMaterial: FILL });
+            function setWeather(t) { wx.type = t; environment.setWeather(t); chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
             setWeather('sunny');
             wxRandToggle.addEventListener('click', () => { SND.play('ui'); wx.random = !wx.random; wxRandToggle.classList.toggle('on', wx.random); wx.timer = 6 + runtimeRng() * 10; });
             function sliderToScale(v) { if (v <= 0) return 0; if (v <= 0.5) return v * 120; return 60 + (v - 0.5) * 2 * (3600 - 60); }
@@ -7788,7 +7792,7 @@ export function installCabin(app) {
                 _amb.multiplyScalar(brightness);
 
                 FILL.uniforms.uColor.value.copy(_amb);
-                FILL.uniforms.uDaylight.value = dayFactor;
+                environment.applyDaylight(dayFactor);   // J2.10：采光走环境的唯一入口（内部写 uDaylight）
 
                 WIN_GLASS.color.setHex(0xffffff);
                 if (twilight > 0.03) WIN_GLASS.color.lerp(_warm, twilight * 0.3);
@@ -7942,6 +7946,9 @@ export function installCabin(app) {
             function tickOnce() {
                 const time = clock.now; const dt = clock.dt;
                 updateSprings(); updatePlayer(dt, time); updateWeatherSystem(dt, time); updateInteractHint();
+                // J2.10：把这一帧累积的环境变化合并成**至多一次**广播 env:change（节流在 environment 内部：
+                // 天气换了或采光变化 > 1% 才 emit —— 太阳每帧都在走，逐帧广播毫无意义）。
+                environment.setGameHour(curHour()); environment.flush();
                 updateWand(dt, time);
                 updateBlast(dt, time);
 
