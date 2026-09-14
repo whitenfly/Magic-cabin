@@ -142,7 +142,11 @@ function gitBatch(cmds) {
  * @param {{allowFail?: boolean, timeout?: number}} [opt]
  */
 function git(args, { allowFail = true, timeout = 0 } = {}) {
-  const cmdline = `git ${args.join(' ')}`;
+  // ★ 降级路径下参数必须逐个 quote：提交信息等含空格的参数一旦被裸拼进命令行，
+  //   `git merge --no-ff <branch> -m merge J2.4：合入 dev` 会被解析成
+  //   "merge: J2.4：合入 - not something we can merge"（实测 task:done 卡在这里）。
+  //   与下面的 run() 保持一致。
+  const cmdline = ['git', ...args].map((a) => (a.includes(' ') ? quote(a) : a)).join(' ');
   let out = '';
   let status = 0;
 
