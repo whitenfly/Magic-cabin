@@ -29,6 +29,9 @@ import {
   zigPts,
   createShapes2d,
 } from '../core/geometry/shapes2d.js'
+import { createLineMaterials } from '../core/materials/lineMaterials.js'
+import { createFillMaterial } from '../core/materials/FillMaterial.js'
+import { createLitMaterialFactory } from '../core/materials/litMaterial.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -86,156 +89,14 @@ const runtimeRng = runtime;
             renderer.setSize(innerWidth, innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            const MAT = new THREE.LineBasicMaterial({ color: 0x111111 });
-            const DASHMAT = new THREE.LineDashedMaterial({ color: 0xa9a9a9, dashSize: 0.22, gapSize: 0.16, transparent: true, opacity: 0.85 });
-            const IN_MAT = new THREE.LineBasicMaterial({ color: 0x8a8a8a });
+            // J2.2：三种线材质已提取到 cabin/core/materials/lineMaterials.js（实现零改动）
+            const { MAT, DASHMAT, IN_MAT } = createLineMaterials();
 
-            /* ============ 全局 FILL 材质：内置一楼炉火 + 二楼魔法吊灯光照 ============ */
-            const FILL = new THREE.ShaderMaterial({
-                uniforms: {
-                    uColor: { value: new THREE.Color(0xffffff) },
-                    uTint: { value: new THREE.Color(0xffffff) },
-                    uFireCenter: { value: new THREE.Vector3(0, 0, 0) },
-                    uFireRadius: { value: 11.0 },
-                    uFireColorNear: { value: new THREE.Color(1.0, 0.62, 0.26) },
-                    uFireColorFar: { value: new THREE.Color(0.78, 0.26, 0.09) },
-                    uFireStrength: { value: 0.0 },
-                    uLampCenter: { value: new THREE.Vector3(0, 5.45, 0) },
-                    uLampRadius: { value: 12.0 },
-                    uLampColorNear: { value: new THREE.Color(1.0, 0.80, 0.58) },
-                    uLampColorFar: { value: new THREE.Color(0.72, 0.50, 0.85) },
-                    uLampStrength: { value: 0.0 },
-                    uDaylight: { value: 0.0 },
-                    uTime: { value: 0 },
-                    uPtPos: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
-                    uPtCol: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()] },
-                    uPtCfg: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
-                    uPtCount: { value: 8 }
-                },
-                vertexShader: `
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-            void main() {
-                vec4 worldPos = modelMatrix * vec4(position, 1.0);
-                vWorldPos = worldPos.xyz;
-                vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-                gl_Position = projectionMatrix * viewMatrix * worldPos;
-            }
-        `,
-                fragmentShader: `
-            uniform vec3 uColor;
-            uniform vec3 uTint;
-            uniform vec3 uFireCenter;
-            uniform float uFireRadius;
-            uniform vec3 uFireColorNear;
-            uniform vec3 uFireColorFar;
-            uniform float uFireStrength;
-            uniform vec3 uLampCenter;
-            uniform float uLampRadius;
-            uniform vec3 uLampColorNear;
-            uniform vec3 uLampColorFar;
-            uniform float uLampStrength;
-            uniform float uDaylight;
-            uniform float uTime;
-            uniform vec3 uPtPos[8];
-            uniform vec3 uPtCol[8];
-            uniform vec4 uPtCfg[8];
-            uniform int uPtCount;
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-
-            void main() {
-                vec3 finalColor = uColor * uTint;
-
-                float limX = min(4.0, 13.2 - 2.0 * vWorldPos.y);
-                float inX = 1.0 - smoothstep(limX, limX + 0.12, abs(vWorldPos.x));
-                float inZ = smoothstep(-4.12, -4.0, vWorldPos.z) * (1.0 - smoothstep(4.0, 4.12, vWorldPos.z));
-
-                /* ---- 一楼炉火 ---- */
-                float inYF = 1.0 - smoothstep(2.98, 3.10, vWorldPos.y);
-                float roomMaskF = inX * inZ * inYF * step(-0.05, vWorldPos.y);
-                if (roomMaskF > 0.002 && uFireStrength > 0.002) {
-                    vec3 toFire = uFireCenter - vWorldPos;
-                    float dist = length(toFire);
-                    vec3 dirToFire = toFire / max(dist, 0.0001);
-                    float ndl = dot(normalize(vWorldNormal), dirToFire);
-                    float facing = smoothstep(-0.08, 0.45, ndl);
-                    float t = clamp(1.0 - dist / uFireRadius, 0.0, 1.0);
-                    float atten = t * t * 0.78 + t * 0.22;
-                    vec3 fireCol = mix(uFireColorFar, uFireColorNear, t);
-                    float flicker = 0.87
-                        + 0.08 * sin(uTime * 6.7 + dist * 1.3)
-                        + 0.03 * sin(uTime * 11.3 + 2.1)
-                        + 0.02 * sin(uTime * 19.7 + 5.0);
-                    float dayFade = 1.0 - uDaylight * 0.75;
-                    float direct = atten * facing * 0.55;
-                    float bounce = atten * 0.18 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndl));
-                    finalColor += fireCol * uFireStrength * flicker * dayFade * (direct + bounce) * roomMaskF;
-                }
-
-                /* ---- 二楼魔法吊灯 ---- */
-                float inYL = smoothstep(3.0, 3.12, vWorldPos.y) * (1.0 - smoothstep(6.65, 6.95, vWorldPos.y));
-                float roomMaskL = inX * inZ * inYL;
-                if (roomMaskL > 0.002 && uLampStrength > 0.002) {
-                    vec3 toLamp = uLampCenter - vWorldPos;
-                    float distL = length(toLamp);
-                    vec3 dirToLamp = toLamp / max(distL, 0.0001);
-                    float ndlL = dot(normalize(vWorldNormal), dirToLamp);
-                    float facingL = smoothstep(-0.08, 0.45, ndlL);
-                    float tL = clamp(1.0 - distL / uLampRadius, 0.0, 1.0);
-                    float attenL = tL * tL * 0.78 + tL * 0.22;
-                    vec3 lampCol = mix(uLampColorFar, uLampColorNear, tL);
-                    float flickerL = 0.93 + 0.045 * sin(uTime * 2.1 + distL * 0.8) + 0.025 * sin(uTime * 4.7 + 1.3);
-                    float dayFadeL = 1.0 - uDaylight * 0.75;
-                    float directL = attenL * facingL * 0.6;
-                    float bounceL = attenL * 0.2 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndlL));
-                    finalColor += lampCol * uLampStrength * flickerL * dayFadeL * (directL + bounceL) * roomMaskL;
-                }
-
-                /* ---- 室内点光源（吊挂木灯·坩埚魔火·魔法阵·暖桌·水晶球·蜡烛·星象仪·月光盆栽） ---- */
-                for (int i = 0; i < 8; i++) {
-                    if (i >= uPtCount) break;
-                    float ptS = uPtCfg[i].y;
-                    if (ptS < 0.003) continue;
-                    float yMaskPt = smoothstep(uPtCfg[i].z, uPtCfg[i].z + 0.12, vWorldPos.y)
-                        * (1.0 - smoothstep(uPtCfg[i].w - 0.12, uPtCfg[i].w, vWorldPos.y));
-                    float roomPt = inX * inZ * yMaskPt;
-                    if (roomPt < 0.003) continue;
-                    vec3 toPt = uPtPos[i] - vWorldPos;
-                    float dPt = length(toPt);
-                    float tPt = clamp(1.0 - dPt / uPtCfg[i].x, 0.0, 1.0);
-                    float aPt = tPt * tPt * 0.78 + tPt * 0.22;
-                    vec3 cPt = uPtCol[i] * (0.60 + 0.40 * tPt);
-                    vec3 dirPt = toPt / max(dPt, 0.0001);
-                    float ndlPt = dot(normalize(vWorldNormal), dirPt);
-                    float facingPt = smoothstep(-0.08, 0.45, ndlPt);
-                    float flickPt = 0.90 + 0.06 * sin(uTime * (5.3 + float(i) * 1.7) + dPt * 1.1 + float(i) * 2.4)
-                        + 0.04 * sin(uTime * (9.1 + float(i) * 0.9) + float(i));
-                    float fadePt = 1.0 - uDaylight * 0.75;
-                    float dirLPt = aPt * facingPt * 0.50;
-                    float bncPt = aPt * 0.16 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndlPt));
-                    finalColor += cPt * ptS * flickPt * fadePt * (dirLPt + bncPt) * roomPt;
-                }
-
-                gl_FragColor = vec4(finalColor, 1.0);
-            }
-        `,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1
-            });
-
-            /* ============ 彩色物品材质工厂：与 FILL 共享环境/光照 uniform（uTint 独立） ============ */
-            function LITMAT(hex, opts) {
-                const u = { uTint: { value: new THREE.Color(hex) } };
-                for (const k in FILL.uniforms) if (k !== 'uTint') u[k] = FILL.uniforms[k];
-                const m = new THREE.ShaderMaterial({
-                    uniforms: u, vertexShader: FILL.vertexShader, fragmentShader: FILL.fragmentShader
-                });
-                if (opts) for (const k in opts) m[k] = opts[k];
-                return m;
-            }
+            // J2.2：全局 FILL 材质与彩色材质工厂已提取到 cabin/core/materials/。
+            // shader 与 uniforms 由 scripts/oneoff/_j22-extract.mjs **逐字节提取**（非手抄）。
+            // 全屋的彩色材质都与这里的 FILL **共享 uniform 引用**，只换 uTint。
+            const FILL = createFillMaterial();
+            const LITMAT = createLitMaterialFactory(FILL);
 
             const WIN_GLASS = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
             const WIN_GLASS_UP = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
