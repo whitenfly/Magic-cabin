@@ -35,6 +35,8 @@ import { createLitMaterialFactory } from '../core/materials/litMaterial.js'
 import { createLayout } from '../world/layout.js'
 import { createLightField } from '../core/lighting/LightField.js'
 import { createPointLightSource } from '../core/lighting/PointLightSource.js'
+import { createInteractionSystem, makeTarget } from '../systems/interaction/InteractionSystem.js'
+import { createHintUI } from '../systems/interaction/HintUI.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -6005,13 +6007,15 @@ export function installCabin(app) {
             let wandAppear = 0;
             let camShake = 0;
             let castDark = 0;
-            let hintOverrideUntil = 0, hintOverrideText = '';
+            // J2.6：临时提示的两个变量（hintOverrideUntil / hintOverrideText）搬进 HintUI ——
+            // 调用方不再需要知道"比较 clock.wallNow()"这个细节。
             const _v1 = new THREE.Vector3(), _whiteC = new THREE.Color(0xffffff);
             const wandCrystalBase = new THREE.Color(0x8fd8ff);
             const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
             const easeInCubic = x => x * x * x;
             const STAR_PALETTE = [[1, 0.42, 0.42], [1, 0.75, 0.35], [1, 0.95, 0.5], [0.55, 1, 0.5], [0.4, 0.9, 1], [0.65, 0.55, 1], [0.95, 0.6, 1], [0.9, 0.95, 1]];
-            function showHintOverride(html) { hintOverrideText = html; hintOverrideUntil = clock.wallNow() + 2.4; }
+            // J2.6：临时消息走 HintUI 的 showOverride（唯一文案出口；2.4 秒后自动让位给交互提示）
+            function showHintOverride(html) { hintUI.showOverride(html); }
             function screenFlash() {
                 // 双脉冲：白闪 → 短暂回落 → 再闪一次 → 消退
                 const el = document.getElementById('flashOverlay');
@@ -7279,26 +7283,35 @@ export function installCabin(app) {
             function toggleFire() { fireLit = !fireLit; SND.play('fire'); }
             function toggleLamp() { lampLit = !lampLit; SND.play('lamp'); }
             const fireMagic = o => { SND.play(o.userData.sfx || 'toggle'); o.userData.onClick(); };
-            const interactables = [
-                { x: FX, z: FZ, r: 2.0, label: '点燃 / 熄灭壁炉', act: toggleFire },
-                { x: 0, z: 0, r: 2.4, label: '点亮 / 熄灭魔法吊灯', act: toggleLamp },
-                { x: 0, z: 4, r: 1.8, label: '打开 / 关上大门', act: () => toggleSpring(doorGroup) },
-                { x: WIN_F_L.c, z: 4, r: 1.6, label: '开 / 关前左窗', act: () => toggleSpring(winFL) },
-                { x: WIN_F_R.c, z: 4, r: 1.6, label: '开 / 关前右窗', act: () => toggleSpring(winFR) },
-                { x: -4, z: WIN_LEFT.c, r: 1.6, label: '开 / 关左侧窗', act: () => toggleSpring(winL) },
-                { x: 3.1, z: 6.3, r: 2.2, label: '编辑路牌文字', act: openSignEditor },
-                { x: 4, z: -1.5, r: 1.7, label: '开 / 关右侧窗', fh: true, act: () => toggleSpring(winR) },
-                { x: 1.5, z: -4, r: 1.7, label: '开 / 关后窗', fh: true, act: () => toggleSpring(winB) }
-            ];
+            // J2.6：9 条近距条目改为**注册式**（统一交互契约）。顺序、半径、锚点逐条照搬 ⇒ 行为零差异；
+            // anchor 全部来自 cabin/world/layout.js（不变量 N9），label 是面向用户的语义化文案（不变量 N10）。
+            const interaction = createInteractionSystem({ registry, warn: (m) => console.warn(m) });
+            interaction.registerProximity({ id: 'floor1/fireplace', label: '点燃 / 熄灭壁炉', mode: 'proximity', anchor: { x: FX, z: FZ }, radius: 2.0, onActivate: toggleFire });
+            interaction.registerProximity({ id: 'floor1/chandelier', label: '点亮 / 熄灭魔法吊灯', mode: 'proximity', anchor: { x: 0, z: 0 }, radius: 2.4, onActivate: toggleLamp });
+            interaction.registerProximity({ id: 'house/door', label: '打开 / 关上大门', mode: 'proximity', anchor: { x: 0, z: 4 }, radius: 1.8, onActivate: () => toggleSpring(doorGroup) });
+            interaction.registerProximity({ id: 'house/window-front-left', label: '开 / 关前左窗', mode: 'proximity', anchor: { x: WIN_F_L.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFL) });
+            interaction.registerProximity({ id: 'house/window-front-right', label: '开 / 关前右窗', mode: 'proximity', anchor: { x: WIN_F_R.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFR) });
+            interaction.registerProximity({ id: 'house/window-left', label: '开 / 关左侧窗', mode: 'proximity', anchor: { x: -4, z: WIN_LEFT.c }, radius: 1.6, onActivate: () => toggleSpring(winL) });
+            interaction.registerProximity({ id: 'outdoor/signpost', label: '编辑路牌文字', mode: 'proximity', anchor: { x: 3.1, z: 6.3 }, radius: 2.2, onActivate: openSignEditor });
+            interaction.registerProximity({ id: 'house/window-right', label: '开 / 关右侧窗', mode: 'proximity', anchor: { x: 4, z: -1.5 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winR) });
+            interaction.registerProximity({ id: 'house/window-back', label: '开 / 关后窗', mode: 'proximity', anchor: { x: 1.5, z: -4 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winB) });
             const hintEl = document.getElementById('hint'), crosshairEl = document.getElementById('crosshair'), lockTipEl = document.getElementById('lockTip');
+            // J2.6：提示文案的唯一出口（原先 #hint 的 innerHTML 被直接写了 4 处，违反不变量 N10）
+            const hintUI = createHintUI({ element: hintEl, clock, isTouch: IS_TOUCH });
             let nearestInteract = null, aimHit = null; const raycaster = new THREE.Raycaster(); const CENTER = new THREE.Vector2(0, 0); const mouse = new THREE.Vector2();
             function ancestorVisible(o) { let p = o; while (p) { if (p.visible === false) return false; p = p.parent; } return true; }
-            function aimRay() { raycaster.setFromCamera(CENTER, camera); const h = raycaster.intersectObjects(hingeMeshes, false).filter(x => ancestorVisible(x.object)); if (h.length) { const g = h[0].object.userData.hingeGroup; return { label: g.userData.aimLabel || '交互', act: () => toggleSpring(g) }; } const m = raycaster.intersectObjects(magicMeshes, false).filter(x => ancestorVisible(x.object)); if (m.length) { const o = m[0].object.userData.magicRoot; return { label: o.userData.aimLabel || '交互', act: () => fireMagic(o) }; } const f = raycaster.intersectObjects(fireMeshes, false).filter(x => ancestorVisible(x.object)); if (f.length) return { label: '点燃 / 熄灭壁炉', act: toggleFire }; return null; }
+            // J2.6：把原先硬编码在 aimRay() 里的「铰链 → 魔法物件 → 壁炉」三段优先，改为按注册顺序的命中源。
+            // ★ 注册次序必须与搬迁前的短路次序**完全一致**，否则同一次点击会命中不同的物件。
+            //   每个源自己负责"命中的 Mesh → 可执行目标"这一步（label 取自各物件的 aimLabel）。
+            interaction.registerAimSource({ id: 'hinges', meshes: hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
+            interaction.registerAimSource({ id: 'magic', meshes: magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
+            interaction.registerAimSource({ id: 'fire', meshes: fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
+            function aimRay() { raycaster.setFromCamera(CENTER, camera); return interaction.aimTarget(raycaster); }
             const isLocked = () => document.pointerLockElement === renderer.domElement;
-            function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (nearestInteract) nearestInteract.act(); }
+            function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (nearestInteract) interaction.activate(nearestInteract); }
             function updateInteractHint() {
-                if (clock.wallNow() < hintOverrideUntil) { hintEl.innerHTML = hintOverrideText; hintEl.classList.add('show'); return; }
-                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) { hintEl.innerHTML = (IS_TOUCH ? '点按 <b>准星</b> 或 <b>交互键</b> ' : '点击 <b>左键</b> ') + aimHit.label; hintEl.classList.add('show'); } else hintEl.classList.remove('show'); return; } aimHit = null; nearestInteract = null; let best = 1e9; for (const it of interactables) { if (it.fh && !fullHouse) continue; const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z); if (d < it.r && d < best) { best = d; nearestInteract = it; } } if (nearestInteract) { hintEl.innerHTML = (IS_TOUCH ? '点按 <b>交互键</b> ' : '按 <b>E</b> ') + nearestInteract.label; hintEl.classList.add('show'); } else hintEl.classList.remove('show');
+                if (hintUI.applyOverride()) return;
+                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
             }
 
             const keys = {}; const signInput = document.getElementById('signInput'); const signEditor = document.getElementById('signEditor'); const picInput = document.getElementById('picInput');
@@ -7341,7 +7354,9 @@ export function installCabin(app) {
                 ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); pinchMode = true; didPinch = true; dragInfo = null; } else if (ptrs.size === 1) { dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; didPinch = false; }
             });
             renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = pinchD - nd; if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + diff * 0.02)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + diff * 0.006)); pinchD = nd; return; } if (!dragInfo) return; if (viewMode === 'fp' && isLocked()) return; const dx = e.clientX - dragInfo.x, dy = e.clientY - dragInfo.y; dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.moved += Math.abs(dx) + Math.abs(dy); pendYaw -= dx * 0.0055; pendPitch += dy * 0.0045 * (viewMode === 'fp' ? -1 : 1); });
-            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera); const hits = raycaster.intersectObjects(hingeMeshes, false).filter(h => ancestorVisible(h.object)); if (hits.length) { toggleSpring(hits[0].object.userData.hingeGroup); return; } const mh = raycaster.intersectObjects(magicMeshes, false).filter(h => ancestorVisible(h.object)); if (mh.length) { fireMagic(mh[0].object.userData.magicRoot); return; } const fh = raycaster.intersectObjects(fireMeshes, false).filter(h => ancestorVisible(h.object)); if (fh.length) toggleFire(); });
+            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
+                // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
+                const clickTarget = interaction.aimTarget(raycaster); if (clickTarget) interaction.activate(clickTarget); });
             renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; dragInfo = null; });
             document.addEventListener('mousemove', e => { if (isLocked() && viewMode === 'fp') { camYaw -= e.movementX * 0.0026; camPitch -= e.movementY * 0.0022; camPitch = Math.max(-1.2, Math.min(1.2, camPitch)); } });
             document.addEventListener('pointerlockchange', () => { const locked = isLocked(); crosshairEl.classList.toggle('show', viewMode === 'fp' && (locked || IS_TOUCH)); lockTipEl.classList.toggle('show', viewMode === 'fp' && !locked && !IS_TOUCH); });
