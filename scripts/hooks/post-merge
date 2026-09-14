@@ -1,0 +1,15 @@
+#!/bin/sh
+# 魔法小屋 · post-merge 钩子：合并后自动记录
+#
+# git 在成功 merge 后执行 post-merge（而不是 post-commit），
+# 所以这个钩子与 post-commit 不会对同一次操作重复记录。
+#
+# 设计原则：绝不阻塞 git —— 输出丢弃，任何失败都以 exit 0 收场。
+# 恢复方式：pnpm hooks:install
+# 详见 docs/VERSIONING.md §12
+
+if command -v node >/dev/null 2>&1; then
+  node scripts/release.mjs record "合并" --kind=merge >/dev/null 2>&1 || true
+fi
+
+exit 0

@@ -5,19 +5,31 @@
 > 操控一只软软的史莱姆在魔法小屋里生活：昼夜循环、7 种天气、120+ 可交互物件、24 层魔法阵与超位爆裂魔法；
 > **书架上的书 = 我写的文章，点开就在书页里读**。
 
-**当前阶段：`J1.5` 构建与内容地基（Astro 落地）✅ 已完成**（2026-09-14，见 [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md)）
-下一步：**`J2` 小屋核心设施**（`CameraRig` + 统一 `Interactable` + 持久化 + 内核）。
-搬迁**只搬位置，不改实现** —— 页面表现与重构前完全一致，而且现在**可以机器证明**，四条安全网各司其职：
+**当前阶段：`J2` 小屋核心设施 ✅ 已完成**（10 项任务全部完成，见 [`docs/J2-实施结果.md`](./docs/J2-实施结果.md)）
+**当前稳定版：`v0.2.0`**（tag `v0.2.0`，开发主线在 `dev` 分支 —— 见 [`docs/VERSIONING.md`](./docs/VERSIONING.md)）
+下一步：**`J3` 物件模块化**（67 件物件 → `defineProp` + 挂载点 ID 表 `app/mounts.js`）。
+`J2` 造好了"注册机制"：**新增一盏灯或一个交互都只需改一个文件**（有测试证明），
+所以 `J3` 的每件物件从"要不要补一个注册"变成**填空**。画面与性能**与阶段开始前完全相同**：
+
+| 判据 | 结果 |
+|---|---|
+| 像素回归（每个任务都跑） | 3 机位 sha256 **逐字节相同**（10/10 次） |
+| 交互冒烟（每个任务都跑） | **28 / 0**（10/10 次） |
+| 性能（阶段级） | 3138 calls / 86158 tris —— **+0.0%**，一个指标都没动 |
+| 单元测试 | **83 项**（零新依赖，Node 内置 `node:test`） |
+
+搬迁**只搬位置，不改实现** —— 页面表现与重构前完全一致，而且**可以机器证明**，四条安全网各司其职：
 
 | 命令 | 回答的问题 |
 |---|---|
 | `pnpm test:visual` | 画面**有没有被改坏**（3 机位 × 基线 sha256 逐字节比对） |
 | `pnpm test:smoke` | 还能**不能玩**（28 项交互断言，manual 时钟下可复现） |
 | `pnpm test:perf` | 有没有**悄悄变慢**（draw calls / triangles 等硬指标） |
-| `pnpm verify:j15` | **站点那一半有没有碰过 3D 那一半**（`src/cabin/**` 逐字节摘要 + 依赖不变量 `N12`，75 项） |
+| `pnpm test:unit` | 契约有没有被破坏（83 项，含"新增一盏灯/一个交互 = 改 1 处"的 DoD 证明） |
+| `pnpm verify` | 静态校验六件套（含 `verify:j15` 的 `src/cabin/**` 摘要 + 依赖不变量） |
 
 前三条是 `J3` 那 67 件物件搬迁的前提 —— 没有它们，每次改动都只能靠肉眼猜；
-第四条是 `J1.5` 引入 Astro 之后新增的：**上框架不等于可以动 3D**。
+`test:unit` 是 `J2` 新增的：**契约与坐标的自洽性**不再依赖人工审查。
 
 > ★ **接下来的路线与每个功能模块的映射，全部在 [`docs/BuildPlaning/`](./docs/BuildPlaning/README.md)。**
 > 那里是"做什么、按什么顺序做、每个模块挂到哪件物品上"的唯一入口；
@@ -110,6 +122,49 @@ pnpm build:single && pnpm serve:single   # → dist-single/，3D 正常、回归
 > 想验证零构建兜底，则用 `pnpm serve:legacy`；想验证单文件产线，则用 `pnpm serve:single`。
 > 测试脚本通过 `tests/e2e/page.mjs` 自动识别首页形态，**不需要额外参数**。
 
+---
+
+## 版本管理（一个开发任务 = 一个版本）
+
+日常开发在 **`dev`**（开发版）上，`main` 只存**稳定版**；每个任务一条 `task/<任务号>` 分支，
+合并回 `dev` 时打 `-dev.N` 预发布 tag，阶段验收通过才合进 `main` 并打正式版本号。
+
+```bash
+git switch dev
+git switch -c task/J2.1-camera-rig          # ① 开任务分支（名字带任务号）
+# …… 开发 + 跑门禁 ……
+git switch dev
+git merge --no-ff task/J2.1-camera-rig      # ② 合并回 dev，保留任务边界
+git tag -a v0.2.0-dev.1 -m "J2.1 完成"       # ③ 开发版快照
+```
+
+| 我需要…… | 看这里 |
+|---|---|
+| 分支模型 / 版本号怎么定 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §1–§2 |
+| 一个任务从头到尾怎么做 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §3 |
+| 什么时候发稳定版 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §4 |
+| 任务完成时该跑哪些门禁 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §5 |
+| 做坏了怎么退回去 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §6 |
+| **有哪些命令、怎么用** | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §11 |
+| **操作记录写在哪、怎么自动记** | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §12 |
+
+**流程已工具化**（`scripts/release.mjs` + git 钩子），日常只需要四条命令：
+
+```bash
+pnpm task:start J2.1 camera-rig   # 开任务分支
+pnpm task:done J2.1               # 收尾：门禁 → 合并回 dev → 打 -dev.N tag
+pnpm ship                         # 生成待人工执行的推送命令（不自动 push）
+pnpm git:status                   # 分支 / 未推送 / tag 同步状态，并自动标记已完成命令
+```
+
+> 每个动作都会**自动追加**到 `GitPushHistory.md`（本地专用、不进版本库，规则见 §12）：
+> `post-commit` / `post-merge` 钩子负责记录，换机器后跑一次 `pnpm hooks:install` 恢复。
+
+> ⚠️ `Magic-cabin` 自身就是仓库根，**不要在 `FrontProj/` 或 `Project/` 再 `git init`**
+> —— 那会让它变成 gitlink，任务级版本边界会全部失效。见 `docs/VERSIONING.md` §7。
+
+---
+
 ## 操作
 
 | 按键 | 动作 |
@@ -136,11 +191,13 @@ Magic-cabin/
 ├─ vite.single.config.ts       # ★ J1.5.6 第二条产线（单文件产物）
 ├─ vite.config.ts              # ⬜ 只承担零构建兜底（受限环境唯一能跑的路径，不可删）
 ├─ index.html                  # ⬜ 零构建入口（importmap + ./src/main.js）
+├─ LICENSE                     # ★ MIT 协议（含上游 YIBI2333 与本项目的版权归属说明）
 ├─ public/sounds/*.mp3         # 11 个音效
 ├─ scripts/
 │  ├─ serve.mjs                # 零依赖静态服务器（默认托管 dist/，--legacy 托管仓库根）
 │  ├─ verify-j15.mjs           # ★ J1.5 门禁（75 项：构建形态 / 不变量 / cabin 摘要 / 产物）
 │  └─ verify-*.mjs             # J1 的搬迁一致性校验（19 项静态 + 11 项运行时）
+├─ .github/workflows/ci.yml    # ★ CI 门禁：typecheck → verify → build（见 docs/VERSIONING.md §5）
 ├─ src/
 │  ├─ content.config.ts        # ★ 内容集合 schema（Zod）
 │  ├─ content/                 # ★ 内容源（作者唯一手写的目录）
@@ -173,6 +230,7 @@ Magic-cabin/
 ├─ dist-single/                # 单文件产物（gitignore）
 └─ docs/
    ├─ BuildPlaning/            # ★ 建设规划（路线 J0–J8 + 模块映射 mapping.yaml）
+   ├─ VERSIONING.md            # ★ 版本管理规范（分支模型 / 版本号 / 任务 SOP / 发布回滚）
    ├─ J1.5-实施结果.md          # ★ J1.5 的 DoD 核对 / 落点 / 75 项门禁 / 遗留与交接
    ├─ MIGRATION.md             # 重构说明（搬迁记录 / 校验 / 映射索引 / 后续路线）
    ├─ baseline.md              # ★ 性能基线（由 tests/e2e/perf.mjs --update 生成）
@@ -207,6 +265,7 @@ Magic-cabin/
 | [`docs/BuildPlaning/04-模块增量开发与配置编排.md`](./docs/BuildPlaning/04-模块增量开发与配置编排.md) | 模块九步 SOP + 配置编排（Firefly 九条） |
 | [`docs/BuildPlaning/mapping.yaml`](./docs/BuildPlaning/mapping.yaml) | ★ **映射真源**：19 个条目 / 18 个编号模块的物品、交互、呈现通道、状态 |
 | [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md) | ★ **已实施阶段的记录**：DoD 核对、落点、75 项门禁、上游坑与遗留交接 |
+| [`docs/VERSIONING.md`](./docs/VERSIONING.md) | ★ **版本管理规范**：`main`/`dev` 分支模型、`J` 编号 ↔ 版本号映射、**一个任务一个版本**的 SOP、发布与回滚、门禁分级 |
 
 ## 上游设计依据
 
@@ -228,4 +287,4 @@ Magic-cabin/
 | 内容 | Markdown + front-matter → Zod schema（`src/content.config.ts`）→ 静态页 / 归档 / 标签 / RSS |
 | 语言 | JS 为主，TS 渐进（`allowJs: true`）；新增代码用 JSDoc 标注类型 |
 | 资源 | **0 KB 外部模型/贴图** —— 全部几何与纹理程序化生成（`BB13`） |
-| 协议 | MIT（原作者 YIBI2333） |
+| 协议 | **MIT** —— 见 [`LICENSE`](./LICENSE)；上游原作为 [YIBI2333/line-art-style-magic-cabin](https://github.com/YIBI2333/line-art-style-magic-cabin) |

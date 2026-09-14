@@ -289,9 +289,9 @@ section('3D 那一半（src/cabin/**）—— J1.5 要求「一行不改」')
       DIGEST_FILE,
       JSON.stringify(
         {
-          what: 'J1.5 期间的 src/cabin/** 逐字节摘要',
-          why: '本项目不是 git 仓库，用逐字节摘要代替「git diff 为空」这条 DoD 判据',
-          note: '⚠️ J3/J4 开始掏空 legacy/ 时会合法地变化。变化前必须先在 J1.5 的结果文档里记一笔原因，再重跑 --record。',
+          what: 'src/cabin/** 逐字节摘要（3D 源码指纹）',
+          why: 'J1.5 期间它是「站点那一半没碰 3D」的判据（当时本项目还不是 git 仓库，用摘要代替 git diff 为空）；J2 起作为 3D 源码指纹防意外改动。',
+          note: '⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。',
           recordedAt: new Date().toISOString().slice(0, 10),
           totals: { files: files.length, lines: totalLines },
           combined,
@@ -317,7 +317,7 @@ section('3D 那一半（src/cabin/**）—— J1.5 要求「一行不改」')
       if (changedFiles.length) console.log(`      改动：${changedFiles.join(' / ')}`)
       if (added.length) console.log(`      新增：${added.join(' / ')}`)
       if (removed.length) console.log(`      删除：${removed.join(' / ')}`)
-      console.log('      ⚠ 若这是 J3/J4 的**合法**改动，先在结果文档里记原因，再重跑 --record')
+      console.log('      ⚠ 若这是 J2/J3/J4 的**合法**改动，先在结果文档里记原因，再重跑 --record')
     }
   }
 

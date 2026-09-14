@@ -200,6 +200,18 @@ export function markdownDir({ base, label = 'markdown-dir' }) {
       for (const rel of files) {
         const relPosix = rel.replace(/\\/g, '/')
         const abs = nodePath.join(root, rel)
+        /**
+         * ★ 交给 Astro 的 filePath 必须是**以 `/` 分隔的相对路径**，不能是绝对路径。
+         *
+         * 依据 `astro/dist/content/mutable-data-store.js`：
+         *   `if (filePath.startsWith("/")) throw new Error('File path must be relative to the site root.')`
+         *
+         * ⚠️ 这条坑在 Windows 上是**隐形**的：`D:\...\a.md` 不以 `/` 开头，检查被绕过，
+         *    本地 `astro sync` / `astro build` 正常通过；到了 Linux CI（`/home/runner/...`）
+         *    才抛出 `File path must be relative to the site root`，造成"本地过、CI 挂"。
+         *    所以这里显式构造 POSIX 相对路径，不做任何平台判定。
+         */
+        const filePath = `${base.replace(/\\/g, '/').replace(/\/+$/, '')}/${relPosix}`
         let text = await fs.readFile(abs, 'utf8')
         text = text.replace(/^\uFEFF/, '') // 去 BOM（Windows 编辑器常带）
         const fm = FRONT_MATTER_RE.exec(text)
@@ -209,10 +221,10 @@ export function markdownDir({ base, label = 'markdown-dir' }) {
 
         // 固定四步（与 Astro 内置 glob loader 同序）：
         //   ① parseData —— Zod 校验 + 补默认值；② 摘要；③ 渲染正文；④ 入库
-        const data = await parseData({ id, data: rawData, filePath: abs })
+        const data = await parseData({ id, data: rawData, filePath })
         const digest = generateDigest(body + '\u0000' + JSON.stringify(data))
         seen.add(id)
-        store.set({ id, data, filePath: abs, digest, body, rendered: await renderMarkdown(body) })
+        store.set({ id, data, filePath, digest, body, rendered: await renderMarkdown(body) })
         count++
       }
 

@@ -1,10 +1,10 @@
 {
   "name": "magic-cabin",
   "private": true,
-  "version": "0.1.5",
-  "packageManager": "pnpm@12.3.4",
+  "version": "0.2.0",
   "type": "module",
-  "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J1.5：Astro 落地）",
+  "license": "MIT",
+  "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J2：小屋核心设施）",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -19,7 +19,7 @@
     "status": "node scripts/ctl.mjs status",
     "stop": "node scripts/ctl.mjs stop",
     "typecheck": "tsc --noEmit",
-    "verify": "node scripts/verify-j15.mjs && node scripts/verify-migration.mjs && node scripts/verify-f02.mjs && node scripts/verify-f03.mjs && node scripts/verify-f04.mjs && node scripts/verify-f06.mjs",
+    "verify": "node scripts/_verify.mjs",
     "verify:j15": "node scripts/verify-j15.mjs",
     "verify:migration": "node scripts/verify-migration.mjs",
     "verify:f02": "node scripts/verify-f02.mjs",
@@ -27,6 +27,7 @@
     "verify:f04": "node scripts/verify-f04.mjs",
     "verify:f06": "node scripts/verify-f06.mjs",
     "verify:determinism": "node scripts/verify-determinism.mjs 3",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
     "test:visual": "node tests/visual/compare.mjs",
     "test:visual:additive": "node tests/visual/compare.mjs --mode=additive",
     "test:smoke": "node tests/e2e/smoke.mjs",
@@ -35,7 +36,15 @@
     "baseline:perf": "node tests/e2e/perf.mjs --update",
     "verify:visual": "node tests/visual/capture.mjs --rounds=3",
     "analyze:png": "node scripts/analyze-png.mjs",
-    "links": "node scripts/check-links.mjs docs/*.md README.md"
+    "links": "node scripts/check-links.mjs docs/*.md README.md",
+    "task:start": "node scripts/release.mjs start",
+    "task:verify": "node scripts/release.mjs verify",
+    "task:done": "node scripts/release.mjs done",
+    "git:status": "node scripts/release.mjs status",
+    "git:history": "node scripts/release.mjs history",
+    "git:sync": "node scripts/release.mjs sync",
+    "ship": "node scripts/release.mjs ship",
+    "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "three": "0.128.0"

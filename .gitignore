@@ -24,3 +24,7 @@ _shots/
 
 # ⚠️ tests/visual/baseline/*.png 与 tests/e2e/baseline/perf.json 必须提交
 #    —— 它们是判据本身（截图基线 / 性能基线），不要加进本文件
+
+# 本地 Git 操作记录（含待人工执行的推送命令）
+# 只留本地、不上传 GitHub；详见文件头部的维护约定
+GitPushHistory.md

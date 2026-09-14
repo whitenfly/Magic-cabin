@@ -6,12 +6,16 @@
 //   ⑤ 音效资源齐全
 // 说明：比对时忽略**末尾空白**（写入时模板字符串会多一个换行，不影响行为）。
 import fs from 'node:fs'
+import path from 'node:path'
+import { ROOT, requireEnv, resolveUpstream } from './_verifyEnv.mjs'
 
-const SRC = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main/index.html'
-const SRC_DIR = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main'
-const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
-
-const srcText = fs.readFileSync(SRC, 'utf8')
+// ★ 路径一律由 _verifyEnv.mjs 推导，不再硬编码本机绝对路径。
+//   上游源文件是**仓库外**的单文件版解压目录，CI 上必然缺失 ⇒ 缺了就明确跳过（exit 2），
+//   而不是抛 ENOENT 把整条 `pnpm verify` 链断在半截。
+const SRC_DIR = path.resolve(ROOT, '../line-art-style-magic-cabin-main')
+const SNAP = path.join(ROOT, '.cache/monolith.after-f02.js')
+requireEnv({ src: true, files: [SNAP] })
+const srcText = resolveUpstream().text
 const srcLines = srcText.split(/\r?\n/)
 const slice = (a, b) => srcLines.slice(a - 1, b).join('\n')
 const N = (s) => s.replace(/\s+$/, '')
@@ -38,7 +42,6 @@ console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–980
 {
   // ⚠️ 检查对象是 **F0.2 完成时的快照**（源文件 + 搬迁 + 随机源替换），
   //    因为 F0.3 之后当前文件又注入了时钟。当前文件与快照的关系由 verify-f03.mjs 验证。
-  const SNAP = `${ROOT}/.cache/monolith.after-f02.js`
   const cur = fs.readFileSync(SNAP, 'utf8')
   // F0.2 之后，随机调用已被替换为种子随机源；把替换**反向还原**后应与源文件逐字节一致，
   // 这证明历次改动只涉及"随机源替换"，没有触碰任何其他逻辑。
@@ -80,8 +83,31 @@ console.log('\n【③ UI DOM src/cabin/dom.js  ←  源 753–835 行】')
 
 console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
 {
-  const mono = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
-  const parts = [mono, fs.readFileSync(`${ROOT}/src/cabin/dom.js`, 'utf8')].join('\n')
+  // ★ J2 起：搬迁把实现从 monolith 逐个移进模块（cabin/core/**、cabin/systems/**），
+  //   若仍只扫 monolith，计数会**合法下降**（J2.1 就把 3 个 `new THREE.Mesh(` 与
+  //   2 个 `new THREE.Group(` 搬进了 cabin/core/geometry/）。
+  //   判据随之改为扫描**整棵 3D 源码树**（`src/cabin/**`）：搬运不改变总数，
+  //   只有"真的增删了几何/交互/监听"才会让计数变化 —— 强度不降，适用面扩大。
+  //   ⚠️ 扫描范围 = **源自 monolith 的实现所在目录**（legacy / core / systems / world / props
+  //   与 `dom.js`），**排除** F0.2/F0.3/J1 新增的基础设施（`app/**`、`boot.js`）——
+  //   后者不是从源文件搬来的（如 `boot.js` 自带的 1 个 `addEventListener`），
+  //   计入会让"源文件 vs 当前"这条等式永远差一截。
+  const walkJs = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) return walkJs(p)
+      return e.isFile() && p.endsWith('.js') ? [p] : []
+    })
+  const cabinRoot = path.join(ROOT, 'src/cabin')
+  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props']
+  const cabinFiles = [
+    ...MIGRATED_DIRS.flatMap((d) => (fs.existsSync(path.join(cabinRoot, d)) ? walkJs(path.join(cabinRoot, d)) : [])),
+    path.join(cabinRoot, 'dom.js'),
+  ]
+  const parts = cabinFiles.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
+  console.log(
+    `  扫描范围：${MIGRATED_DIRS.join('/')} + dom.js 共 ${cabinFiles.length} 个 .js（不含 app/** 与 boot.js）`,
+  )
   // Math.random() 已被 F0.2 替换为种子随机源，比对时先反向还原
   const restored = parts.replace(/\b(outdoorRng|floor1Rng|floor2Rng|skyRng|textureRng|slimeRng|runtimeRng)\(\)/g, 'Math.random()')
   const count = (s, re) => (s.match(re) || []).length

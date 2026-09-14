@@ -1,0 +1,37 @@
+# 换行符策略：全局关闭转换
+#
+# 本仓库存在「逐字节判据」，任何换行符改写都会让它们报警：
+#   - tests/baseline/cabin-digest.json  → src/cabin/** 的 sha256 摘要
+#   - tests/visual/baseline/*.png       → 3 机位截图 sha256 基线
+#   - tests/e2e/baseline/perf.json      → 性能基线
+#
+# 因此这里用 `-text` 明确表示「不做任何 eol 规范化」：库中内容 = 工作区内容，
+# 跨平台 checkout 不改写字节。
+#
+# ⚠️ 不要改成 `* text=auto`，也不要把 core.autocrlf 设为 true ——
+#    那会悄悄改写被摘要守住的文件，使门禁报警却查不出原因。
+#    详见 docs/VERSIONING.md §8。
+#
+# 首次引入本文件时用 `* -text` 是为了「零风险」：它只禁止未来的转换，
+# 不会去动任何已提交文件的字节。若日后要统一成全库 LF，须单独作为一个任务
+# 处理，并在改完后重建 cabin-digest 与视觉基线。
+
+* -text
+
+# ── 二进制资源：不做 diff、不做 eol 处理 ──────────────────────────
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.mp3  binary
+*.wav  binary
+*.ogg  binary
+*.woff binary
+*.woff2 binary
+*.zip  binary
+
+# ── 语言统计：把这些当文档，别拉低代码行数统计 ────────────────────
+pnpm-lock.yaml linguist-generated=true
+docs/**        linguist-documentation=true

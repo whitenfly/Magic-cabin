@@ -15,6 +15,30 @@
 import * as THREE from 'three'
 import { scene, runtime } from '../app/rng.js'
 import { clock } from '../app/clock.js'
+import { createSpringSystem } from '../core/util/spring.js'
+import { createSketch } from '../core/geometry/sketch.js'
+import { createRoundBox } from '../core/geometry/roundBox.js'
+import { createSolid } from '../core/geometry/solid.js'
+import {
+  ringPts,
+  polyPts,
+  starPts,
+  arcPts,
+  spiralPts,
+  wavyRingPts,
+  zigPts,
+  createShapes2d,
+} from '../core/geometry/shapes2d.js'
+import { createLineMaterials } from '../core/materials/lineMaterials.js'
+import { createFillMaterial } from '../core/materials/FillMaterial.js'
+import { createLitMaterialFactory } from '../core/materials/litMaterial.js'
+import { createLayout } from '../world/layout.js'
+import { createLightField } from '../core/lighting/LightField.js'
+import { createPointLightSource } from '../core/lighting/PointLightSource.js'
+import { createInteractionSystem, makeTarget } from '../systems/interaction/InteractionSystem.js'
+import { createHintUI } from '../systems/interaction/HintUI.js'
+import { createCameraRig } from '../core/render/CameraRig.js'
+import { createEnvironment } from '../systems/weather/environment.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -34,7 +58,19 @@ const {
 //    当成 runtime 的参数调用，抛出 "runtime(...) is not a function"。
 const runtimeRng = runtime;
 
-        (function () {
+/**
+ * 安装小屋（`J2.5`）：由 `boot.js` 造好应用内核之后调用。
+ *
+ * 这里是"3D 内部"与"应用内核"之间**唯一**的接缝 —— 内核交出 `registry` / `bus` /
+ * `scheduler`，小屋把自己的登记动作接上去。搬迁期（`J2`–`J4`）本函数体仍是原来的
+ * 自执行函数，只是**不再自动执行**：时机改由 boot 控制（DOM 就绪、测试开关设好之后），
+ * 这样内核才能先于场景存在。
+ *
+ * @param {object} app `createApp()` 的产物
+ */
+export function installCabin(app) {
+    const { registry, bus, scheduler, store } = app;
+    (function () {
             'use strict';
             const mqCoarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
             const mqFine = window.matchMedia ? window.matchMedia('(pointer: fine)').matches : true;
@@ -46,7 +82,8 @@ const runtimeRng = runtime;
                 const NAMES = ['door', 'window', 'fire', 'lamp', 'cast', 'magic', 'cat', 'toggle', 'ui', 'chim', 'doorbell'];
                 const pool = {};
                 for (const n of NAMES) { const a = new Audio('sounds/' + n + '.mp3'); a.preload = 'auto'; pool[n] = a; }
-                let vol = 0.6, on = true;
+                // J2.8：音量与音效开关由 store 决定（刷新后保持上次的选择；?deterministic=1 下不持久化）
+                let vol = store.get('audio.volume'), on = store.get('audio.enabled');
                 function play(name) {
                     if (!on) return;
                     const a = pool[name];
@@ -72,193 +109,37 @@ const runtimeRng = runtime;
             renderer.setSize(innerWidth, innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            const MAT = new THREE.LineBasicMaterial({ color: 0x111111 });
-            const DASHMAT = new THREE.LineDashedMaterial({ color: 0xa9a9a9, dashSize: 0.22, gapSize: 0.16, transparent: true, opacity: 0.85 });
-            const IN_MAT = new THREE.LineBasicMaterial({ color: 0x8a8a8a });
+            // J2.2：三种线材质已提取到 cabin/core/materials/lineMaterials.js（实现零改动）
+            const { MAT, DASHMAT, IN_MAT } = createLineMaterials();
 
-            /* ============ 全局 FILL 材质：内置一楼炉火 + 二楼魔法吊灯光照 ============ */
-            const FILL = new THREE.ShaderMaterial({
-                uniforms: {
-                    uColor: { value: new THREE.Color(0xffffff) },
-                    uTint: { value: new THREE.Color(0xffffff) },
-                    uFireCenter: { value: new THREE.Vector3(0, 0, 0) },
-                    uFireRadius: { value: 11.0 },
-                    uFireColorNear: { value: new THREE.Color(1.0, 0.62, 0.26) },
-                    uFireColorFar: { value: new THREE.Color(0.78, 0.26, 0.09) },
-                    uFireStrength: { value: 0.0 },
-                    uLampCenter: { value: new THREE.Vector3(0, 5.45, 0) },
-                    uLampRadius: { value: 12.0 },
-                    uLampColorNear: { value: new THREE.Color(1.0, 0.80, 0.58) },
-                    uLampColorFar: { value: new THREE.Color(0.72, 0.50, 0.85) },
-                    uLampStrength: { value: 0.0 },
-                    uDaylight: { value: 0.0 },
-                    uTime: { value: 0 },
-                    uPtPos: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
-                    uPtCol: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()] },
-                    uPtCfg: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
-                    uPtCount: { value: 8 }
-                },
-                vertexShader: `
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-            void main() {
-                vec4 worldPos = modelMatrix * vec4(position, 1.0);
-                vWorldPos = worldPos.xyz;
-                vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-                gl_Position = projectionMatrix * viewMatrix * worldPos;
-            }
-        `,
-                fragmentShader: `
-            uniform vec3 uColor;
-            uniform vec3 uTint;
-            uniform vec3 uFireCenter;
-            uniform float uFireRadius;
-            uniform vec3 uFireColorNear;
-            uniform vec3 uFireColorFar;
-            uniform float uFireStrength;
-            uniform vec3 uLampCenter;
-            uniform float uLampRadius;
-            uniform vec3 uLampColorNear;
-            uniform vec3 uLampColorFar;
-            uniform float uLampStrength;
-            uniform float uDaylight;
-            uniform float uTime;
-            uniform vec3 uPtPos[8];
-            uniform vec3 uPtCol[8];
-            uniform vec4 uPtCfg[8];
-            uniform int uPtCount;
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-
-            void main() {
-                vec3 finalColor = uColor * uTint;
-
-                float limX = min(4.0, 13.2 - 2.0 * vWorldPos.y);
-                float inX = 1.0 - smoothstep(limX, limX + 0.12, abs(vWorldPos.x));
-                float inZ = smoothstep(-4.12, -4.0, vWorldPos.z) * (1.0 - smoothstep(4.0, 4.12, vWorldPos.z));
-
-                /* ---- 一楼炉火 ---- */
-                float inYF = 1.0 - smoothstep(2.98, 3.10, vWorldPos.y);
-                float roomMaskF = inX * inZ * inYF * step(-0.05, vWorldPos.y);
-                if (roomMaskF > 0.002 && uFireStrength > 0.002) {
-                    vec3 toFire = uFireCenter - vWorldPos;
-                    float dist = length(toFire);
-                    vec3 dirToFire = toFire / max(dist, 0.0001);
-                    float ndl = dot(normalize(vWorldNormal), dirToFire);
-                    float facing = smoothstep(-0.08, 0.45, ndl);
-                    float t = clamp(1.0 - dist / uFireRadius, 0.0, 1.0);
-                    float atten = t * t * 0.78 + t * 0.22;
-                    vec3 fireCol = mix(uFireColorFar, uFireColorNear, t);
-                    float flicker = 0.87
-                        + 0.08 * sin(uTime * 6.7 + dist * 1.3)
-                        + 0.03 * sin(uTime * 11.3 + 2.1)
-                        + 0.02 * sin(uTime * 19.7 + 5.0);
-                    float dayFade = 1.0 - uDaylight * 0.75;
-                    float direct = atten * facing * 0.55;
-                    float bounce = atten * 0.18 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndl));
-                    finalColor += fireCol * uFireStrength * flicker * dayFade * (direct + bounce) * roomMaskF;
-                }
-
-                /* ---- 二楼魔法吊灯 ---- */
-                float inYL = smoothstep(3.0, 3.12, vWorldPos.y) * (1.0 - smoothstep(6.65, 6.95, vWorldPos.y));
-                float roomMaskL = inX * inZ * inYL;
-                if (roomMaskL > 0.002 && uLampStrength > 0.002) {
-                    vec3 toLamp = uLampCenter - vWorldPos;
-                    float distL = length(toLamp);
-                    vec3 dirToLamp = toLamp / max(distL, 0.0001);
-                    float ndlL = dot(normalize(vWorldNormal), dirToLamp);
-                    float facingL = smoothstep(-0.08, 0.45, ndlL);
-                    float tL = clamp(1.0 - distL / uLampRadius, 0.0, 1.0);
-                    float attenL = tL * tL * 0.78 + tL * 0.22;
-                    vec3 lampCol = mix(uLampColorFar, uLampColorNear, tL);
-                    float flickerL = 0.93 + 0.045 * sin(uTime * 2.1 + distL * 0.8) + 0.025 * sin(uTime * 4.7 + 1.3);
-                    float dayFadeL = 1.0 - uDaylight * 0.75;
-                    float directL = attenL * facingL * 0.6;
-                    float bounceL = attenL * 0.2 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndlL));
-                    finalColor += lampCol * uLampStrength * flickerL * dayFadeL * (directL + bounceL) * roomMaskL;
-                }
-
-                /* ---- 室内点光源（吊挂木灯·坩埚魔火·魔法阵·暖桌·水晶球·蜡烛·星象仪·月光盆栽） ---- */
-                for (int i = 0; i < 8; i++) {
-                    if (i >= uPtCount) break;
-                    float ptS = uPtCfg[i].y;
-                    if (ptS < 0.003) continue;
-                    float yMaskPt = smoothstep(uPtCfg[i].z, uPtCfg[i].z + 0.12, vWorldPos.y)
-                        * (1.0 - smoothstep(uPtCfg[i].w - 0.12, uPtCfg[i].w, vWorldPos.y));
-                    float roomPt = inX * inZ * yMaskPt;
-                    if (roomPt < 0.003) continue;
-                    vec3 toPt = uPtPos[i] - vWorldPos;
-                    float dPt = length(toPt);
-                    float tPt = clamp(1.0 - dPt / uPtCfg[i].x, 0.0, 1.0);
-                    float aPt = tPt * tPt * 0.78 + tPt * 0.22;
-                    vec3 cPt = uPtCol[i] * (0.60 + 0.40 * tPt);
-                    vec3 dirPt = toPt / max(dPt, 0.0001);
-                    float ndlPt = dot(normalize(vWorldNormal), dirPt);
-                    float facingPt = smoothstep(-0.08, 0.45, ndlPt);
-                    float flickPt = 0.90 + 0.06 * sin(uTime * (5.3 + float(i) * 1.7) + dPt * 1.1 + float(i) * 2.4)
-                        + 0.04 * sin(uTime * (9.1 + float(i) * 0.9) + float(i));
-                    float fadePt = 1.0 - uDaylight * 0.75;
-                    float dirLPt = aPt * facingPt * 0.50;
-                    float bncPt = aPt * 0.16 * (0.35 + 0.65 * smoothstep(-0.5, 0.3, ndlPt));
-                    finalColor += cPt * ptS * flickPt * fadePt * (dirLPt + bncPt) * roomPt;
-                }
-
-                gl_FragColor = vec4(finalColor, 1.0);
-            }
-        `,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1
-            });
-
-            /* ============ 彩色物品材质工厂：与 FILL 共享环境/光照 uniform（uTint 独立） ============ */
-            function LITMAT(hex, opts) {
-                const u = { uTint: { value: new THREE.Color(hex) } };
-                for (const k in FILL.uniforms) if (k !== 'uTint') u[k] = FILL.uniforms[k];
-                const m = new THREE.ShaderMaterial({
-                    uniforms: u, vertexShader: FILL.vertexShader, fragmentShader: FILL.fragmentShader
-                });
-                if (opts) for (const k in opts) m[k] = opts[k];
-                return m;
-            }
+            // J2.2：全局 FILL 材质与彩色材质工厂已提取到 cabin/core/materials/。
+            // shader 与 uniforms 由 scripts/oneoff/_j22-extract.mjs **逐字节提取**（非手抄）。
+            // 全屋的彩色材质都与这里的 FILL **共享 uniform 引用**，只换 uTint。
+            const FILL = createFillMaterial();
+            const LITMAT = createLitMaterialFactory(FILL);
 
             const WIN_GLASS = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
             const WIN_GLASS_UP = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
 
-            const V = (x, y, z) => new THREE.Vector3(x, y, z);
-            const geo = pts => new THREE.BufferGeometry().setFromPoints(pts.map(p => V(p[0], p[1], p[2])));
-            const line = pts => new THREE.Line(geo(pts), MAT);
-            const iline = pts => new THREE.Line(geo(pts), IN_MAT);
-            function dline(pts) { const l = new THREE.Line(geo(pts), DASHMAT); l.computeLineDistances(); return l; }
-
-            function edge(g, threshold = 1, lmat) {
-                const grp = new THREE.Group();
-                grp.add(new THREE.Mesh(g, FILL));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, threshold), lmat || MAT));
-                return grp;
-            }
-            const box = (w, h, d) => edge(new THREE.BoxGeometry(w, h, d));
-            const log = (len, r = 0.15) => edge(new THREE.CylinderGeometry(r, r, len, 8));
-            function put(o, x, y, z, rx, ry, rz, parent) {
-                o.position.set(x, y, z); if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz; (parent || scene).add(o); return o;
-            }
-            function logBetween(p1, p2, r, parent) {
-                const v = V(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]); const L = edge(new THREE.CylinderGeometry(r, r, v.length(), 8));
-                L.position.set((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2);
-                L.quaternion.setFromUnitVectors(V(0, 1, 0), v.normalize()); (parent || scene).add(L); return L;
-            }
+            // J2.1：线稿几何 DSL 已提取到 cabin/core/geometry/sketch.js（实现零改动）。
+            // 场景与四种共享材质**显式注入** —— core/ 不持有全局场景（不变量 N1 / N7）。
+            // 解构保留原标识符名，文件内 2000+ 处调用点（box / log / put / edge…）一行都不用改。
+            const { V, geo, line, iline, dline, edge, box, log, put, logBetween } = createSketch({
+                scene,
+                materials: { line: MAT, inner: IN_MAT, dash: DASHMAT, fill: FILL },
+            });
 
             put(new THREE.Mesh(new THREE.PlaneGeometry(130, 130), FILL), 0, -0.01, 0, -Math.PI / 2, 0, 0);
             for (let z = -9; z <= 9; z += 1.5) put(line([[-10, 0.01, z], [10, 0.01, z]]), 0, 0, 0);
 
-            const HOLE_R = 1.2, FLOOR_TOP = 3.12;
-            const DOOR_HOLE = { c: 0, hw: 0.78, y0: 0, y1: 2.35 };
-            const WIN_F_L = { c: -2.4, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_F_R = { c: 2.4, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_LEFT = { c: -1.5, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_GABLE = { c: 0, hw: 0.52, y0: 4.95, y1: 5.8 };
-            const LOG_R = 0.15, LOG_GAP = 0.27, WALL_TOP = 4.42, WALL_Y0 = 0;
+            // J2.9：建筑外壳尺寸与陈设锚点已集中到 cabin/world/layout.js（不变量 N9）。
+            // 数值一个没改 —— 交互判定与几何构建从此共用同一份坐标（J2.6 的 anchor 直接用它们）。
+            const {
+                HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
+                CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
+                CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
+                FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
+            } = createLayout();
 
             function logWall(along, fixed, halfLen, openings, cornerExt, parent) {
                 const g = new THREE.Group(); const nLogs = Math.floor((WALL_TOP - WALL_Y0) / LOG_GAP);
@@ -333,7 +214,10 @@ const runtimeRng = runtime;
             }
             logGable(4, [WIN_GABLE]);
 
-            const fullHouseGroup = new THREE.Group(); fullHouseGroup.visible = false; scene.add(fullHouseGroup); let fullHouse = false;
+            const fullHouseGroup = new THREE.Group(); fullHouseGroup.visible = false; scene.add(fullHouseGroup);
+            // J2.8：小屋形态由 store 决定（默认剖切）。可见性由菜单就绪后的 applyFullHouse() 统一应用，
+            // 所以这里刻意**不**直接同步 fullHouseGroup.visible —— 只有一处应用点，不会出现两套状态。
+            let fullHouse = store.get('house.full');
             {
                 const WIN_R = { c: -1.5, hw: 0.52, y0: 1.1, y1: 2.1 }; const WIN_B = { c: 1.5, hw: 0.52, y0: 1.1, y1: 2.1 };
                 logWall('z', 4, D_HALF, [WIN_R], 0.18, fullHouseGroup); logWall('x', -4, D_HALF, [WIN_B], 0.18, fullHouseGroup); logGable(-4, [], fullHouseGroup);
@@ -379,10 +263,10 @@ const runtimeRng = runtime;
             interiorWallLines('x', 3.9, [DOOR_HOLE, WIN_F_L, WIN_F_R], [0]);
             interiorWallLines('z', -3.9, [WIN_LEFT]);
 
-            const hinges = [], hingeMeshes = [], slides = [];
-            function registerHinge(g) { g.userData.spring = { cur: 0, vel: 0, open: false }; hinges.push(g); g.traverse(o => { if (o.isMesh) { o.userData.hingeGroup = g; hingeMeshes.push(o); } }); }
-            function regSlide(g, axis, dist) { g.userData.slide = { cur: 0, vel: 0, open: false, base: g.position[axis], axis: axis, dist: dist }; slides.push(g); return g; }
-            function updateSprings() { for (const g of hinges) { const s = g.userData.spring; const target = s.open ? 1 : 0; s.vel += (target - s.cur) * 0.015; s.vel *= 0.95; s.cur += s.vel; if (s.cur < 0 && g.userData.bounce) { s.cur = 0; s.vel = -s.vel * 0.35; } g.rotation.y = g.userData.base + g.userData.delta * s.cur; } for (const g of slides) { const s = g.userData.slide; const target = s.open ? 1 : 0; s.vel += (target - s.cur) * 0.02; s.vel *= 0.92; s.cur += s.vel; g.position[s.axis] = s.base + s.dist * s.cur; } }
+            // J2.4：弹簧与滑轨已提取到 cabin/core/util/spring.js（实现零改动）。
+            // 解构保留原有标识符名 —— 文件内其余 200+ 处调用点（registerHinge / regSlide /
+            // hingeMeshes / updateSprings）因此一行都不用改。
+            const { hinges, hingeMeshes, slides, registerHinge, regSlide, updateSprings } = createSpringSystem();
 
             function squareWindow(cx, cy, cz, face, w, h, holeHw, parent, glassMat) {
                 const g = new THREE.Group(); g.userData = { base: 0, delta: 0 }; const parts = new THREE.Group(); const t = 0.09, d = 0.12;
@@ -427,7 +311,6 @@ const runtimeRng = runtime;
             doorGroup.userData.aimLabel = '打开 / 关上大门';
             winFL.userData.aimLabel = '开 / 关前左窗'; winFR.userData.aimLabel = '开 / 关前右窗'; winL.userData.aimLabel = '开 / 关左侧窗'; winG.userData.aimLabel = '开 / 关阁楼窗'; winR.userData.aimLabel = '开 / 关右侧窗'; winB.userData.aimLabel = '开 / 关后窗';
 
-            const CHX = -3.35, CHZ = 1.5, HEARTH = 0.12, FX = CHX + 0.15, FZ = CHZ;
             FILL.uniforms.uFireCenter.value.set(FX, 0.55, FZ);
 
             const fireMeshes = []; let fireLit = true; let fireP = 1;
@@ -461,8 +344,17 @@ const runtimeRng = runtime;
             const smokePuffs = [];
             for (let i = 0; i < 5; i++) { const p = edge(new THREE.TorusGeometry(0.14, 0.035, 6, 20)); p.rotation.x = Math.PI / 2; p.userData.phase = i / 5; scene.add(p); smokePuffs.push(p); }
 
-            const magicMeshes = [];
-            function regMagic(o, onClick) { o.userData.onClick = onClick; o.traverse(m => { if (m.isMesh && !m.userData.noHit) { m.userData.magicRoot = o; magicMeshes.push(m); } }); return o; }
+            // J2.5：交互登记交给应用内核的注册中心（J2.6 会在它之上做统一契约）。
+            // ★ magicMeshes 仍是**同一个数组实例**（注册中心持有它），
+            //   准星射线（aimRay）与点击射线照旧直接用它做 intersectObjects —— 命中行为零改动。
+            const magicMeshes = registry.magicMeshes;
+            function regMagic(o, onClick) {
+                o.userData.onClick = onClick;
+                const meshes = [];
+                o.traverse(m => { if (m.isMesh && !m.userData.noHit) meshes.push(m); });
+                registry.registerMagic(o, meshes);   // 内部统一设置 magicRoot 并 push 进 magicMeshes
+                return o;
+            }
 
             const STAIR_N = 14;
             function buildStairs() {
@@ -710,30 +602,8 @@ const runtimeRng = runtime;
             /* ========================================================== */
             /* ============ 室内陈设专用：圆角几何与材质工具 ============ */
             /* ========================================================== */
-            function roundBoxGeo(w, h, d, r, seg) {
-                if (seg === undefined) seg = 2;
-                r = Math.min(r, w / 2, h / 2, d / 2);
-                const g = new THREE.BoxGeometry(w, h, d, seg * 2 + 1, seg * 2 + 1, seg * 2 + 1);
-                const pa = g.attributes.position;
-                const hw = w / 2 - r, hh = h / 2 - r, hd = d / 2 - r;
-                for (let i = 0; i < pa.count; i++) {
-                    const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
-                    const cx = Math.max(-hw, Math.min(hw, x));
-                    const cy = Math.max(-hh, Math.min(hh, y));
-                    const cz = Math.max(-hd, Math.min(hd, z));
-                    const dx = x - cx, dy = y - cy, dz = z - cz;
-                    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    if (len > 1e-9) {
-                        pa.setXYZ(i, cx + dx / len * r, cy + dy / len * r, cz + dz / len * r);
-                    } else {
-                        pa.setXYZ(i, cx, cy, cz);
-                    }
-                }
-                g.computeVertexNormals();
-                return g;
-            }
-
-            const rbox = (w, h, d, r, seg) => edge(roundBoxGeo(w, h, d, r, seg === undefined ? 2 : seg), 12);
+            // J2.1：圆角几何已提取到 cabin/core/geometry/roundBox.js（实现零改动）
+            const { roundBoxGeo, rbox } = createRoundBox({ edge });
 
             /* —— 一楼陈设专用：材质与工具 —— */
 
@@ -743,27 +613,16 @@ const runtimeRng = runtime;
 
             const CATMAT = LITMAT(0xece6da);
             const CATMAT2 = LITMAT(0xe2dbcd);
-            const lloop = (pts, parent) => { const l = new THREE.LineLoop(geo(pts), MAT); (parent || scene).add(l); return l; };
+            // J2.1：lloop / solid / solidCyl 已提取到 cabin/core/geometry/solid.js。
+            // 默认实体材质（原实现里硬编码的 CATMAT）改为**注入** —— core/ 里只留中性名（不变量 N1）。
+            const { lloop, solid, solidCyl } = createSolid({
+                V, geo, scene, lineMaterial: MAT, defaultSolidMaterial: CATMAT,
+            });
             const sm01 = t => t * t * (3 - 2 * t);
-            function solid(g, mat, lmat) {
-                const grp = new THREE.Group();
-                grp.add(new THREE.Mesh(g, mat));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 1), lmat || MAT));
-                return grp;
-            }
-            function solidCyl(p1, p2, r, parent, mat) {
-                const v = V(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
-                const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, v.length(), 8), mat || CATMAT);
-                m.position.set((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2);
-                m.quaternion.setFromUnitVectors(V(0, 1, 0), v.normalize());
-                (parent || scene).add(m);
-                return m;
-            }
 
             /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
             /* ========================================================== */
-            const MTX = 1.8, MTZ = 2.2, MTTOP = 0.78;
 
             // ---- 12.1 原木餐桌 ----
             put(box(1.15, 0.06, 0.8), MTX, 0.75, MTZ);
@@ -1293,7 +1152,6 @@ const runtimeRng = runtime;
             regMagic(car, () => { carOn = !carOn; });
 
             /* ---- 12.9e 大魔女坩埚 ---- */
-            const CCX = -2.35, CCZ = -0.45;
             const STOVE_TOP = 0.58;
             const CAL_UP = 0.34;
             const cauldronG = new THREE.Group();
@@ -1438,7 +1296,6 @@ const runtimeRng = runtime;
             }
 
             /* ---- 紫色魔法阵 ---- */
-            const MC_X = -2.75, MC_Z = -2.15;
             const mcG = new THREE.Group();
             mcG.position.set(MC_X, 0.015, MC_Z);
             scene.add(mcG);
@@ -1551,8 +1408,6 @@ const runtimeRng = runtime;
             mcG.userData.sfx = 'magic';
 
             /* ---- 12.9f 长餐桌 ---- */
-            const DT_X = 1.6, DT_Z = -3.35;
-            const DTOP = 0.77;
             put(box(2.6, 0.06, 0.8), DT_X, 0.74, DT_Z);
             put(box(2.72, 0.04, 0.92), DT_X, 0.69, DT_Z);
             for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
@@ -1822,7 +1677,6 @@ const runtimeRng = runtime;
             regMagic(broomG, () => { broomHover = !broomHover; });
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
-            const CBX = 3.05, CBZ = 3.25;
             const orbStandG = new THREE.Group();
             orbStandG.position.set(CBX, 0, CBZ);
             scene.add(orbStandG);
@@ -1879,7 +1733,6 @@ const runtimeRng = runtime;
             orbStandG.userData.sfx = 'magic';
 
             /* ---- 月光魔法盆栽【门侧前右墙角】 ---- */
-            const PLX = 3.55, PLZ = 2.45;
             const plantG = new THREE.Group();
             plantG.position.set(PLX, 0, PLZ);
             scene.add(plantG);
@@ -2116,7 +1969,6 @@ const runtimeRng = runtime;
             let kotatsuOn = true;
             let kotGlowMat = null;
             let radioNoteRun = 0;
-            const KOT_X = 2.55, KOT_Z = -0.5, KTOP = 0.4475;
             const kotatsuG = new THREE.Group();
             kotatsuG.position.set(KOT_X, 0, KOT_Z);
             kotatsuG.rotation.y = 0.22;
@@ -2509,8 +2361,6 @@ const runtimeRng = runtime;
             /* ========================================================== */
             /* ============ 二楼陈设（床·书桌·魔杖·星象仪·挂画等） ============ */
             /* ========================================================== */
-            const FY = FLOOR_TOP;
-            const BEDX = -2.4, BEDZ = -2.55;
 
             /* ---- 18.1 大床 ---- */
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
@@ -2535,7 +2385,6 @@ const runtimeRng = runtime;
             }
 
             /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */
-            const NSX = -1.15, NSZ = -3.3;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 put(edge(new THREE.CylinderGeometry(0.022, 0.018, 0.16, 6)), NSX + sxsz[0] * 0.19, FY + 0.08, NSZ + sxsz[1] * 0.16, 0, 0, 0);
             }
@@ -2580,8 +2429,6 @@ const runtimeRng = runtime;
             makeCandleGlow(0.18, 0.12, 0xff9a3c);
 
             /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */
-            const TBLX = 2.5, TBLZ = -2.5;
-            const TBL_TOP = FY + 0.80;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 put(edge(new THREE.CylinderGeometry(0.035, 0.028, 0.72, 8)), TBLX + sxsz[0] * 1.00, FY + 0.36, TBLZ + sxsz[1] * 0.45, 0, 0, 0);
             }
@@ -6162,13 +6009,15 @@ const runtimeRng = runtime;
             let wandAppear = 0;
             let camShake = 0;
             let castDark = 0;
-            let hintOverrideUntil = 0, hintOverrideText = '';
+            // J2.6：临时提示的两个变量（hintOverrideUntil / hintOverrideText）搬进 HintUI ——
+            // 调用方不再需要知道"比较 clock.wallNow()"这个细节。
             const _v1 = new THREE.Vector3(), _whiteC = new THREE.Color(0xffffff);
             const wandCrystalBase = new THREE.Color(0x8fd8ff);
             const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
             const easeInCubic = x => x * x * x;
             const STAR_PALETTE = [[1, 0.42, 0.42], [1, 0.75, 0.35], [1, 0.95, 0.5], [0.55, 1, 0.5], [0.4, 0.9, 1], [0.65, 0.55, 1], [0.95, 0.6, 1], [0.9, 0.95, 1]];
-            function showHintOverride(html) { hintOverrideText = html; hintOverrideUntil = clock.wallNow() + 2.4; }
+            // J2.6：临时消息走 HintUI 的 showOverride（唯一文案出口；2.4 秒后自动让位给交互提示）
+            function showHintOverride(html) { hintUI.showOverride(html); }
             function screenFlash() {
                 // 双脉冲：白闪 → 短暂回落 → 再闪一次 → 消退
                 const el = document.getElementById('flashOverlay');
@@ -6360,22 +6209,11 @@ const runtimeRng = runtime;
             });
             const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.frustumCulled = false; scene.add(dustPts);
 
-            /* ---- 魔法阵几何辅助 ---- */
-            function ringPts(r, n, rot) { const a = []; for (let i = 0; i < n; i++) { const t = (rot || 0) + i / n * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function polyPts(r, sides, rot) { const a = []; for (let i = 0; i < sides; i++) { const t = (rot || 0) + i / sides * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function starPts(r, sides, step, rot) { const a = []; for (let i = 0; i < sides; i++) { const t = (rot || 0) + (i * step % sides) / sides * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function arcPts(r, a0, a1, n) { const a = []; for (let i = 0; i <= n; i++) { const t = a0 + (a1 - a0) * i / n; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function spiralPts(r0, r1, turns, n, a0) { const a = []; for (let i = 0; i <= n; i++) { const t = i / n; const ang = a0 + t * turns * Math.PI * 2; const rr = r0 + (r1 - r0) * t; a.push([Math.cos(ang) * rr, Math.sin(ang) * rr, 0]); } return a; }
-            function wavyRingPts(r, waves, amp, ph) { const a = []; const n = 120; for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; const rr = r + Math.sin(t * waves + ph) * amp; a.push([Math.cos(t) * rr, Math.sin(t) * rr, 0]); } return a; }
-            function zigPts(r1, r2, teeth) { const a = []; const n = teeth * 2; for (let i = 0; i < n; i++) { const t = i / n * Math.PI * 2; const rr = i % 2 ? r1 : r2; a.push([Math.cos(t) * rr, Math.sin(t) * rr, 0]); } return a; }
-            function lineFromPts(pts, mat, loop) {
-                const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => V(p[0], p[1], p[2])));
-                return loop ? new THREE.LineLoop(g, mat) : new THREE.Line(g, mat);
-            }
-            function segsFromPairs(pairs, mat) {
-                const pts = []; for (const pr of pairs) pts.push(V(pr[0][0], pr[0][1], 0), V(pr[1][0], pr[1][1], 0));
-                return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), mat);
-            }
+            /* ---- 魔法阵几何辅助（J2.1：已提取到 cabin/core/geometry/shapes2d.js） ---- */
+            // 七个纯点集函数（ringPts / polyPts / starPts / arcPts / spiralPts / wavyRingPts / zigPts）
+            // 零依赖、无副作用，由文件顶部 import 直接引入（`tests/unit/` 可直接测）；
+            // 下面两个构建器需要 V，故在此注入。
+            const { lineFromPts, segsFromPairs } = createShapes2d({ V });
             // 卫星小阵：kind 0=三角 1=十字 2=五芒星 3=放射 4=方形
             function sat(g, m, cx, cy, r, kind, rot) {
                 g.add(lineFromPts(ringPts(r, Math.max(12, Math.floor(r * 16)), rot || 0).map(p => [p[0] + cx, p[1] + cy]), m, true));
@@ -7380,6 +7218,13 @@ const runtimeRng = runtime;
             let camYaw = Math.PI, camPitch = 0.32, viewDist = 3.2, pendYaw = 0, pendPitch = 0;
             let viewMode = 'fixed';
             const FIX_LOOK = V(0, 2.2, 0); let fixYaw = Math.atan2(9.5, 11.5); let fixPitch = Math.asin(5.0 / Math.hypot(9.5, 5.0, 11.5)); let fixDist = Math.hypot(9.5, 5.0, 11.5);
+            // J2.7：三段相机解算搬进 cabin/core/render/CameraRig.js（**逐字照搬**，行为零差异）。
+            // 视角状态（fixYaw / camPitch / viewDist…）仍住在小屋这边，每帧经 state 传进去 ——
+            // core/ 不碰具体状态量（不变量 N1）。mode 名与 viewMode 取值一一对应。
+            const cameraRig = createCameraRig({ camera, mode: viewMode });
+            cameraRig.defineMode('fixed', (s, cam) => { const cp = Math.cos(s.fixPitch), sp = Math.sin(s.fixPitch); cam.position.set(s.look.x + Math.sin(s.fixYaw) * cp * s.fixDist, s.look.y + sp * s.fixDist, s.look.z + Math.cos(s.fixYaw) * cp * s.fixDist); cam.lookAt(s.look); });
+            cameraRig.defineMode('fp', (s, cam) => { cam.position.set(s.player.pos.x, s.player.pos.y + 0.30, s.player.pos.z); cam.lookAt(s.player.pos.x + Math.sin(s.camYaw) * Math.cos(s.camPitch) * 10, s.player.pos.y + 0.30 + Math.sin(s.camPitch) * 10, s.player.pos.z + Math.cos(s.camYaw) * Math.cos(s.camPitch) * 10); });
+            cameraRig.defineMode('tp', (s, cam) => { const cp = Math.cos(s.camPitch), sp = Math.sin(s.camPitch); const px = s.player.pos.x - Math.sin(s.camYaw) * cp * s.viewDist, py = s.player.pos.y + 0.34 + sp * s.viewDist, pz = s.player.pos.z - Math.cos(s.camYaw) * cp * s.viewDist; cam.position.set(px, Math.max(py, 0.25), pz); cam.lookAt(s.player.pos.x, s.player.pos.y + 0.25, s.player.pos.z); });
             const solidBoxes = [
                 { x1: -4.85, z1: 3.80, x2: -0.78, z2: 4.20 }, { x1: 0.78, z1: 3.80, x2: 4.85, z2: 4.20 },
                 { x1: -4.20, z1: -4.85, x2: 4.20, z2: -3.80 }, { x1: -4.20, z1: -4.85, x2: -3.80, z2: 4.85 },
@@ -7447,26 +7292,35 @@ const runtimeRng = runtime;
             function toggleFire() { fireLit = !fireLit; SND.play('fire'); }
             function toggleLamp() { lampLit = !lampLit; SND.play('lamp'); }
             const fireMagic = o => { SND.play(o.userData.sfx || 'toggle'); o.userData.onClick(); };
-            const interactables = [
-                { x: FX, z: FZ, r: 2.0, label: '点燃 / 熄灭壁炉', act: toggleFire },
-                { x: 0, z: 0, r: 2.4, label: '点亮 / 熄灭魔法吊灯', act: toggleLamp },
-                { x: 0, z: 4, r: 1.8, label: '打开 / 关上大门', act: () => toggleSpring(doorGroup) },
-                { x: WIN_F_L.c, z: 4, r: 1.6, label: '开 / 关前左窗', act: () => toggleSpring(winFL) },
-                { x: WIN_F_R.c, z: 4, r: 1.6, label: '开 / 关前右窗', act: () => toggleSpring(winFR) },
-                { x: -4, z: WIN_LEFT.c, r: 1.6, label: '开 / 关左侧窗', act: () => toggleSpring(winL) },
-                { x: 3.1, z: 6.3, r: 2.2, label: '编辑路牌文字', act: openSignEditor },
-                { x: 4, z: -1.5, r: 1.7, label: '开 / 关右侧窗', fh: true, act: () => toggleSpring(winR) },
-                { x: 1.5, z: -4, r: 1.7, label: '开 / 关后窗', fh: true, act: () => toggleSpring(winB) }
-            ];
+            // J2.6：9 条近距条目改为**注册式**（统一交互契约）。顺序、半径、锚点逐条照搬 ⇒ 行为零差异；
+            // anchor 全部来自 cabin/world/layout.js（不变量 N9），label 是面向用户的语义化文案（不变量 N10）。
+            const interaction = createInteractionSystem({ registry, warn: (m) => console.warn(m) });
+            interaction.registerProximity({ id: 'floor1/fireplace', label: '点燃 / 熄灭壁炉', mode: 'proximity', anchor: { x: FX, z: FZ }, radius: 2.0, onActivate: toggleFire });
+            interaction.registerProximity({ id: 'floor1/chandelier', label: '点亮 / 熄灭魔法吊灯', mode: 'proximity', anchor: { x: 0, z: 0 }, radius: 2.4, onActivate: toggleLamp });
+            interaction.registerProximity({ id: 'house/door', label: '打开 / 关上大门', mode: 'proximity', anchor: { x: 0, z: 4 }, radius: 1.8, onActivate: () => toggleSpring(doorGroup) });
+            interaction.registerProximity({ id: 'house/window-front-left', label: '开 / 关前左窗', mode: 'proximity', anchor: { x: WIN_F_L.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFL) });
+            interaction.registerProximity({ id: 'house/window-front-right', label: '开 / 关前右窗', mode: 'proximity', anchor: { x: WIN_F_R.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFR) });
+            interaction.registerProximity({ id: 'house/window-left', label: '开 / 关左侧窗', mode: 'proximity', anchor: { x: -4, z: WIN_LEFT.c }, radius: 1.6, onActivate: () => toggleSpring(winL) });
+            interaction.registerProximity({ id: 'outdoor/signpost', label: '编辑路牌文字', mode: 'proximity', anchor: { x: 3.1, z: 6.3 }, radius: 2.2, onActivate: openSignEditor });
+            interaction.registerProximity({ id: 'house/window-right', label: '开 / 关右侧窗', mode: 'proximity', anchor: { x: 4, z: -1.5 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winR) });
+            interaction.registerProximity({ id: 'house/window-back', label: '开 / 关后窗', mode: 'proximity', anchor: { x: 1.5, z: -4 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winB) });
             const hintEl = document.getElementById('hint'), crosshairEl = document.getElementById('crosshair'), lockTipEl = document.getElementById('lockTip');
+            // J2.6：提示文案的唯一出口（原先 #hint 的 innerHTML 被直接写了 4 处，违反不变量 N10）
+            const hintUI = createHintUI({ element: hintEl, clock, isTouch: IS_TOUCH });
             let nearestInteract = null, aimHit = null; const raycaster = new THREE.Raycaster(); const CENTER = new THREE.Vector2(0, 0); const mouse = new THREE.Vector2();
             function ancestorVisible(o) { let p = o; while (p) { if (p.visible === false) return false; p = p.parent; } return true; }
-            function aimRay() { raycaster.setFromCamera(CENTER, camera); const h = raycaster.intersectObjects(hingeMeshes, false).filter(x => ancestorVisible(x.object)); if (h.length) { const g = h[0].object.userData.hingeGroup; return { label: g.userData.aimLabel || '交互', act: () => toggleSpring(g) }; } const m = raycaster.intersectObjects(magicMeshes, false).filter(x => ancestorVisible(x.object)); if (m.length) { const o = m[0].object.userData.magicRoot; return { label: o.userData.aimLabel || '交互', act: () => fireMagic(o) }; } const f = raycaster.intersectObjects(fireMeshes, false).filter(x => ancestorVisible(x.object)); if (f.length) return { label: '点燃 / 熄灭壁炉', act: toggleFire }; return null; }
+            // J2.6：把原先硬编码在 aimRay() 里的「铰链 → 魔法物件 → 壁炉」三段优先，改为按注册顺序的命中源。
+            // ★ 注册次序必须与搬迁前的短路次序**完全一致**，否则同一次点击会命中不同的物件。
+            //   每个源自己负责"命中的 Mesh → 可执行目标"这一步（label 取自各物件的 aimLabel）。
+            interaction.registerAimSource({ id: 'hinges', meshes: hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
+            interaction.registerAimSource({ id: 'magic', meshes: magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
+            interaction.registerAimSource({ id: 'fire', meshes: fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
+            function aimRay() { raycaster.setFromCamera(CENTER, camera); return interaction.aimTarget(raycaster); }
             const isLocked = () => document.pointerLockElement === renderer.domElement;
-            function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (nearestInteract) nearestInteract.act(); }
+            function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (nearestInteract) interaction.activate(nearestInteract); }
             function updateInteractHint() {
-                if (clock.wallNow() < hintOverrideUntil) { hintEl.innerHTML = hintOverrideText; hintEl.classList.add('show'); return; }
-                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) { hintEl.innerHTML = (IS_TOUCH ? '点按 <b>准星</b> 或 <b>交互键</b> ' : '点击 <b>左键</b> ') + aimHit.label; hintEl.classList.add('show'); } else hintEl.classList.remove('show'); return; } aimHit = null; nearestInteract = null; let best = 1e9; for (const it of interactables) { if (it.fh && !fullHouse) continue; const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z); if (d < it.r && d < best) { best = d; nearestInteract = it; } } if (nearestInteract) { hintEl.innerHTML = (IS_TOUCH ? '点按 <b>交互键</b> ' : '按 <b>E</b> ') + nearestInteract.label; hintEl.classList.add('show'); } else hintEl.classList.remove('show');
+                if (hintUI.applyOverride()) return;
+                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
             }
 
             const keys = {}; const signInput = document.getElementById('signInput'); const signEditor = document.getElementById('signEditor'); const picInput = document.getElementById('picInput');
@@ -7509,7 +7363,9 @@ const runtimeRng = runtime;
                 ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); pinchMode = true; didPinch = true; dragInfo = null; } else if (ptrs.size === 1) { dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; didPinch = false; }
             });
             renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = pinchD - nd; if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + diff * 0.02)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + diff * 0.006)); pinchD = nd; return; } if (!dragInfo) return; if (viewMode === 'fp' && isLocked()) return; const dx = e.clientX - dragInfo.x, dy = e.clientY - dragInfo.y; dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.moved += Math.abs(dx) + Math.abs(dy); pendYaw -= dx * 0.0055; pendPitch += dy * 0.0045 * (viewMode === 'fp' ? -1 : 1); });
-            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera); const hits = raycaster.intersectObjects(hingeMeshes, false).filter(h => ancestorVisible(h.object)); if (hits.length) { toggleSpring(hits[0].object.userData.hingeGroup); return; } const mh = raycaster.intersectObjects(magicMeshes, false).filter(h => ancestorVisible(h.object)); if (mh.length) { fireMagic(mh[0].object.userData.magicRoot); return; } const fh = raycaster.intersectObjects(fireMeshes, false).filter(h => ancestorVisible(h.object)); if (fh.length) toggleFire(); });
+            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
+                // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
+                const clickTarget = interaction.aimTarget(raycaster); if (clickTarget) interaction.activate(clickTarget); });
             renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; dragInfo = null; });
             document.addEventListener('mousemove', e => { if (isLocked() && viewMode === 'fp') { camYaw -= e.movementX * 0.0026; camPitch -= e.movementY * 0.0022; camPitch = Math.max(-1.2, Math.min(1.2, camPitch)); } });
             document.addEventListener('pointerlockchange', () => { const locked = isLocked(); crosshairEl.classList.toggle('show', viewMode === 'fp' && (locked || IS_TOUCH)); lockTipEl.classList.toggle('show', viewMode === 'fp' && !locked && !IS_TOUCH); });
@@ -7518,14 +7374,24 @@ const runtimeRng = runtime;
 
             const menuPanel = document.getElementById('menuPanel'), houseToggle = document.getElementById('houseToggle'), viewFixedBtn = document.getElementById('viewFixedBtn'), viewTpBtn = document.getElementById('viewTpBtn'), viewFpBtn = document.getElementById('viewFpBtn'), resetBtn = document.getElementById('resetBtn');
             document.getElementById('menuDot').addEventListener('click', () => { SND.play('ui'); menuPanel.classList.toggle('open'); });
-            houseToggle.addEventListener('click', () => { SND.play('ui'); fullHouse = !fullHouse; houseToggle.classList.toggle('on', fullHouse); fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; });
+            /** J2.8：小屋形态的**唯一**应用点 —— 菜单按钮、持久化初始化、测试钩子共用它，
+             *  避免"改了一处忘了另一处"（搬迁前这段逻辑在 3 个地方各写了一遍）。 */
+            function applyFullHouse(on) { fullHouse = !!on; houseToggle.classList.toggle('on', fullHouse); fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; }
+            houseToggle.addEventListener('click', () => { SND.play('ui'); applyFullHouse(!fullHouse); store.set('house.full', fullHouse); });
             function resetSlime() { player.pos.set(0, 0, 5.2); player.vy = 0; player.yaw = Math.PI; player.moveSpeed = 0; player.onGround = true; camYaw = Math.PI; camPitch = 0.32; pendYaw = 0; pendPitch = 0; slime.squash = SLIME_FLAT; slime.squashV = 0; slime.wob = 0; slime.wobV = 0; }
             resetBtn.addEventListener('click', () => { SND.play('ui'); resetSlime(); });
-            function setViewMode(m) { viewMode = m; viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
+            function setViewMode(m) { viewMode = m; store.set('view.mode', m); cameraRig.setMode(m); viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
             viewFixedBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fixed'); }); viewTpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('tp'); }); viewFpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fp'); });
             const sfxToggle = document.getElementById('sfxToggle'), sfxSlider = document.getElementById('sfxSlider');
-            sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
-            sfxSlider.addEventListener('input', () => SND.setVolume(parseFloat(sfxSlider.value)));
+            sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); store.set('audio.enabled', on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
+            sfxSlider.addEventListener('input', () => { const v = parseFloat(sfxSlider.value); SND.setVolume(v); store.set('audio.volume', v); });
+            // J2.8：把持久化的设置**应用回场景与 UI** —— 刷新后保持上次的选择（风险 R4 的正面）。
+            // 放在这里是因为它需要菜单 DOM（houseToggle / viewXxxBtn / sfxToggle / sfxSlider）已就绪；
+            // `?deterministic=1` 下 store 不持久化，读到的必然是默认值 ⇒ 像素回归与冒烟仍然**环境无关**。
+            sfxToggle.classList.toggle('on', SND.isEnabled());
+            sfxSlider.value = String(SND.getVolume());
+            applyFullHouse(store.get('house.full'));
+            setViewMode(store.get('view.mode'));
             function applySign() { signText = signInput.value.trim() || '魔女小屋'; drawSign(signText); signEditor.classList.remove('show'); signInput.blur(); SND.play('chim'); }
             document.getElementById('signOk').addEventListener('click', applySign);
             signInput.addEventListener('keydown', e => { if (e.key === 'Enter') applySign(); if (e.key === 'Escape') { signEditor.classList.remove('show'); signInput.blur(); } e.stopPropagation(); });
@@ -7566,13 +7432,12 @@ const runtimeRng = runtime;
                 core.scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + slime.pulse) + (casting ? 0.15 : 0)); core.position.set(Math.sin(time * 1.3) * 0.012, 0.015 * Math.sin(time * 1.9), Math.sin(time * 1.1) * 0.010);
                 for (const b of bubbles) { const t = (time * 0.22 + b.userData.ph) % 1; const r2 = b.userData.rr * (1 - t * 0.45); b.position.set(Math.cos(b.userData.ang) * r2, -0.12 + t * 0.24, Math.sin(b.userData.ang) * r2); b.scale.setScalar(0.5 + 0.5 * Math.sin(t * Math.PI)); }
                 const shs = 1 / Math.sqrt(sy); slimeShadow.scale.set(shs, shs, 1); slimeShadow.material.opacity = 0.10 + 0.10 / sy;
-                if (viewMode === 'fixed') { const cp = Math.cos(fixPitch), sp = Math.sin(fixPitch); camera.position.set(FIX_LOOK.x + Math.sin(fixYaw) * cp * fixDist, FIX_LOOK.y + sp * fixDist, FIX_LOOK.z + Math.cos(fixYaw) * cp * fixDist); camera.lookAt(FIX_LOOK); }
-                else if (viewMode === 'fp') { camera.position.set(player.pos.x, player.pos.y + 0.30, player.pos.z); camera.lookAt(player.pos.x + Math.sin(camYaw) * Math.cos(camPitch) * 10, player.pos.y + 0.30 + Math.sin(camPitch) * 10, player.pos.z + Math.cos(camYaw) * Math.cos(camPitch) * 10); }
-                else { const cp = Math.cos(camPitch), sp = Math.sin(camPitch); const px = player.pos.x - Math.sin(camYaw) * cp * viewDist, py = player.pos.y + 0.34 + sp * viewDist, pz = player.pos.z - Math.cos(camYaw) * cp * viewDist; camera.position.set(px, Math.max(py, 0.25), pz); camera.lookAt(player.pos.x, player.pos.y + 0.25, player.pos.z); }
+                // J2.7：三段解算搬进 CameraRig（按当前视角选 solver；原先是 if / else if / else 三段）
+                cameraRig.update({ fixYaw, fixPitch, fixDist, camYaw, camPitch, viewDist, player, look: FIX_LOOK });
             }
 
             /* ==================== 天空·时间·天气系统 ==================== */
-            let gameSec = 10 * 3600, timeScale = 60;
+            let gameSec = 10 * 3600, timeScale = store.get('time.scale');   // J2.8：时间流速来自设置
             const curHour = () => (gameSec / 3600) % 24;
             const WX_LIST = ['sunny', 'cloudy', 'fog', 'rain', 'storm', 'snow', 'blizzard'];
             const WX_NAME = { sunny: '晴', cloudy: '多云', fog: '雾', rain: '雨', storm: '暴雨', snow: '雪', blizzard: '暴雪' };
@@ -7590,7 +7455,10 @@ const runtimeRng = runtime;
             const wxChipsBox = document.getElementById('wxChips'), wxRandToggle = document.getElementById('wxRandToggle'), timeSlider = document.getElementById('timeSlider'), speedSlider = document.getElementById('speedSlider'), clockEl = document.getElementById('clock');
             const chipEls = [];
             for (const t of WX_LIST) { const b = document.createElement('div'); b.className = 'wxChip'; b.textContent = WX_NAME[t]; b.addEventListener('click', () => { SND.play('ui'); setWeather(t); }); wxChipsBox.appendChild(b); chipEls.push(b); }
-            function setWeather(t) { wx.type = t; chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
+            // J2.10：环境量（天气 / 时间 / 采光）有了唯一持有者，并通过 bus 广播 env:change。
+            // 需要响应环境的东西改为**订阅事件**，而不是去读 wx.type / uDaylight（不变量 N1）。
+            const environment = createEnvironment({ bus, fillMaterial: FILL });
+            function setWeather(t) { wx.type = t; environment.setWeather(t); chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
             setWeather('sunny');
             wxRandToggle.addEventListener('click', () => { SND.play('ui'); wx.random = !wx.random; wxRandToggle.classList.toggle('on', wx.random); wx.timer = 6 + runtimeRng() * 10; });
             function sliderToScale(v) { if (v <= 0) return 0; if (v <= 0.5) return v * 120; return 60 + (v - 0.5) * 2 * (3600 - 60); }
@@ -7924,7 +7792,7 @@ const runtimeRng = runtime;
                 _amb.multiplyScalar(brightness);
 
                 FILL.uniforms.uColor.value.copy(_amb);
-                FILL.uniforms.uDaylight.value = dayFactor;
+                environment.applyDaylight(dayFactor);   // J2.10：采光走环境的唯一入口（内部写 uDaylight）
 
                 WIN_GLASS.color.setHex(0xffffff);
                 if (twilight > 0.03) WIN_GLASS.color.lerp(_warm, twilight * 0.3);
@@ -8057,11 +7925,30 @@ const runtimeRng = runtime;
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
             let testCam = null;
             let ptLantern = 1, ptKot = 1, ptMc = 0, ptCb = 0, ptPlant = 0;
+            // J2.3：室内点光源改为**注册式**（原实现是 tickOnce() 里 8 行硬编码的 PP[i]/PC[i]/PG[i]）。
+            // ★ 注册顺序 = 槽位顺序：shader 的闪烁相位含 float(i)，顺序一换画面就变 ——
+            //   所以这 8 个的次序必须与原 PP[0]…PP[7] **完全一致**，位置/颜色/半径/yMin/yMax 也逐字照搬。
+            //   位置来自 cabin/world/layout.js（不变量 N9），强度用闭包读状态量，于是 core/ 里
+            //   不出现任何具体物件的名字（不变量 N1）。
+            const lightField = createLightField({ fillMaterial: FILL, warn: (m) => console.warn(m) });
+            lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [MTX, 2.52, MTZ], color: 0xffb066, radius: 4.6, strength: () => ptLantern, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [CCX, 1.14, CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [MC_X, 0.36, MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ptMc, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [KOT_X, 0.48, KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [CBX, 0.88, CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ptCb, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor2/candle', position: [NSX, FY + 1.00, NSZ], color: 0xffc06a, radius: 3.6, strength: () => candleP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => magicP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [PLX, 0.48, PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ptPlant, yMin: 0.0, yMax: 3.04 }));
+            // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
+            for (const src of lightField.sources) registry.registerLight(src);
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
             function tickOnce() {
                 const time = clock.now; const dt = clock.dt;
                 updateSprings(); updatePlayer(dt, time); updateWeatherSystem(dt, time); updateInteractHint();
+                // J2.10：把这一帧累积的环境变化合并成**至多一次**广播 env:change（节流在 environment 内部：
+                // 天气换了或采光变化 > 1% 才 emit —— 太阳每帧都在走，逐帧广播毫无意义）。
+                environment.setGameHour(curHour()); environment.flush();
                 updateWand(dt, time);
                 updateBlast(dt, time);
 
@@ -8980,27 +8867,18 @@ const runtimeRng = runtime;
                 ptMc += ((mcRun > 0 ? 1 : 0) - ptMc) * 0.055;
                 ptCb += ((cbRun > 0 ? 1 : 0) - ptCb) * 0.055;
                 ptPlant += ((plantRun > 0 ? 1 : 0) - ptPlant) * 0.055;
-                {
-                    const PP = FILL.uniforms.uPtPos.value, PC = FILL.uniforms.uPtCol.value, PG = FILL.uniforms.uPtCfg.value;
-                    PP[0].set(MTX, 2.52, MTZ); PC[0].set(0xffb066); PG[0].set(4.6, ptLantern, 0.0, 3.04);
-                    PP[1].set(CCX, 1.14, CCZ); PC[1].set(0x6fa8ff); PG[1].set(5.6, 0.92, 0.0, 3.04);
-                    PP[2].set(MC_X, 0.36, MC_Z); PC[2].set(0x9b6fe8); PG[2].set(5.2, ptMc, 0.0, 3.04);
-                    PP[3].set(KOT_X, 0.48, KOT_Z); PC[3].set(0xffa858); PG[3].set(4.2, ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), 0.0, 3.04);
-                    PP[4].set(CBX, 0.88, CBZ); PC[4].set(0xb5a0f2); PG[4].set(3.6, ptCb, 0.0, 3.04);
-                    PP[5].set(NSX, FY + 1.00, NSZ); PC[5].set(0xffc06a); PG[5].set(3.6, candleP, 3.02, 6.9);
-                    PP[6].set(1.75, TBL_TOP + 0.52, -2.72); PC[6].set(0xffe08a); PG[6].set(4.6, magicP, 3.02, 6.9);
-                    PP[7].set(PLX, 0.48, PLZ); PC[7].set(0x9bc0e8); PG[7].set(3.8, ptPlant, 0.0, 3.04);
-                }
+                // J2.3：8 个槽位的填充交给光照场（原先是 8 行 PP[i]/PC[i]/PG[i] 硬编码）。
+                // 光源在初始化时注册过一次，这里只按注册顺序刷新强度 —— 新增一盏灯不再改本文件。
+                lightField.update(time, dt);
 
                 if (camShake > 0.002) {
-                    camera.position.x += (runtimeRng() - 0.5) * camShake;
-                    camera.position.y += (runtimeRng() - 0.5) * camShake;
-                    camera.position.z += (runtimeRng() - 0.5) * camShake;
+                    // J2.7：抖动位移交给 CameraRig；衰减与判据留在这里（它们是本文件的状态量）
+                    cameraRig.applyShake(camShake, runtimeRng);
                     camShake *= Math.exp(-3.2 * dt);
                 }
 
                 // J0.4：测试机位覆盖 —— 固定相机位用于截图回归（realtime 下 testCam 恒为 null，不生效）
-                if (testCam) { camera.position.set(testCam[0], testCam[1], testCam[2]); camera.lookAt(testCam[3], testCam[4], testCam[5]); }
+                if (testCam) cameraRig.applyTestCamera(testCam);
 
                 renderer.render(scene, camera);
                 // F0.3：手动模式下由主循环驱动装饰循环（realtime 模式由它自己的 rAF 驱动）
@@ -9033,10 +8911,8 @@ const runtimeRng = runtime;
                 //       默认是剖切模式：省略的墙/屋顶用虚线表示，便于从外面看到室内；
                 //       true = 显示完整外观（实墙 + 屋顶）。截图机位据此选择「看室内」还是「看整体」。
                 window.__cabinSetFullHouse = function (on) {
-                    fullHouse = !!on;
-                    houseToggle.classList.toggle('on', fullHouse);
-                    fullHouseGroup.visible = fullHouse;
-                    dashedGroup.visible = !fullHouse;
+                    // J2.8：与菜单按钮共用同一个应用点；测试钩子**不写 store**（避免测试污染用户设置）
+                    applyFullHouse(on);
                     return fullHouse;
                 };
                 // 静止重绘：**只重绘，不推进任何状态**。
@@ -9075,3 +8951,4 @@ const runtimeRng = runtime;
             }
             addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
         })();
+}
