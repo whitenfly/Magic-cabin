@@ -518,7 +518,7 @@ git ls-remote --tags origin
 | 9 | ★ **阶段收尾必须跑 `pnpm ship`，并把生成的推送命令执行完** | 否则 `main` 与正式 tag 滞留本地，而记录上"看不出少做了什么"（2026-09-14 事故） |
 | 10 | ★ **任务打的 `v0.2.0-dev.N` 必须用 `git push origin <tag…>` 单独推** | `git push origin dev` **不会**带上 tag —— 11 个 tag 滞留本地就是这个原因 |
 | 11 | ★ **推送完成后跑一次 `pnpm git:status`** | 它是"待执行命令"翻成 `[x]` 的唯一时机；不跑就永远停在 `[ ]` |
-| 12 | ★ **模型在会话里执行 git 一律走 `pnpm git:exec -- git …`** | 见 §13：否则模型执行的命令不会进入记录（人工敲的不在此列，也无须记录） |
+| 12 | ★ **模型执行的 git「变更命令」一律走 `pnpm git:exec -- git …`** | 见 §13：否则不进记录。只读查询（`status`/`log`/`diff`…）可直接跑，它们**不该**进历史 |
 
 ---
 
@@ -527,29 +527,54 @@ git ls-remote --tags origin
 > 本节的规则由**模型自觉遵守 + 工具强制记录**共同保证；它回答的是
 > 「AI 在开发过程中到底跑了哪些 git 命令」这个可追溯性问题。
 
-### 13.1 需求边界（2026-09-14 明确）
+### 13.1 需求边界（2026-09-14 明确，二次收窄）
 
-> **模型在开发中自动执行的每一条 git 命令都必须被记录；不包括人工在终端敲的命令。**
+> **记录所有对仓库有影响、有修改的 git 命令；**
+> **不包括仅查看状态、查看仓库这类无修改的命令。**
+> 只管**模型**执行的，不管人工在终端敲的。
 
-因此**不用** git 自带的 `trace2`（它会把人工命令一并捕获，还要改用户级 `git config` —— 边界不准、
-动用户环境）。边界改划在**入口**上：
+两条边界各自排除了一个方案：
+
+| 被排除的做法 | 为什么 |
+|---|---|
+| git 自带的 `trace2`（"捕获所有 git 命令"） | 会把**人工**命令一并卷进来（边界不准），且 `trace2.eventTarget` 只有用户级 config 才生效（实测 git 2.55），要动用户环境 |
+| 把只读查询也记进历史 | `status` / `log` / `diff` / `rev-parse` / `reflog` 是"**查看**"不是"**修改**" —— 记进去只会让历史被噪音淹没 |
+
+边界因此落在**入口 + 判据**两件事上：
 
 ```bash
-pnpm git:exec -- git add -A
-pnpm git:exec -- git commit -F .cache/commit-msg.txt
-pnpm git:exec -- git status --short          # ★ 只读查询同样记录
+pnpm git:exec -- git add -A                       # ★ 变更类 → 记
+pnpm git:exec -- git commit -F .cache/commit-msg.txt   # ★ 变更类 → 记
+pnpm git:exec -- git status --short               # 只读查询 → 执行，但不记
 ```
 
-工具代为执行，并把**原命令 + 退出码**写进本次记录（只读查询也写）。
-于是"模型跑过什么"既不依赖事后回忆，也不依赖 git 的追踪机制。
+工具**代为执行**，把**原命令 + 退出码**写进记录 —— 于是"模型跑过什么"既不依赖事后回忆，
+也不依赖 git 的追踪机制。
+
+**什么算"有修改"**（`isMutatingGit()` 的判据，实现见 `scripts/release.mjs`）：
+
+| 记 | 不记 |
+|---|---|
+| `add` `commit` `merge` `rebase` `reset` `cherry-pick` `revert` `stash` | `log` `status` `diff` `show` `rev-parse` `reflog` `describe` `ls-files` |
+| `switch` `checkout` `restore` `rm` `mv` `clean` `apply` `am` | `tag -l` / `tag --points-at`（查询用法） |
+| `push` `pull` `fetch` `clone` `init` | `branch --show-current` / `-l` / `-vv` |
+| `tag -a/-d/-s/-f`、`branch -d/-m/-c`、`remote add/set-url` | `config --get/--list`、`remote -v` |
+| `update-ref` `symbolic-ref` `update-index` `read-tree` `write-tree` | `ls-remote` |
+| `gc` `prune` `pack-refs` `filter-branch` `sparse-checkout` `notes` `submodule` `worktree` | —— |
+
+> 判据里带着**同一命令的两种用法**（`tag -l` vs `tag -a`、`config --get` vs `config k v`）——
+> 见 §13.4 的测试，别只按命令名判。
 
 ### 13.2 三条记录路径的分工
 
 | 记录路径 | 覆盖范围 | 命令来源 | 可信度 |
 |---|---|---|---|
-| `pnpm git:exec -- git …` | **模型执行的每一条** git 命令（变更 + 只读） | **原命令** | ★★★ 直接捕获 |
+| `pnpm git:exec -- git …` | **模型执行的对仓库有修改的命令** | **原命令** | ★★★ 直接捕获 |
 | `task:start` / `verify` / `done` / `ship` / `sync` | 这些工具自动执行的 git 操作 | **原命令** | ★★★ 直接捕获 |
 | `post-commit` / `post-merge` 钩子 | 提交 / 合并**事件**（含人工在终端做的） | **重建**（钩子拿不到原文，素材来自 reflog） | ★★ 等价但非原样 |
+
+**补登记**：`record --ops="git …"`（可多次）用于"忘了走 exec"的场景；
+传入的只读查询会被**自动过滤**并在记录里如实报告忽略了几条。
 
 ### 13.3 ⚠️ PowerShell 引号坑（实测）
 

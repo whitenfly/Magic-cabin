@@ -23,6 +23,7 @@ import {
   buildEntry,
   parseMergeSource,
   parseExecArgs,
+  isRecordableOp,
   TAG_STATE,
 } from '../../scripts/release.mjs'
 
@@ -232,4 +233,68 @@ test('parseExecArgs：空参数返回空数组（调用方据此报用法错误�
 
 test('parseExecArgs：只剥掉第一个 git（参数里再有 git 字样不动它）', () => {
   assert.deepEqual(parseExecArgs(['--', 'git', 'log', '--grep=git']), ['log', '--grep=git'])
+})
+
+/* ───────── ⑦ 记录边界：只记"对仓库有修改"的命令，查询一律不记 ───────── */
+
+test('★ isRecordableOp：变更类命令要记', () => {
+  for (const op of [
+    'git add -A',
+    'git commit -F .cache/commit-msg.txt',
+    'git commit --amend -F msg.txt',
+    'git merge --no-ff dev -m x',
+    'git tag -a v1 -m x',
+    'git tag -d v1',
+    'git branch -d task/x',
+    'git switch dev',
+    'git push origin dev',
+    'git reset --soft HEAD~1',
+    'git update-ref refs/remotes/origin/dev HEAD',
+    'git config trace2.eventTarget /tmp/x',
+    'git stash',
+    'git clean -fd',
+  ]) {
+    assert.equal(isRecordableOp(op), true, `应记：${op}`)
+  }
+})
+
+test('★ isRecordableOp：只读查询一律不记（查看状态 / 查看仓库）', () => {
+  for (const op of [
+    'git status',
+    'git status --short',
+    'git log --oneline -3',
+    'git log -1 --format=%s',
+    'git rev-parse --short HEAD',
+    'git reflog -20',
+    'git diff --stat',
+    'git show HEAD',
+    'git tag -l',
+    'git tag --points-at HEAD',
+    'git branch --show-current',
+    'git branch -vv',
+    'git ls-files',
+    'git describe --tags',
+    'git config --get user.name',
+    'git config --list',
+    'git ls-remote --tags origin',
+    'git remote -v',
+    '',
+    '   ',
+  ]) {
+    assert.equal(isRecordableOp(op), false, `不应记：${JSON.stringify(op)}`)
+  }
+})
+
+test('isMutatingGit：补全的引用/对象库操作也识别为变更', () => {
+  for (const args of [
+    ['update-ref', 'refs/remotes/origin/dev', 'HEAD'],
+    ['symbolic-ref', 'HEAD', 'refs/heads/dev'],
+    ['clean', '-fd'],
+    ['gc', '--prune=now'],
+    ['filter-branch', '--tree-filter', 'x'],
+    ['config', 'user.name', 'x'],
+  ]) {
+    assert.equal(isMutatingGit(args), true, `应识别为变更：git ${args.join(' ')}`)
+  }
+  assert.equal(isMutatingGit(['config', '--get', 'user.name']), false, 'config --get 是查询')
 })

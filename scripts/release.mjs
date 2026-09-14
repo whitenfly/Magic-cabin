@@ -171,7 +171,31 @@ function isMutatingGit(args) {
     case 'stash':
     case 'init':
     case 'clone':
+    // ── 引用的直接操作与对象库操作（都确实改了仓库，别漏）──
+    case 'update-ref':
+    case 'symbolic-ref':
+    case 'update-index':
+    case 'read-tree':
+    case 'checkout-index':
+    case 'write-tree':
+    // ── 工作区 / 补丁类 ──
+    case 'clean':
+    case 'apply':
+    case 'am':
+    // ── 维护类（会改写对象库与引用）──
+    case 'gc':
+    case 'prune':
+    case 'pack-refs':
+    case 'replace':
+    case 'filter-branch':
+    case 'sparse-checkout':
+    case 'notes':
+    case 'submodule':
+    case 'worktree':
       return true;
+    case 'config':
+      // `config --get/--list/-l/…` 是查询；`config <key> <value>` / `--unset` / `--add` 是写
+      return !has('--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l');
     case 'tag':
       // `tag -l` / `--points-at` / `--list` 是查询；`-a` / `-d` / `-s` / `-f` 才是写
       return has('-a', '-d', '-s', '-f');
@@ -968,24 +992,46 @@ function parseExecArgs(args) {
   return argv;
 }
 
+/**
+ * `record --ops="git …"` 的字符串是否值得记 —— 只留**对仓库有修改**的命令。
+ *
+ * 与 `isMutatingGit()` 同一套判据，只是输入是字符串而非 argv。
+ * 抽出来是为了可测：补登记时把 `git status` 之类的查询混进去是很容易犯的错。
+ */
+function isRecordableOp(op) {
+  const argv = String(op)
+    .trim()
+    .replace(/^git(\.exe)?\s+/i, '')
+    .split(/\s+/)
+    .filter(Boolean);
+  return argv.length > 0 && isMutatingGit(argv);
+}
+
 function cmdExec(args) {
   const argv = parseExecArgs(args);
   if (argv.length === 0) die('用法：node scripts/release.mjs exec -- git <args…>');
+  // ★ 只记**对仓库有修改**的命令（`add` / `commit` / `merge` / `tag -a` / `branch -d` / `push`…）。
+  //   只读查询（`status` / `log` / `diff` / `rev-parse` / `reflog`…）照常执行、照常输出，
+  //   但**不进历史** —— 否则每次查看状态都会污染记录（见 docs/VERSIONING.md §13.1）。
+  const recordable = isMutatingGit(argv);
   step(`exec: git ${argv.map(fmtArg).join(' ')}`);
   const r = git(argv, { allowFail: true });
   if (r.out) process.stdout.write(r.out);
-  const flipped = appendRecord(
-    buildEntry({
-      task: `git ${argv[0]}${argv[1] && !argv[1].startsWith('-') ? ` ${argv[1]}` : ''}`,
-      kind: 'exec',
-      st: collectLight(),
-      // ★ 显式传入（不依赖 isMutatingGit 的采集）：只读查询也要留下原命令
-      ops: [`git ${argv.map(fmtArg).join(' ')}`],
-      body: [`- 退出码：${r.status}${r.status === 0 ? '' : '  ⚠️ 非零'}`],
-      note: '本命令由模型通过 exec 入口执行并自动记录（见 docs/VERSIONING.md §13）。',
-    }),
-  );
-  reportFlipped(flipped);
+  if (recordable) {
+    const flipped = appendRecord(
+      buildEntry({
+        task: `git ${argv[0]}${argv[1] && !argv[1].startsWith('-') ? ` ${argv[1]}` : ''}`,
+        kind: 'exec',
+        st: collectLight(),
+        ops: [`git ${argv.map(fmtArg).join(' ')}`],
+        body: [`- 退出码：${r.status}${r.status === 0 ? '' : '  ⚠️ 非零'}`],
+        note: '本命令由模型通过 exec 入口执行并自动记录（见 docs/VERSIONING.md §13）。',
+      }),
+    );
+    reportFlipped(flipped);
+  } else {
+    info('只读查询：已执行，按约定不进历史（§13.1）');
+  }
   if (r.status !== 0) process.exitCode = r.status;
 }
 
@@ -993,8 +1039,12 @@ function cmdRecord(args) {
   const kindArg = args.find((a) => a.startsWith('--kind='));
   const kind = kindArg ? kindArg.slice('--kind='.length) : 'manual';
   const task = args.filter((a) => !a.startsWith('--')).join(' ') || '(未命名)';
-  // 事后补登记：--ops="git add -A"（可多次传入）—— 给"忘了走 exec"的场景兜底
-  const extraOps = args.filter((a) => a.startsWith('--ops=')).map((a) => a.slice('--ops='.length));
+  // 事后补登记：--ops="git add -A"（可多次传入）—— 给"忘了走 exec"的场景兜底。
+  // ★ 只留**对仓库有修改**的命令：把 `git status` 之类的查询混进来是很容易犯的错，
+  //   而它们按 §13.1 不该出现在历史里 ⇒ 这里直接过滤掉并如实报告忽略了几条。
+  const allOps = args.filter((a) => a.startsWith('--ops=')).map((a) => a.slice('--ops='.length));
+  const extraOps = allOps.filter(isRecordableOp);
+  const droppedOps = allOps.length - extraOps.length;
   const KIND_DESC = {
     commit: 'git 钩子自动记录：产生了一次提交',
     merge: 'git 钩子自动记录：完成了一次合并',
@@ -1004,6 +1054,7 @@ function cmdRecord(args) {
   //   并明确标注是"重建"（与工具路径的「实际执行」原样捕获区分开，两者可信度不同）。
   const rebuilt = reconstructOp(kind);
   const body = [`- 来源：${KIND_DESC[kind] ?? kind}`];
+  if (droppedOps > 0) body.push(`- 已忽略 ${droppedOps} 条只读查询（按 §13.1 只记有修改的命令）`);
   if (rebuilt) {
     body.push(`- **重建**命令（钩子拿不到原文，此处由 git 状态还原）：\`${rebuilt}\``);
   } else if (kind === 'merge' || kind === 'commit') {
@@ -1144,6 +1195,7 @@ export {
   buildEntry,
   parseMergeSource,
   parseExecArgs,
+  isRecordableOp,
   TAG_STATE,
   DEV_BRANCH,
   MAIN_BRANCH,
