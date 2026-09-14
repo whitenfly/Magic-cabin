@@ -326,7 +326,7 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 | `pnpm task:start J2.1 camera-rig` | 开任务分支 | 前置检查（是否在 `dev`、工作区是否干净、`dev` 是否有未推送）→ `git switch -c task/J2.1-camera-rig` → 追加记录 |
 | `pnpm task:verify J2.1` | 跑门禁并记录 | `typecheck + verify + build`，逐项记录耗时与结果（`-- --quick` 只跑前两项） |
 | `pnpm task:done J2.1` | 收尾一个任务 | 校验工作区干净 → 跑完整门禁 → `git merge --no-ff` 回 `dev` → 打 `v0.2.0-dev.N` tag → 删任务分支 → 追加记录与推送命令 |
-| `pnpm git:status` | 仓库状态总览 | 分支 / HEAD / 工作区 / 未推送提交 / 每个 tag 的同步状态。**只读，不改任何文件** |
+| `pnpm git:status` | 仓库状态总览 | 分支 / HEAD / 工作区 / 未推送提交 / 每个 tag 的同步状态；并**自动把已验证执行的 `[ ]` 翻成 `[x]`**（除此之外不改动任何记录） |
 | `pnpm ship` | 生成推送命令 | 按实际 git 状态生成**待人工执行**的 push 命令并追加记录。**绝不执行 push** |
 | `pnpm ship main` | 生成发布计划 | `dev` → `main` 的合并 + 正式版 tag 的一整套命令（含要手工改的 `package.json` version） |
 | `pnpm git:history` | 查看自动记录区 | 打印 `GitPushHistory.md` 的追加记录 |
@@ -393,6 +393,10 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 # 人工确认 tag 是否已推送（在能联网的普通终端执行）
 git ls-remote --tags origin
 ```
+
+> **`git:status` 会顺带做完成标记**：每次运行都会把「能证明已执行」的 `[ ]` 翻成 `[x]`，
+> 除此之外**不改动任何已记录内容**。所以推送结束后跑一次 `pnpm git:status`，
+> 待执行命令区块会自动变成已完成状态——这是这条命令的固定收尾用法。
 
 ### 12.5 强制红线
 

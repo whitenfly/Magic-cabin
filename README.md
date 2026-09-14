@@ -143,7 +143,7 @@ git tag -a v0.2.0-dev.1 -m "J2.1 完成"       # ③ 开发版快照
 pnpm task:start J2.1 camera-rig   # 开任务分支
 pnpm task:done J2.1               # 收尾：门禁 → 合并回 dev → 打 -dev.N tag
 pnpm ship                         # 生成待人工执行的推送命令（不自动 push）
-pnpm git:status                   # 只读：分支 / 未推送 / tag 同步状态
+pnpm git:status                   # 分支 / 未推送 / tag 同步状态，并自动标记已完成命令
 ```
 
 > 每个动作都会**自动追加**到 `GitPushHistory.md`（本地专用、不进版本库，规则见 §12）：

@@ -699,7 +699,14 @@ function cmdStatus() {
   if (!st.main.exists) warn('origin/main 不存在（首次推送前）');
   for (const c of st.main.commits) say(`  ${c}`);
   say('');
-  info('（status 只读：不改动 GitPushHistory.md）');
+  const flipped = syncHistory({}); // 只做完成标记：把已验证执行的 [ ] 翻成 [x]，不追加任何内容
+  if (flipped?.length) {
+    say('');
+    step('完成标记（自动）');
+    reportFlipped(flipped);
+  } else {
+    info('（status 不改动 GitPushHistory.md：仅在能证明命令已执行时才翻 [x]）');
+  }
 }
 
 function cmdHistory() {
