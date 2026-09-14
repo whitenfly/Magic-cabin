@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-14",
   "totals": {
-    "files": 30,
-    "lines": 11566
+    "files": 33,
+    "lines": 11940
   },
-  "combined": "91fb1756bbd0cdab9ac091a8f855d8b5b6da5749b90b1d5c9bc706b1b7a81f55",
+  "combined": "8b8705780bffc485d0cd3dddd720b76e16b4993b737196885d23028236539e72",
   "files": {
     "app/App.js": "5346e3e6dd63da0c",
     "app/clock.js": "bf08267716714873",
@@ -34,8 +34,11 @@
     "core/README.md": "f9e6d693b9813b3d",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "6463d448cc163d8a",
-    "legacy/monolith.js": "dceb66a298626eca",
+    "legacy/monolith.js": "8ac0756b4228c750",
     "props/README.md": "600f9c9259b2ee19",
+    "systems/interaction/HintUI.js": "1794afdcb98dae86",
+    "systems/interaction/InteractionSystem.js": "beab0e4eff8f7bbd",
+    "systems/interaction/types.js": "14a1a233b2e9ee3a",
     "systems/README.md": "5278ee9befdf972a",
     "world/layout.js": "f9838f2036b49850",
     "world/README.md": "c1acb1851828d7ff"
