@@ -38,10 +38,12 @@ import { scene as rngScene, runtime as runtimeRng, SCENE_SEED } from './rng.js'
 import { createEventBus } from './EventBus.js'
 import { createRegistry } from './Registry.js'
 import { createUpdateScheduler } from './UpdateScheduler.js'
+import { createStore } from './store.js'
 
 /**
  * @param {object} [options]
  * @param {number} [options.rngSeed] 场景种子（默认取 `rng.js` 的 `SCENE_SEED`）
+ * @param {boolean} [options.persist] 设置是否持久化（`?deterministic=1` 时传 false，见 `store.js` 纪律 3）
  * @param {(msg: string, ...rest: any[]) => void} [options.log] 日志出口（默认静默，测试可注入）
  * @returns 应用内核实例
  */
@@ -51,6 +53,9 @@ export function createApp(options = {}) {
   const scheduler = createUpdateScheduler()
   const log = options.log || (() => {})
   const seed = options.rngSeed ?? SCENE_SEED
+  // J2.8：设置存储。`persist: false` 时只写内存 —— 测试必须**环境无关**
+  // （否则"上一次测试把音量调到 0"会变成画面差异，而这与代码有没有改坏无关）。
+  const store = createStore({ persist: options.persist !== false, warn: (m) => log(m) })
 
   /** @type {Map<string, object>} 已装配的模块（按 id 查重） */
   const features = new Map()
@@ -64,6 +69,7 @@ export function createApp(options = {}) {
     bus,
     scheduler,
     registry,
+    store,
     log,
     seed,
   }
@@ -120,6 +126,7 @@ export function createApp(options = {}) {
     bus,
     scheduler,
     registry,
+    store,
     ctx,
     /** 场景随机源（构建期永久确定）与运行期随机源 */
     rng: { scene: rngScene, runtime: runtimeRng },
@@ -144,6 +151,9 @@ export function createApp(options = {}) {
         registry: registry.stats(),
         scheduler: scheduler.stats(),
         clock: clock.snapshot(),
+        // J2.8：设置与持久化状态（`persist: false` 时说明跑在确定性模式）
+        settings: store.snapshot(),
+        persist: store.persist,
       }
     },
   }
