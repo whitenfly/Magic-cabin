@@ -199,7 +199,9 @@ export async function bootCabin() {
 
   // ③ 造应用内核（J2.5）：时钟 / 随机源 / 事件总线 / 注册中心 / 更新调度器都挂在它上面。
   //    内核必须先于 3D 实现存在 —— 实现会把自己的登记动作接上去（installCabin）。
-  const app = createApp()
+  //    J2.8：`?deterministic=1` 时**关闭持久化** —— 测试必须环境无关，
+  //    否则"上一次测试把音量/视角改过"会变成画面差异，而这与代码有没有改坏无关。
+  const app = createApp({ persist: !opts.deterministic })
   if (opts.stats) {
     // 与 `window.__cabinRenderStats` 同一个开关：只在 `?stats=1` 时暴露，
     // 正常游玩路径上不存在这个接口（沿用 J0.4/J0.6 的约定）。

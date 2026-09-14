@@ -63,7 +63,7 @@ const runtimeRng = runtime;
  * @param {object} app `createApp()` 的产物
  */
 export function installCabin(app) {
-    const { registry, bus, scheduler } = app;
+    const { registry, bus, scheduler, store } = app;
     (function () {
             'use strict';
             const mqCoarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
@@ -76,7 +76,8 @@ export function installCabin(app) {
                 const NAMES = ['door', 'window', 'fire', 'lamp', 'cast', 'magic', 'cat', 'toggle', 'ui', 'chim', 'doorbell'];
                 const pool = {};
                 for (const n of NAMES) { const a = new Audio('sounds/' + n + '.mp3'); a.preload = 'auto'; pool[n] = a; }
-                let vol = 0.6, on = true;
+                // J2.8：音量与音效开关由 store 决定（刷新后保持上次的选择；?deterministic=1 下不持久化）
+                let vol = store.get('audio.volume'), on = store.get('audio.enabled');
                 function play(name) {
                     if (!on) return;
                     const a = pool[name];
@@ -207,7 +208,10 @@ export function installCabin(app) {
             }
             logGable(4, [WIN_GABLE]);
 
-            const fullHouseGroup = new THREE.Group(); fullHouseGroup.visible = false; scene.add(fullHouseGroup); let fullHouse = false;
+            const fullHouseGroup = new THREE.Group(); fullHouseGroup.visible = false; scene.add(fullHouseGroup);
+            // J2.8：小屋形态由 store 决定（默认剖切）。可见性由菜单就绪后的 applyFullHouse() 统一应用，
+            // 所以这里刻意**不**直接同步 fullHouseGroup.visible —— 只有一处应用点，不会出现两套状态。
+            let fullHouse = store.get('house.full');
             {
                 const WIN_R = { c: -1.5, hw: 0.52, y0: 1.1, y1: 2.1 }; const WIN_B = { c: 1.5, hw: 0.52, y0: 1.1, y1: 2.1 };
                 logWall('z', 4, D_HALF, [WIN_R], 0.18, fullHouseGroup); logWall('x', -4, D_HALF, [WIN_B], 0.18, fullHouseGroup); logGable(-4, [], fullHouseGroup);
@@ -7344,14 +7348,24 @@ export function installCabin(app) {
 
             const menuPanel = document.getElementById('menuPanel'), houseToggle = document.getElementById('houseToggle'), viewFixedBtn = document.getElementById('viewFixedBtn'), viewTpBtn = document.getElementById('viewTpBtn'), viewFpBtn = document.getElementById('viewFpBtn'), resetBtn = document.getElementById('resetBtn');
             document.getElementById('menuDot').addEventListener('click', () => { SND.play('ui'); menuPanel.classList.toggle('open'); });
-            houseToggle.addEventListener('click', () => { SND.play('ui'); fullHouse = !fullHouse; houseToggle.classList.toggle('on', fullHouse); fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; });
+            /** J2.8：小屋形态的**唯一**应用点 —— 菜单按钮、持久化初始化、测试钩子共用它，
+             *  避免"改了一处忘了另一处"（搬迁前这段逻辑在 3 个地方各写了一遍）。 */
+            function applyFullHouse(on) { fullHouse = !!on; houseToggle.classList.toggle('on', fullHouse); fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; }
+            houseToggle.addEventListener('click', () => { SND.play('ui'); applyFullHouse(!fullHouse); store.set('house.full', fullHouse); });
             function resetSlime() { player.pos.set(0, 0, 5.2); player.vy = 0; player.yaw = Math.PI; player.moveSpeed = 0; player.onGround = true; camYaw = Math.PI; camPitch = 0.32; pendYaw = 0; pendPitch = 0; slime.squash = SLIME_FLAT; slime.squashV = 0; slime.wob = 0; slime.wobV = 0; }
             resetBtn.addEventListener('click', () => { SND.play('ui'); resetSlime(); });
-            function setViewMode(m) { viewMode = m; viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
+            function setViewMode(m) { viewMode = m; store.set('view.mode', m); viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
             viewFixedBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fixed'); }); viewTpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('tp'); }); viewFpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fp'); });
             const sfxToggle = document.getElementById('sfxToggle'), sfxSlider = document.getElementById('sfxSlider');
-            sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
-            sfxSlider.addEventListener('input', () => SND.setVolume(parseFloat(sfxSlider.value)));
+            sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); store.set('audio.enabled', on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
+            sfxSlider.addEventListener('input', () => { const v = parseFloat(sfxSlider.value); SND.setVolume(v); store.set('audio.volume', v); });
+            // J2.8：把持久化的设置**应用回场景与 UI** —— 刷新后保持上次的选择（风险 R4 的正面）。
+            // 放在这里是因为它需要菜单 DOM（houseToggle / viewXxxBtn / sfxToggle / sfxSlider）已就绪；
+            // `?deterministic=1` 下 store 不持久化，读到的必然是默认值 ⇒ 像素回归与冒烟仍然**环境无关**。
+            sfxToggle.classList.toggle('on', SND.isEnabled());
+            sfxSlider.value = String(SND.getVolume());
+            applyFullHouse(store.get('house.full'));
+            setViewMode(store.get('view.mode'));
             function applySign() { signText = signInput.value.trim() || '魔女小屋'; drawSign(signText); signEditor.classList.remove('show'); signInput.blur(); SND.play('chim'); }
             document.getElementById('signOk').addEventListener('click', applySign);
             signInput.addEventListener('keydown', e => { if (e.key === 'Enter') applySign(); if (e.key === 'Escape') { signEditor.classList.remove('show'); signInput.blur(); } e.stopPropagation(); });
@@ -7398,7 +7412,7 @@ export function installCabin(app) {
             }
 
             /* ==================== 天空·时间·天气系统 ==================== */
-            let gameSec = 10 * 3600, timeScale = 60;
+            let gameSec = 10 * 3600, timeScale = store.get('time.scale');   // J2.8：时间流速来自设置
             const curHour = () => (gameSec / 3600) % 24;
             const WX_LIST = ['sunny', 'cloudy', 'fog', 'rain', 'storm', 'snow', 'blizzard'];
             const WX_NAME = { sunny: '晴', cloudy: '多云', fog: '雾', rain: '雨', storm: '暴雨', snow: '雪', blizzard: '暴雪' };
@@ -8859,10 +8873,8 @@ export function installCabin(app) {
                 //       默认是剖切模式：省略的墙/屋顶用虚线表示，便于从外面看到室内；
                 //       true = 显示完整外观（实墙 + 屋顶）。截图机位据此选择「看室内」还是「看整体」。
                 window.__cabinSetFullHouse = function (on) {
-                    fullHouse = !!on;
-                    houseToggle.classList.toggle('on', fullHouse);
-                    fullHouseGroup.visible = fullHouse;
-                    dashedGroup.visible = !fullHouse;
+                    // J2.8：与菜单按钮共用同一个应用点；测试钩子**不写 store**（避免测试污染用户设置）
+                    applyFullHouse(on);
                     return fullHouse;
                 };
                 // 静止重绘：**只重绘，不推进任何状态**。
