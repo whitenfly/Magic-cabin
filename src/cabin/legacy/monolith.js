@@ -32,6 +32,7 @@ import {
 import { createLineMaterials } from '../core/materials/lineMaterials.js'
 import { createFillMaterial } from '../core/materials/FillMaterial.js'
 import { createLitMaterialFactory } from '../core/materials/litMaterial.js'
+import { createLayout } from '../world/layout.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -112,13 +113,14 @@ const runtimeRng = runtime;
             put(new THREE.Mesh(new THREE.PlaneGeometry(130, 130), FILL), 0, -0.01, 0, -Math.PI / 2, 0, 0);
             for (let z = -9; z <= 9; z += 1.5) put(line([[-10, 0.01, z], [10, 0.01, z]]), 0, 0, 0);
 
-            const HOLE_R = 1.2, FLOOR_TOP = 3.12;
-            const DOOR_HOLE = { c: 0, hw: 0.78, y0: 0, y1: 2.35 };
-            const WIN_F_L = { c: -2.4, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_F_R = { c: 2.4, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_LEFT = { c: -1.5, hw: 0.58, y0: 1.1, y1: 2.1 };
-            const WIN_GABLE = { c: 0, hw: 0.52, y0: 4.95, y1: 5.8 };
-            const LOG_R = 0.15, LOG_GAP = 0.27, WALL_TOP = 4.42, WALL_Y0 = 0;
+            // J2.9：建筑外壳尺寸与陈设锚点已集中到 cabin/world/layout.js（不变量 N9）。
+            // 数值一个没改 —— 交互判定与几何构建从此共用同一份坐标（J2.6 的 anchor 直接用它们）。
+            const {
+                HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
+                CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
+                CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
+                FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
+            } = createLayout();
 
             function logWall(along, fixed, halfLen, openings, cornerExt, parent) {
                 const g = new THREE.Group(); const nLogs = Math.floor((WALL_TOP - WALL_Y0) / LOG_GAP);
@@ -287,7 +289,6 @@ const runtimeRng = runtime;
             doorGroup.userData.aimLabel = '打开 / 关上大门';
             winFL.userData.aimLabel = '开 / 关前左窗'; winFR.userData.aimLabel = '开 / 关前右窗'; winL.userData.aimLabel = '开 / 关左侧窗'; winG.userData.aimLabel = '开 / 关阁楼窗'; winR.userData.aimLabel = '开 / 关右侧窗'; winB.userData.aimLabel = '开 / 关后窗';
 
-            const CHX = -3.35, CHZ = 1.5, HEARTH = 0.12, FX = CHX + 0.15, FZ = CHZ;
             FILL.uniforms.uFireCenter.value.set(FX, 0.55, FZ);
 
             const fireMeshes = []; let fireLit = true; let fireP = 1;
@@ -591,7 +592,6 @@ const runtimeRng = runtime;
             /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
             /* ========================================================== */
-            const MTX = 1.8, MTZ = 2.2, MTTOP = 0.78;
 
             // ---- 12.1 原木餐桌 ----
             put(box(1.15, 0.06, 0.8), MTX, 0.75, MTZ);
@@ -1121,7 +1121,6 @@ const runtimeRng = runtime;
             regMagic(car, () => { carOn = !carOn; });
 
             /* ---- 12.9e 大魔女坩埚 ---- */
-            const CCX = -2.35, CCZ = -0.45;
             const STOVE_TOP = 0.58;
             const CAL_UP = 0.34;
             const cauldronG = new THREE.Group();
@@ -1266,7 +1265,6 @@ const runtimeRng = runtime;
             }
 
             /* ---- 紫色魔法阵 ---- */
-            const MC_X = -2.75, MC_Z = -2.15;
             const mcG = new THREE.Group();
             mcG.position.set(MC_X, 0.015, MC_Z);
             scene.add(mcG);
@@ -1379,8 +1377,6 @@ const runtimeRng = runtime;
             mcG.userData.sfx = 'magic';
 
             /* ---- 12.9f 长餐桌 ---- */
-            const DT_X = 1.6, DT_Z = -3.35;
-            const DTOP = 0.77;
             put(box(2.6, 0.06, 0.8), DT_X, 0.74, DT_Z);
             put(box(2.72, 0.04, 0.92), DT_X, 0.69, DT_Z);
             for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
@@ -1650,7 +1646,6 @@ const runtimeRng = runtime;
             regMagic(broomG, () => { broomHover = !broomHover; });
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
-            const CBX = 3.05, CBZ = 3.25;
             const orbStandG = new THREE.Group();
             orbStandG.position.set(CBX, 0, CBZ);
             scene.add(orbStandG);
@@ -1707,7 +1702,6 @@ const runtimeRng = runtime;
             orbStandG.userData.sfx = 'magic';
 
             /* ---- 月光魔法盆栽【门侧前右墙角】 ---- */
-            const PLX = 3.55, PLZ = 2.45;
             const plantG = new THREE.Group();
             plantG.position.set(PLX, 0, PLZ);
             scene.add(plantG);
@@ -1944,7 +1938,6 @@ const runtimeRng = runtime;
             let kotatsuOn = true;
             let kotGlowMat = null;
             let radioNoteRun = 0;
-            const KOT_X = 2.55, KOT_Z = -0.5, KTOP = 0.4475;
             const kotatsuG = new THREE.Group();
             kotatsuG.position.set(KOT_X, 0, KOT_Z);
             kotatsuG.rotation.y = 0.22;
@@ -2337,8 +2330,6 @@ const runtimeRng = runtime;
             /* ========================================================== */
             /* ============ 二楼陈设（床·书桌·魔杖·星象仪·挂画等） ============ */
             /* ========================================================== */
-            const FY = FLOOR_TOP;
-            const BEDX = -2.4, BEDZ = -2.55;
 
             /* ---- 18.1 大床 ---- */
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
@@ -2363,7 +2354,6 @@ const runtimeRng = runtime;
             }
 
             /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */
-            const NSX = -1.15, NSZ = -3.3;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 put(edge(new THREE.CylinderGeometry(0.022, 0.018, 0.16, 6)), NSX + sxsz[0] * 0.19, FY + 0.08, NSZ + sxsz[1] * 0.16, 0, 0, 0);
             }
@@ -2408,8 +2398,6 @@ const runtimeRng = runtime;
             makeCandleGlow(0.18, 0.12, 0xff9a3c);
 
             /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */
-            const TBLX = 2.5, TBLZ = -2.5;
-            const TBL_TOP = FY + 0.80;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 put(edge(new THREE.CylinderGeometry(0.035, 0.028, 0.72, 8)), TBLX + sxsz[0] * 1.00, FY + 0.36, TBLZ + sxsz[1] * 0.45, 0, 0, 0);
             }

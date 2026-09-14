@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-14",
   "totals": {
-    "files": 20,
-    "lines": 10414
+    "files": 21,
+    "lines": 10532
   },
-  "combined": "ffad3a0a5daf8b4a90bc4d9f72269c314802de5269a24907bcf79c6406b352c9",
+  "combined": "fcbca33332b9d46bbab9e6d95c7e4d26f5d8f2b502b1c8f5a4926cbbecf7fe6b",
   "files": {
     "app/clock.js": "bf08267716714873",
     "app/README.md": "57f5d3e6336fad25",
@@ -25,9 +25,10 @@
     "core/README.md": "f9e6d693b9813b3d",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "6463d448cc163d8a",
-    "legacy/monolith.js": "063b167ca19f2a55",
+    "legacy/monolith.js": "b920e04711742039",
     "props/README.md": "600f9c9259b2ee19",
     "systems/README.md": "5278ee9befdf972a",
+    "world/layout.js": "f9838f2036b49850",
     "world/README.md": "c1acb1851828d7ff"
   }
 }
