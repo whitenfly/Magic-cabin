@@ -84,8 +84,12 @@ function launchShell(cmdline) {
   const opts = { cwd: ROOT, stdio: 'ignore' };
   let r;
   if (IS_WIN) {
-    // 用 `*>` 而不是 `>`：`*>` 把所有流按文本管道序列化，配合按 BOM 解码拿到 UTF-8
-    const inner = `${cmdline} *> '${file.replace(/'/g, "''")}'`;
+    // 用 `*>` 而不是 `>`：`*>` 把所有流按文本管道序列化，配合按 BOM 解码拿到 UTF-8。
+    // ★ 末尾必须显式 `exit $LASTEXITCODE`：git 会把**正常提示**写到 stderr
+    //   （如 `git switch -c` 的 "Switched to a new branch 'x'"），PowerShell 据此抛
+    //   NativeCommandError 并使 powershell.exe 以 1 退出 —— 结果是"命令明明成功却被判定为失败"，
+    //   `task:start` / `task:done` 会在动作已完成之后报错并跳过记录。
+    const inner = `${cmdline} *> '${file.replace(/'/g, "''")}'; exit $LASTEXITCODE`;
     r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', inner], opts);
   } else {
     r = spawnSync('/bin/sh', ['-c', `${cmdline} > '${file}' 2>&1`], opts);
