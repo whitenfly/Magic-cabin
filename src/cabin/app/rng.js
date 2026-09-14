@@ -76,7 +76,7 @@ export function createRng(seed) {
 }
 
 // ── 场景随机（A / C 类）：永久确定，每次加载一致 ──
-// 区域划分与 monolith.js 的行号区间一一对应，见 docs/ArtLine-Part/10-F0.2-实施结果.md
+// 区域划分与 monolith.js 的行号区间一一对应，见 docs/实施结果/F0.2-实施结果.md
 export const scene = {
   /** 室外景物（森林 / 草地 / 石头 / 蘑菇 / 花 / 树桩 / 萤火虫） —— 行 516–657 */
   outdoor: createRng(hash32('scene/outdoor') ^ SCENE_SEED),

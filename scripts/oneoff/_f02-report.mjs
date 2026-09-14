@@ -1,7 +1,7 @@
 // 用模板 + 替换记录生成 F0.2 实施报告
 // 模板：scripts/oneoff/_f02-report.template.md
 // 数据：.cache/f02-replacements.json
-// 输出：Magic-cabin/docs/F0.2-实施结果.md
+// 输出：Magic-cabin/docs/实施结果/F0.2-实施结果.md
 //
 // 命名约定：实施记录以**阶段号**标识（F0.2 / F2 / F3…），不使用位置序号 ——
 // 它属于工程自身的文档，不延续 ArtLine-Part 设计文档的 01–09 编号。
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
-const OUT = path.join(ROOT, 'docs/F0.2-实施结果.md')
+const OUT = path.join(ROOT, 'docs/实施结果/F0.2-实施结果.md')
 
 const tpl = fs.readFileSync(path.join(ROOT, 'scripts/oneoff/_f02-report.template.md'), 'utf8')
 const data = JSON.parse(fs.readFileSync(path.join(ROOT, '.cache/f02-replacements.json'), 'utf8'))

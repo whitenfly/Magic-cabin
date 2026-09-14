@@ -128,7 +128,7 @@ git switch -c task/J2.1-camera-rig      # 名字带任务号，与 docs/ 文档�
 
 ### ② 开发
 
-写代码；同时按 [`J1.5-实施结果.md`](./J1.5-实施结果.md) 的格式准备 `docs/J2.1-实施结果.md`。
+写代码；同时按 [`J1.5-实施结果.md`](./实施结果/J1.5-实施结果.md) 的格式准备 `docs/实施结果/J2.1-实施结果.md`。
 
 ### ③ 跑门禁（见 §5 分级，任务级必须全绿）
 
@@ -144,7 +144,7 @@ pnpm test:perf        # 有没有悄悄变慢
 
 ### ④ 补齐记录 + 对齐版本号
 
-- `docs/J2.1-实施结果.md`（DoD 核对 / 落点 / 门禁项数 / 遗留与交接）
+- `docs/实施结果/J2.1-实施结果.md`（DoD 核对 / 落点 / 门禁项数 / 遗留与交接）
 - `package.json` 的 `version` → `0.2.0-dev.1`
 - 若是阶段收尾，同步更新根 `README.md` 顶部的「当前阶段」
 
@@ -156,7 +156,7 @@ git commit -m "J2.1 CameraRig：统一相机运动与视角切换
 
 - 落点：src/cabin/app/camera-rig.js
 - 门禁：typecheck / verify / visual / smoke / perf 全绿
-- 验收：见 docs/J2.1-实施结果.md"
+- 验收：见 docs/实施结果/J2.1-实施结果.md"
 ```
 
 > 建议沿用路线图的粒度：**一个文件一次提交**，让 `git log` 能直接回答「这个文件是什么时候、为哪个任务改的」。

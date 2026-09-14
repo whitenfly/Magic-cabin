@@ -768,7 +768,7 @@ function cmdDone(args) {
         `- 版本号：\`${base}\`（package.json 的 version 请同步）`,
         `- tag：\`${tag}\`（开发版快照，只打在 ${DEV_BRANCH} 上）`,
         `- 合并至：\`${DEV_BRANCH}\` @ \`${after.head}\``,
-        `- 待补：\`docs/${task}-实施结果.md\`（DoD 核对 / 落点 / 门禁项数 / 遗留交接）`,
+        `- 待补：\`docs/实施结果/${task}-实施结果.md\`（DoD 核对 / 落点 / 门禁项数 / 遗留交接）`,
       ],
       note:
         '★ **阶段收尾必须再跑 `pnpm ship`**（dev → main 合并 + 正式版 tag），' +

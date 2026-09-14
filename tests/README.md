@@ -70,7 +70,7 @@ node scripts/verify-j15.mjs --built    # 附产物断言（需先 pnpm build）
 任何一处改动都会让它失败并**列出具体是哪几个文件**。
 
 > ⚠️ **`J3`/`J4` 开始掏空 `legacy/` 时，这个摘要会合法变化。**
-> 改之前先在 `docs/J3-实施结果.md` 一类的文档里记一笔原因，再执行：
+> 改之前先在 `docs/实施结果/J3-实施结果.md` 一类的文档里记一笔原因，再执行：
 > `node scripts/verify-j15.mjs --record`
 
 ---
@@ -94,7 +94,7 @@ pnpm test:visual           # 与基线比对（搬迁/改动后跑这个）
 | 3 | `floor2-desk` | `[0.2, 4.55, 2.95] → [0.2, 3.85, -2.6]` | 二楼：大床与书桌（含桌面陈设）同时入画 |
 
 判据、机位坐标的算法依据、以及排查过的坑，见 [`visual/README.md`](./visual/README.md) 与
-[`docs/F0.4-实施结果.md`](../docs/F0.4-实施结果.md)。
+[`docs/实施结果/F0.4-实施结果.md`](../docs/实施结果/F0.4-实施结果.md)。
 
 > **改动后怎么判**：搬迁式改动（物件模块化）→ 全部机位 sha256 相同；新增式改动 → **只允许 1 个机位**有差异且需人工审查。
 
@@ -113,7 +113,7 @@ pnpm test:smoke     # 28 项断言（约 200s；时间主要花在逐帧推进�
 做法上有一个关键点：冒烟同样跑在 **manual 时钟**下（`?deterministic=1&frames=1`），
 每一帧由脚本推进，因此"走了多少帧、点了什么、画面变化多少"全部是确定值，
 失败可稳定重放。细节见 [`e2e/README.md`](./e2e/README.md) 与
-[`docs/F0.5-实施结果.md`](../docs/F0.5-实施结果.md)。
+[`docs/实施结果/F0.5-实施结果.md`](../docs/实施结果/F0.5-实施结果.md)。
 
 ---
 
@@ -158,7 +158,7 @@ node tests/e2e/perf.mjs --gpu --rounds=5 --update      # 建议机器空载时�
 一旦上升，就说明新架构引入了额外的渲染批次（材质/几何不再共享、光照槽位重复提交）。
 
 细节见 [`e2e/README.md`](./e2e/README.md) §1.5 与 [`docs/baseline.md`](../docs/baseline.md)
-（GPU 采集后会生成 `docs/baseline.gpu.md`；实施记录见 [`docs/F0.6-实施结果.md`](../docs/F0.6-实施结果.md)）。
+（GPU 采集后会生成 `docs/baseline.gpu.md`；实施记录见 [`docs/实施结果/F0.6-实施结果.md`](../docs/实施结果/F0.6-实施结果.md)）。
 
 ---
 

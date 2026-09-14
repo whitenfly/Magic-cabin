@@ -5,7 +5,7 @@
 > 操控一只软软的史莱姆在魔法小屋里生活：昼夜循环、7 种天气、120+ 可交互物件、24 层魔法阵与超位爆裂魔法；
 > **书架上的书 = 我写的文章，点开就在书页里读**。
 
-**当前阶段：`J2` 小屋核心设施 ✅ 已完成**（10 项任务全部完成，见 [`docs/J2-实施结果.md`](./docs/J2-实施结果.md)）
+**当前阶段：`J2` 小屋核心设施 ✅ 已完成**（10 项任务全部完成，见 [`docs/实施结果/J2-实施结果.md`](./docs/实施结果/J2-实施结果.md)）
 **当前稳定版：`v0.2.0`**（tag `v0.2.0`，开发主线在 `dev` 分支 —— 见 [`docs/VERSIONING.md`](./docs/VERSIONING.md)）
 下一步：**`J3` 物件模块化**（67 件物件 → `defineProp` + 挂载点 ID 表 `app/mounts.js`）。
 `J2` 造好了"注册机制"：**新增一盏灯或一个交互都只需改一个文件**（有测试证明），
@@ -68,7 +68,7 @@ pnpm build:single && pnpm serve:single   # → dist-single/，3D 正常、回归
 >
 > ⚠️ `dist-single/` **不能靠双击打开**（`file://` 下模块脚本被 CORS 拦，是浏览器规则）。
 > 它当前的定位是"离线分发的相对路径产物"，"双击即玩"留给 `J8.6` 定稿 —— 见
-> [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md) §5。
+> [`docs/实施结果/J1.5-实施结果.md`](./docs/实施结果/J1.5-实施结果.md) §5。
 
 ## 本地服务管理
 
@@ -230,15 +230,14 @@ Magic-cabin/
 ├─ dist-single/                # 单文件产物（gitignore）
 └─ docs/
    ├─ BuildPlaning/            # ★ 建设规划（路线 J0–J8 + 模块映射 mapping.yaml）
+   ├─ 实施结果/                 # ★ 每个阶段的实施结果（DoD 核对 / 落点 / 门禁 / 遗留交接）
+   │  ├─ J2-实施结果.md         #   阶段级：J2 小屋核心设施（10 项任务的索引与汇总）
+   │  ├─ J2.1 … J2.10-实施结果.md
+   │  ├─ J1.5-实施结果.md       #   构建与内容地基（Astro 落地）
+   │  └─ F0.2 … F0.6-实施结果.md
    ├─ VERSIONING.md            # ★ 版本管理规范（分支模型 / 版本号 / 任务 SOP / 发布回滚）
-   ├─ J1.5-实施结果.md          # ★ J1.5 的 DoD 核对 / 落点 / 75 项门禁 / 遗留与交接
    ├─ MIGRATION.md             # 重构说明（搬迁记录 / 校验 / 映射索引 / 后续路线）
-   ├─ baseline.md              # ★ 性能基线（由 tests/e2e/perf.mjs --update 生成）
-   ├─ F0.2-实施结果.md          # 注入种子随机（286 处随机源替换的逐行清单）
-   ├─ F0.3-实施结果.md          # 注入可步进时钟（定格到第 N 帧）
-   ├─ F0.4-实施结果.md          # 最小截图回归（3 机位 × 3 轮零差异）
-   ├─ F0.5-实施结果.md          # 交互冒烟（28 项断言，manual 时钟下可复现）
-   └─ F0.6-实施结果.md          # 性能基线（首屏 / FPS / renderer.info）
+   └─ baseline.md              # ★ 性能基线（由 tests/e2e/perf.mjs --update 生成）
 ```
 
 **本次未迁移任何 Firefly 组件与配置**。`src/features/`、`src/cabin/props/` 目前只有 README 占位，
@@ -250,7 +249,7 @@ Magic-cabin/
 >
 > **已按规划新增（`J1.5`）**：`astro.config.mjs`、`vite.single.config.ts`、`src/{content.config.ts,content,pages,layouts,components}`、
 > `src/blog/{loaders,posts}.js`、`tests/e2e/page.mjs`、`tests/baseline/cabin-digest.json`、`scripts/verify-j15.mjs`。
-> 详表见 [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md) §2。
+> 详表见 [`docs/实施结果/J1.5-实施结果.md`](./docs/实施结果/J1.5-实施结果.md) §2。
 
 ---
 
@@ -264,7 +263,7 @@ Magic-cabin/
 | [`docs/BuildPlaning/03-渲染通道与构建选型.md`](./docs/BuildPlaning/03-渲染通道与构建选型.md) | 四通道模型（文章走方案 B）+ Astro 落地 |
 | [`docs/BuildPlaning/04-模块增量开发与配置编排.md`](./docs/BuildPlaning/04-模块增量开发与配置编排.md) | 模块九步 SOP + 配置编排（Firefly 九条） |
 | [`docs/BuildPlaning/mapping.yaml`](./docs/BuildPlaning/mapping.yaml) | ★ **映射真源**：19 个条目 / 18 个编号模块的物品、交互、呈现通道、状态 |
-| [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md) | ★ **已实施阶段的记录**：DoD 核对、落点、75 项门禁、上游坑与遗留交接 |
+| [`docs/实施结果/J1.5-实施结果.md`](./docs/实施结果/J1.5-实施结果.md) | ★ **已实施阶段的记录**：DoD 核对、落点、75 项门禁、上游坑与遗留交接 |
 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) | ★ **版本管理规范**：`main`/`dev` 分支模型、`J` 编号 ↔ 版本号映射、**一个任务一个版本**的 SOP、发布与回滚、门禁分级 |
 
 ## 上游设计依据

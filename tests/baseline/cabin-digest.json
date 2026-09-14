@@ -1,13 +1,13 @@
 {
   "what": "src/cabin/** 逐字节摘要（3D 源码指纹）",
   "why": "J1.5 期间它是「站点那一半没碰 3D」的判据（当时本项目还不是 git 仓库，用摘要代替 git diff 为空）；J2 起作为 3D 源码指纹防意外改动。",
-  "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。",
+  "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-14",
   "totals": {
     "files": 35,
     "lines": 12276
   },
-  "combined": "7502306f9d31859603baa740f405b8dd7e5b4815495d7611e9a5986dbe423fb9",
+  "combined": "9227217af65bd4e2db7c7882d8411a4608c7524c6c59c6eefea57036d597e8a0",
   "files": {
     "app/App.js": "5346e3e6dd63da0c",
     "app/clock.js": "bf08267716714873",
@@ -15,7 +15,7 @@
     "app/Feature.js": "428b4246a16f6585",
     "app/README.md": "57f5d3e6336fad25",
     "app/Registry.js": "df319750f7060bf1",
-    "app/rng.js": "4d3198dd7142a550",
+    "app/rng.js": "94de1f9a190259dd",
     "app/settings.js": "0053a2af11956381",
     "app/store.js": "318fc3660d177614",
     "app/UpdateScheduler.js": "dae922480a1212fa",

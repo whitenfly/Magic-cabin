@@ -23,7 +23,7 @@ import { defineConfig, type Plugin } from 'vite'
  *    不再承担日常 `dev` / `build`（那两件事已经归 Astro，见 `astro.config.mjs`）。
  *    因此没有 `server` 段 —— 产物靠 `pnpm serve:single` 在本地验证。
  *
- * ── ★ 当前真实状态（J1.5 实测，详见 `docs/J1.5-实施结果.md` §5）★ ──────────
+ * ── ★ 当前真实状态（J1.5 实测，详见 `docs/实施结果/J1.5-实施结果.md` §5）★ ──────────
  *
  * | 能力 | 状态 |
  * |---|---|

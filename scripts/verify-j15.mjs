@@ -291,7 +291,7 @@ section('3D 那一半（src/cabin/**）—— J1.5 要求「一行不改」')
         {
           what: 'src/cabin/** 逐字节摘要（3D 源码指纹）',
           why: 'J1.5 期间它是「站点那一半没碰 3D」的判据（当时本项目还不是 git 仓库，用摘要代替 git diff 为空）；J2 起作为 3D 源码指纹防意外改动。',
-          note: '⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。',
+          note: '⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。',
           recordedAt: new Date().toISOString().slice(0, 10),
           totals: { files: files.length, lines: totalLines },
           combined,

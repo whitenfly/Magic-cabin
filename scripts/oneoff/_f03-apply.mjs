@@ -1,6 +1,6 @@
 // F0.3 实施：注入可步进时钟
 //
-// 设计见 src/cabin/app/clock.js 与 docs/F0.3-实施结果.md
+// 设计见 src/cabin/app/clock.js 与 docs/实施结果/F0.3-实施结果.md
 // 原则：**realtime 模式行为与改动前完全等价**；只有 manual 模式新增「定格」能力。
 //
 // 输出：

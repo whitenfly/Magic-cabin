@@ -401,7 +401,7 @@ ${b.samples.map((s, i) => `- 第 ${i + 1} 轮：首屏 ${s.readyMs} ms · FPS ${
 | 交互冒烟（\`J0.5\`） | \`pnpm test:smoke\` | 还能**不能玩** |
 | **性能基线（\`J0.6\`）** | \`pnpm test:perf\` | 有没有**悄悄变慢** |
 
-详见 [\`F0.4-实施结果.md\`](./F0.4-实施结果.md) / [\`F0.5-实施结果.md\`](./F0.5-实施结果.md) / [\`F0.6-实施结果.md\`](./F0.6-实施结果.md)。
+详见 [\`F0.4-实施结果.md\`](../../docs/实施结果/F0.4-实施结果.md) / [\`F0.5-实施结果.md\`](../../docs/实施结果/F0.5-实施结果.md) / [\`F0.6-实施结果.md\`](../../docs/实施结果/F0.6-实施结果.md)。
 `
 }
 
@@ -467,7 +467,7 @@ if (!browser) {
 }
 // 健康检查：J1.5 起首页有两种合法形态（`dist/` 产物 / 零构建），由 tests/e2e/page.mjs 统一解析。
 // 旧的判据是硬编码 `${OPTS.url}/index.html` + `html.includes('src/main.js')` ——
-// 在 Astro 产物下必然失败，且看起来像环境问题（见 docs/J1.5-实施结果.md §8）。
+// 在 Astro 产物下必然失败，且看起来像环境问题（见 docs/实施结果/J1.5-实施结果.md §8）。
 const HOME = await resolveHomePath(OPTS.url, {
   onError: (why) => {
     console.error(`✗ 无法访问 ${OPTS.url} 或返回内容不是本项目页面 —— ${why}`)
