@@ -37,6 +37,7 @@ import { createLightField } from '../core/lighting/LightField.js'
 import { createPointLightSource } from '../core/lighting/PointLightSource.js'
 import { createInteractionSystem, makeTarget } from '../systems/interaction/InteractionSystem.js'
 import { createHintUI } from '../systems/interaction/HintUI.js'
+import { createCameraRig } from '../core/render/CameraRig.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -7216,6 +7217,13 @@ export function installCabin(app) {
             let camYaw = Math.PI, camPitch = 0.32, viewDist = 3.2, pendYaw = 0, pendPitch = 0;
             let viewMode = 'fixed';
             const FIX_LOOK = V(0, 2.2, 0); let fixYaw = Math.atan2(9.5, 11.5); let fixPitch = Math.asin(5.0 / Math.hypot(9.5, 5.0, 11.5)); let fixDist = Math.hypot(9.5, 5.0, 11.5);
+            // J2.7：三段相机解算搬进 cabin/core/render/CameraRig.js（**逐字照搬**，行为零差异）。
+            // 视角状态（fixYaw / camPitch / viewDist…）仍住在小屋这边，每帧经 state 传进去 ——
+            // core/ 不碰具体状态量（不变量 N1）。mode 名与 viewMode 取值一一对应。
+            const cameraRig = createCameraRig({ camera, mode: viewMode });
+            cameraRig.defineMode('fixed', (s, cam) => { const cp = Math.cos(s.fixPitch), sp = Math.sin(s.fixPitch); cam.position.set(s.look.x + Math.sin(s.fixYaw) * cp * s.fixDist, s.look.y + sp * s.fixDist, s.look.z + Math.cos(s.fixYaw) * cp * s.fixDist); cam.lookAt(s.look); });
+            cameraRig.defineMode('fp', (s, cam) => { cam.position.set(s.player.pos.x, s.player.pos.y + 0.30, s.player.pos.z); cam.lookAt(s.player.pos.x + Math.sin(s.camYaw) * Math.cos(s.camPitch) * 10, s.player.pos.y + 0.30 + Math.sin(s.camPitch) * 10, s.player.pos.z + Math.cos(s.camYaw) * Math.cos(s.camPitch) * 10); });
+            cameraRig.defineMode('tp', (s, cam) => { const cp = Math.cos(s.camPitch), sp = Math.sin(s.camPitch); const px = s.player.pos.x - Math.sin(s.camYaw) * cp * s.viewDist, py = s.player.pos.y + 0.34 + sp * s.viewDist, pz = s.player.pos.z - Math.cos(s.camYaw) * cp * s.viewDist; cam.position.set(px, Math.max(py, 0.25), pz); cam.lookAt(s.player.pos.x, s.player.pos.y + 0.25, s.player.pos.z); });
             const solidBoxes = [
                 { x1: -4.85, z1: 3.80, x2: -0.78, z2: 4.20 }, { x1: 0.78, z1: 3.80, x2: 4.85, z2: 4.20 },
                 { x1: -4.20, z1: -4.85, x2: 4.20, z2: -3.80 }, { x1: -4.20, z1: -4.85, x2: -3.80, z2: 4.85 },
@@ -7371,7 +7379,7 @@ export function installCabin(app) {
             houseToggle.addEventListener('click', () => { SND.play('ui'); applyFullHouse(!fullHouse); store.set('house.full', fullHouse); });
             function resetSlime() { player.pos.set(0, 0, 5.2); player.vy = 0; player.yaw = Math.PI; player.moveSpeed = 0; player.onGround = true; camYaw = Math.PI; camPitch = 0.32; pendYaw = 0; pendPitch = 0; slime.squash = SLIME_FLAT; slime.squashV = 0; slime.wob = 0; slime.wobV = 0; }
             resetBtn.addEventListener('click', () => { SND.play('ui'); resetSlime(); });
-            function setViewMode(m) { viewMode = m; store.set('view.mode', m); viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
+            function setViewMode(m) { viewMode = m; store.set('view.mode', m); cameraRig.setMode(m); viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
             viewFixedBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fixed'); }); viewTpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('tp'); }); viewFpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fp'); });
             const sfxToggle = document.getElementById('sfxToggle'), sfxSlider = document.getElementById('sfxSlider');
             sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); store.set('audio.enabled', on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
@@ -7423,9 +7431,8 @@ export function installCabin(app) {
                 core.scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + slime.pulse) + (casting ? 0.15 : 0)); core.position.set(Math.sin(time * 1.3) * 0.012, 0.015 * Math.sin(time * 1.9), Math.sin(time * 1.1) * 0.010);
                 for (const b of bubbles) { const t = (time * 0.22 + b.userData.ph) % 1; const r2 = b.userData.rr * (1 - t * 0.45); b.position.set(Math.cos(b.userData.ang) * r2, -0.12 + t * 0.24, Math.sin(b.userData.ang) * r2); b.scale.setScalar(0.5 + 0.5 * Math.sin(t * Math.PI)); }
                 const shs = 1 / Math.sqrt(sy); slimeShadow.scale.set(shs, shs, 1); slimeShadow.material.opacity = 0.10 + 0.10 / sy;
-                if (viewMode === 'fixed') { const cp = Math.cos(fixPitch), sp = Math.sin(fixPitch); camera.position.set(FIX_LOOK.x + Math.sin(fixYaw) * cp * fixDist, FIX_LOOK.y + sp * fixDist, FIX_LOOK.z + Math.cos(fixYaw) * cp * fixDist); camera.lookAt(FIX_LOOK); }
-                else if (viewMode === 'fp') { camera.position.set(player.pos.x, player.pos.y + 0.30, player.pos.z); camera.lookAt(player.pos.x + Math.sin(camYaw) * Math.cos(camPitch) * 10, player.pos.y + 0.30 + Math.sin(camPitch) * 10, player.pos.z + Math.cos(camYaw) * Math.cos(camPitch) * 10); }
-                else { const cp = Math.cos(camPitch), sp = Math.sin(camPitch); const px = player.pos.x - Math.sin(camYaw) * cp * viewDist, py = player.pos.y + 0.34 + sp * viewDist, pz = player.pos.z - Math.cos(camYaw) * cp * viewDist; camera.position.set(px, Math.max(py, 0.25), pz); camera.lookAt(player.pos.x, player.pos.y + 0.25, player.pos.z); }
+                // J2.7：三段解算搬进 CameraRig（按当前视角选 solver；原先是 if / else if / else 三段）
+                cameraRig.update({ fixYaw, fixPitch, fixDist, camYaw, camPitch, viewDist, player, look: FIX_LOOK });
             }
 
             /* ==================== 天空·时间·天气系统 ==================== */
@@ -8858,14 +8865,13 @@ export function installCabin(app) {
                 lightField.update(time, dt);
 
                 if (camShake > 0.002) {
-                    camera.position.x += (runtimeRng() - 0.5) * camShake;
-                    camera.position.y += (runtimeRng() - 0.5) * camShake;
-                    camera.position.z += (runtimeRng() - 0.5) * camShake;
+                    // J2.7：抖动位移交给 CameraRig；衰减与判据留在这里（它们是本文件的状态量）
+                    cameraRig.applyShake(camShake, runtimeRng);
                     camShake *= Math.exp(-3.2 * dt);
                 }
 
                 // J0.4：测试机位覆盖 —— 固定相机位用于截图回归（realtime 下 testCam 恒为 null，不生效）
-                if (testCam) { camera.position.set(testCam[0], testCam[1], testCam[2]); camera.lookAt(testCam[3], testCam[4], testCam[5]); }
+                if (testCam) cameraRig.applyTestCamera(testCam);
 
                 renderer.render(scene, camera);
                 // F0.3：手动模式下由主循环驱动装饰循环（realtime 模式由它自己的 rAF 驱动）
