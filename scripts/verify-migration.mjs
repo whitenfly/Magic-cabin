@@ -83,8 +83,31 @@ console.log('\n【③ UI DOM src/cabin/dom.js  ←  源 753–835 行】')
 
 console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
 {
-  const mono = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
-  const parts = [mono, fs.readFileSync(`${ROOT}/src/cabin/dom.js`, 'utf8')].join('\n')
+  // ★ J2 起：搬迁把实现从 monolith 逐个移进模块（cabin/core/**、cabin/systems/**），
+  //   若仍只扫 monolith，计数会**合法下降**（J2.1 就把 3 个 `new THREE.Mesh(` 与
+  //   2 个 `new THREE.Group(` 搬进了 cabin/core/geometry/）。
+  //   判据随之改为扫描**整棵 3D 源码树**（`src/cabin/**`）：搬运不改变总数，
+  //   只有"真的增删了几何/交互/监听"才会让计数变化 —— 强度不降，适用面扩大。
+  //   ⚠️ 扫描范围 = **源自 monolith 的实现所在目录**（legacy / core / systems / world / props
+  //   与 `dom.js`），**排除** F0.2/F0.3/J1 新增的基础设施（`app/**`、`boot.js`）——
+  //   后者不是从源文件搬来的（如 `boot.js` 自带的 1 个 `addEventListener`），
+  //   计入会让"源文件 vs 当前"这条等式永远差一截。
+  const walkJs = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) return walkJs(p)
+      return e.isFile() && p.endsWith('.js') ? [p] : []
+    })
+  const cabinRoot = path.join(ROOT, 'src/cabin')
+  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props']
+  const cabinFiles = [
+    ...MIGRATED_DIRS.flatMap((d) => (fs.existsSync(path.join(cabinRoot, d)) ? walkJs(path.join(cabinRoot, d)) : [])),
+    path.join(cabinRoot, 'dom.js'),
+  ]
+  const parts = cabinFiles.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
+  console.log(
+    `  扫描范围：${MIGRATED_DIRS.join('/')} + dom.js 共 ${cabinFiles.length} 个 .js（不含 app/** 与 boot.js）`,
+  )
   // Math.random() 已被 F0.2 替换为种子随机源，比对时先反向还原
   const restored = parts.replace(/\b(outdoorRng|floor1Rng|floor2Rng|skyRng|textureRng|slimeRng|runtimeRng)\(\)/g, 'Math.random()')
   const count = (s, re) => (s.match(re) || []).length

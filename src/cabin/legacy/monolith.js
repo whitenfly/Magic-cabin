@@ -16,6 +16,19 @@ import * as THREE from 'three'
 import { scene, runtime } from '../app/rng.js'
 import { clock } from '../app/clock.js'
 import { createSpringSystem } from '../core/util/spring.js'
+import { createSketch } from '../core/geometry/sketch.js'
+import { createRoundBox } from '../core/geometry/roundBox.js'
+import { createSolid } from '../core/geometry/solid.js'
+import {
+  ringPts,
+  polyPts,
+  starPts,
+  arcPts,
+  spiralPts,
+  wavyRingPts,
+  zigPts,
+  createShapes2d,
+} from '../core/geometry/shapes2d.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -227,28 +240,13 @@ const runtimeRng = runtime;
             const WIN_GLASS = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
             const WIN_GLASS_UP = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
 
-            const V = (x, y, z) => new THREE.Vector3(x, y, z);
-            const geo = pts => new THREE.BufferGeometry().setFromPoints(pts.map(p => V(p[0], p[1], p[2])));
-            const line = pts => new THREE.Line(geo(pts), MAT);
-            const iline = pts => new THREE.Line(geo(pts), IN_MAT);
-            function dline(pts) { const l = new THREE.Line(geo(pts), DASHMAT); l.computeLineDistances(); return l; }
-
-            function edge(g, threshold = 1, lmat) {
-                const grp = new THREE.Group();
-                grp.add(new THREE.Mesh(g, FILL));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, threshold), lmat || MAT));
-                return grp;
-            }
-            const box = (w, h, d) => edge(new THREE.BoxGeometry(w, h, d));
-            const log = (len, r = 0.15) => edge(new THREE.CylinderGeometry(r, r, len, 8));
-            function put(o, x, y, z, rx, ry, rz, parent) {
-                o.position.set(x, y, z); if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz; (parent || scene).add(o); return o;
-            }
-            function logBetween(p1, p2, r, parent) {
-                const v = V(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]); const L = edge(new THREE.CylinderGeometry(r, r, v.length(), 8));
-                L.position.set((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2);
-                L.quaternion.setFromUnitVectors(V(0, 1, 0), v.normalize()); (parent || scene).add(L); return L;
-            }
+            // J2.1：线稿几何 DSL 已提取到 cabin/core/geometry/sketch.js（实现零改动）。
+            // 场景与四种共享材质**显式注入** —— core/ 不持有全局场景（不变量 N1 / N7）。
+            // 解构保留原标识符名，文件内 2000+ 处调用点（box / log / put / edge…）一行都不用改。
+            const { V, geo, line, iline, dline, edge, box, log, put, logBetween } = createSketch({
+                scene,
+                materials: { line: MAT, inner: IN_MAT, dash: DASHMAT, fill: FILL },
+            });
 
             put(new THREE.Mesh(new THREE.PlaneGeometry(130, 130), FILL), 0, -0.01, 0, -Math.PI / 2, 0, 0);
             for (let z = -9; z <= 9; z += 1.5) put(line([[-10, 0.01, z], [10, 0.01, z]]), 0, 0, 0);
@@ -711,30 +709,8 @@ const runtimeRng = runtime;
             /* ========================================================== */
             /* ============ 室内陈设专用：圆角几何与材质工具 ============ */
             /* ========================================================== */
-            function roundBoxGeo(w, h, d, r, seg) {
-                if (seg === undefined) seg = 2;
-                r = Math.min(r, w / 2, h / 2, d / 2);
-                const g = new THREE.BoxGeometry(w, h, d, seg * 2 + 1, seg * 2 + 1, seg * 2 + 1);
-                const pa = g.attributes.position;
-                const hw = w / 2 - r, hh = h / 2 - r, hd = d / 2 - r;
-                for (let i = 0; i < pa.count; i++) {
-                    const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
-                    const cx = Math.max(-hw, Math.min(hw, x));
-                    const cy = Math.max(-hh, Math.min(hh, y));
-                    const cz = Math.max(-hd, Math.min(hd, z));
-                    const dx = x - cx, dy = y - cy, dz = z - cz;
-                    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    if (len > 1e-9) {
-                        pa.setXYZ(i, cx + dx / len * r, cy + dy / len * r, cz + dz / len * r);
-                    } else {
-                        pa.setXYZ(i, cx, cy, cz);
-                    }
-                }
-                g.computeVertexNormals();
-                return g;
-            }
-
-            const rbox = (w, h, d, r, seg) => edge(roundBoxGeo(w, h, d, r, seg === undefined ? 2 : seg), 12);
+            // J2.1：圆角几何已提取到 cabin/core/geometry/roundBox.js（实现零改动）
+            const { roundBoxGeo, rbox } = createRoundBox({ edge });
 
             /* —— 一楼陈设专用：材质与工具 —— */
 
@@ -744,22 +720,12 @@ const runtimeRng = runtime;
 
             const CATMAT = LITMAT(0xece6da);
             const CATMAT2 = LITMAT(0xe2dbcd);
-            const lloop = (pts, parent) => { const l = new THREE.LineLoop(geo(pts), MAT); (parent || scene).add(l); return l; };
+            // J2.1：lloop / solid / solidCyl 已提取到 cabin/core/geometry/solid.js。
+            // 默认实体材质（原实现里硬编码的 CATMAT）改为**注入** —— core/ 里只留中性名（不变量 N1）。
+            const { lloop, solid, solidCyl } = createSolid({
+                V, geo, scene, lineMaterial: MAT, defaultSolidMaterial: CATMAT,
+            });
             const sm01 = t => t * t * (3 - 2 * t);
-            function solid(g, mat, lmat) {
-                const grp = new THREE.Group();
-                grp.add(new THREE.Mesh(g, mat));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 1), lmat || MAT));
-                return grp;
-            }
-            function solidCyl(p1, p2, r, parent, mat) {
-                const v = V(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
-                const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, v.length(), 8), mat || CATMAT);
-                m.position.set((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2);
-                m.quaternion.setFromUnitVectors(V(0, 1, 0), v.normalize());
-                (parent || scene).add(m);
-                return m;
-            }
 
             /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
@@ -6361,22 +6327,11 @@ const runtimeRng = runtime;
             });
             const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.frustumCulled = false; scene.add(dustPts);
 
-            /* ---- 魔法阵几何辅助 ---- */
-            function ringPts(r, n, rot) { const a = []; for (let i = 0; i < n; i++) { const t = (rot || 0) + i / n * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function polyPts(r, sides, rot) { const a = []; for (let i = 0; i < sides; i++) { const t = (rot || 0) + i / sides * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function starPts(r, sides, step, rot) { const a = []; for (let i = 0; i < sides; i++) { const t = (rot || 0) + (i * step % sides) / sides * Math.PI * 2; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function arcPts(r, a0, a1, n) { const a = []; for (let i = 0; i <= n; i++) { const t = a0 + (a1 - a0) * i / n; a.push([Math.cos(t) * r, Math.sin(t) * r, 0]); } return a; }
-            function spiralPts(r0, r1, turns, n, a0) { const a = []; for (let i = 0; i <= n; i++) { const t = i / n; const ang = a0 + t * turns * Math.PI * 2; const rr = r0 + (r1 - r0) * t; a.push([Math.cos(ang) * rr, Math.sin(ang) * rr, 0]); } return a; }
-            function wavyRingPts(r, waves, amp, ph) { const a = []; const n = 120; for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; const rr = r + Math.sin(t * waves + ph) * amp; a.push([Math.cos(t) * rr, Math.sin(t) * rr, 0]); } return a; }
-            function zigPts(r1, r2, teeth) { const a = []; const n = teeth * 2; for (let i = 0; i < n; i++) { const t = i / n * Math.PI * 2; const rr = i % 2 ? r1 : r2; a.push([Math.cos(t) * rr, Math.sin(t) * rr, 0]); } return a; }
-            function lineFromPts(pts, mat, loop) {
-                const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => V(p[0], p[1], p[2])));
-                return loop ? new THREE.LineLoop(g, mat) : new THREE.Line(g, mat);
-            }
-            function segsFromPairs(pairs, mat) {
-                const pts = []; for (const pr of pairs) pts.push(V(pr[0][0], pr[0][1], 0), V(pr[1][0], pr[1][1], 0));
-                return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), mat);
-            }
+            /* ---- 魔法阵几何辅助（J2.1：已提取到 cabin/core/geometry/shapes2d.js） ---- */
+            // 七个纯点集函数（ringPts / polyPts / starPts / arcPts / spiralPts / wavyRingPts / zigPts）
+            // 零依赖、无副作用，由文件顶部 import 直接引入（`tests/unit/` 可直接测）；
+            // 下面两个构建器需要 V，故在此注入。
+            const { lineFromPts, segsFromPairs } = createShapes2d({ V });
             // 卫星小阵：kind 0=三角 1=十字 2=五芒星 3=放射 4=方形
             function sat(g, m, cx, cy, r, kind, rot) {
                 g.add(lineFromPts(ringPts(r, Math.max(12, Math.floor(r * 16)), rot || 0).map(p => [p[0] + cx, p[1] + cy]), m, true));
