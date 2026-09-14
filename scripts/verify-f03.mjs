@@ -9,13 +9,13 @@
 //   本脚本验证第二段；verify-f02.mjs 验证第一段；verify-f04.mjs 验证第三段。
 import fs from 'node:fs'
 import path from 'node:path'
+import { ROOT, requireEnv } from './_verifyEnv.mjs'
 
-const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
 // ⚠️ 检查对象是 **F0.3 完成时的快照**，不是当前文件 ——
 //    J0.4 之后当前文件又加了「测试机位」钩子，与 F0.2 快照已不再只差「时钟注入」。
 const TARGET = path.join(ROOT, '.cache/monolith.after-f03.js')
 const SNAPSHOT = path.join(ROOT, '.cache/monolith.after-f02.js')
-const SRC = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main/index.html'
+requireEnv({ files: [TARGET, SNAPSHOT] })
 
 const N = (s) => s.replace(/\s+$/, '')
 let pass = 0

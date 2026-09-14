@@ -6,12 +6,16 @@
 //   ⑤ 音效资源齐全
 // 说明：比对时忽略**末尾空白**（写入时模板字符串会多一个换行，不影响行为）。
 import fs from 'node:fs'
+import path from 'node:path'
+import { ROOT, requireEnv, resolveUpstream } from './_verifyEnv.mjs'
 
-const SRC = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main/index.html'
-const SRC_DIR = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main'
-const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
-
-const srcText = fs.readFileSync(SRC, 'utf8')
+// ★ 路径一律由 _verifyEnv.mjs 推导，不再硬编码本机绝对路径。
+//   上游源文件是**仓库外**的单文件版解压目录，CI 上必然缺失 ⇒ 缺了就明确跳过（exit 2），
+//   而不是抛 ENOENT 把整条 `pnpm verify` 链断在半截。
+const SRC_DIR = path.resolve(ROOT, '../line-art-style-magic-cabin-main')
+const SNAP = path.join(ROOT, '.cache/monolith.after-f02.js')
+requireEnv({ src: true, files: [SNAP] })
+const srcText = resolveUpstream().text
 const srcLines = srcText.split(/\r?\n/)
 const slice = (a, b) => srcLines.slice(a - 1, b).join('\n')
 const N = (s) => s.replace(/\s+$/, '')
@@ -38,7 +42,6 @@ console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–980
 {
   // ⚠️ 检查对象是 **F0.2 完成时的快照**（源文件 + 搬迁 + 随机源替换），
   //    因为 F0.3 之后当前文件又注入了时钟。当前文件与快照的关系由 verify-f03.mjs 验证。
-  const SNAP = `${ROOT}/.cache/monolith.after-f02.js`
   const cur = fs.readFileSync(SNAP, 'utf8')
   // F0.2 之后，随机调用已被替换为种子随机源；把替换**反向还原**后应与源文件逐字节一致，
   // 这证明历次改动只涉及"随机源替换"，没有触碰任何其他逻辑。

@@ -4,14 +4,16 @@
 //          应当与源文件（line-art-style-magic-cabin-main/index.html 第 844–9807 行）**逐字节一致**。
 //          这证明本次改动**只做了随机源替换**，没有碰任何其他逻辑。
 import fs from 'node:fs'
+import path from 'node:path'
+import { ROOT, requireEnv, resolveUpstream } from './_verifyEnv.mjs'
 
-const SRC = 'D:/FireflyQAQ/Project/FrontProj/line-art-style-magic-cabin-main/index.html'
-const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
 // ⚠️ 检查对象是 **F0.2 完成时的快照**，不是当前文件。
 //    原因：F0.3 之后当前文件又注入了时钟，与源文件不再只差「随机源替换」。
 //    可追溯链：源文件 --F1+F0.2--> 本快照 --F0.3--> 当前文件
 //    当前文件与快照的关系由 scripts/verify-f03.mjs 验证。
-const TARGET = `${ROOT}/.cache/monolith.after-f02.js`
+const TARGET = path.join(ROOT, '.cache/monolith.after-f02.js')
+requireEnv({ src: true, files: [TARGET] })
+const SRC = resolveUpstream().path
 
 const RNG_NAMES = ['outdoorRng', 'floor1Rng', 'floor2Rng', 'skyRng', 'textureRng', 'slimeRng', 'runtimeRng']
 const RE_RNG = new RegExp(`\\b(${RNG_NAMES.join('|')})\\(\\)`, 'g')

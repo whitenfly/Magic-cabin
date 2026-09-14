@@ -12,6 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { requireEnv } from './_verifyEnv.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TARGET = path.join(ROOT, 'src/cabin/legacy/monolith.js')
@@ -29,11 +30,8 @@ const check = (name, ok, detail = '') => {
   ok ? pass++ : fail++
 }
 
-if (!fs.existsSync(SNAPSHOT)) {
-  console.error(`\n✗ 缺少 J0.4 快照：${path.relative(ROOT, SNAPSHOT).replace(/\\/g, '/')}`)
-  console.error('  重建：node scripts/oneoff/_j06-freeze.mjs\n')
-  process.exit(2)
-}
+// ★ 先查前置再读文件（顺序很关键）：否则快照缺失会直接抛 ENOENT
+requireEnv({ files: [SNAPSHOT] })
 
 const cur = fs.readFileSync(TARGET, 'utf8')
 const boot = fs.readFileSync(BOOT, 'utf8')

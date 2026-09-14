@@ -19,7 +19,7 @@
     "status": "node scripts/ctl.mjs status",
     "stop": "node scripts/ctl.mjs stop",
     "typecheck": "tsc --noEmit",
-    "verify": "node scripts/verify-j15.mjs && node scripts/verify-migration.mjs && node scripts/verify-f02.mjs && node scripts/verify-f03.mjs && node scripts/verify-f04.mjs && node scripts/verify-f06.mjs",
+    "verify": "node scripts/_verify.mjs",
     "verify:j15": "node scripts/verify-j15.mjs",
     "verify:migration": "node scripts/verify-migration.mjs",
     "verify:f02": "node scripts/verify-f02.mjs",

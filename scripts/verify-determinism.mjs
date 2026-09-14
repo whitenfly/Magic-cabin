@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { ROOT } from './_verifyEnv.mjs'
 
-const ROOT = 'D:/FireflyQAQ/Project/FrontProj/Magic-cabin'
 const SHOTS = path.join(ROOT, '_shots')
 // 关键：带上确定性开关，否则运行期随机（爆炸/涟漪/浮字/天气轮换）仍是真随机的。
 // F0.3 起可再加 &frames=N 启用手动时钟，把画面**定格到第 N 帧**。

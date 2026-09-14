@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { requireEnv } from './_verifyEnv.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // ⚠️ 检查对象是 **J0.4 完成态的快照**，不是当前文件 ——
@@ -34,22 +35,12 @@ const check = (name, ok, detail = '') => {
   ok ? pass++ : fail++
 }
 
+// ★ 必须先查前置再读文件：原先 readFileSync 排在 existsSync 检查之前，
+//   快照一旦缺失就直接抛 ENOENT，把下面那段"给可执行提示"的保护代码变成了死代码。
+requireEnv({ files: [TARGET, SNAPSHOT] })
+
 const cur = fs.readFileSync(TARGET, 'utf8')
 const boot = fs.readFileSync(BOOT, 'utf8')
-
-// `.cache/` 不进版本库：快照缺失时给出可执行的提示，而不是一句 ENOENT
-if (!fs.existsSync(TARGET)) {
-  console.error(`\n✗ 缺少 J0.4 快照：${path.relative(ROOT, TARGET).replace(/\\/g, '/')}`)
-  console.error('  它是 J0.4 完成态的 monolith.js（含 testCam 与两个机位钩子，不含 J0.6 的渲染统计钩子）。')
-  console.error('  重建：node scripts/oneoff/_j06-freeze.mjs（会对当前文件撤销 J0.6 并自检）\n')
-  process.exit(2)
-}
-if (!fs.existsSync(SNAPSHOT)) {
-  console.error(`\n✗ 缺少 F0.3 快照：${path.relative(ROOT, SNAPSHOT).replace(/\\/g, '/')}`)
-  console.error('  它是 F0.3 完成态的 monolith.js（只有「时钟注入」，不含 testCam 与两个 J0.4 钩子）。')
-  console.error('  重建：把 J0.4 之前的 monolith.js 复制过去，或对 after-j04 执行本脚本的 undoJ04() 后另存。\n')
-  process.exit(2)
-}
 
 // ── 反向还原 J0.4 的三处改动 ──
 function undoJ04(text) {
