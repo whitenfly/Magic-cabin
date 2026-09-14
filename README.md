@@ -6,6 +6,7 @@
 > **书架上的书 = 我写的文章，点开就在书页里读**。
 
 **当前阶段：`J1.5` 构建与内容地基（Astro 落地）✅ 已完成**（2026-09-14，见 [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md)）
+**当前稳定版：`v0.1.5`**（tag `v0.1.5`，开发主线在 `dev` 分支 —— 见 [`docs/VERSIONING.md`](./docs/VERSIONING.md)）
 下一步：**`J2` 小屋核心设施**（`CameraRig` + 统一 `Interactable` + 持久化 + 内核）。
 搬迁**只搬位置，不改实现** —— 页面表现与重构前完全一致，而且现在**可以机器证明**，四条安全网各司其职：
 
@@ -110,6 +111,35 @@ pnpm build:single && pnpm serve:single   # → dist-single/，3D 正常、回归
 > 想验证零构建兜底，则用 `pnpm serve:legacy`；想验证单文件产线，则用 `pnpm serve:single`。
 > 测试脚本通过 `tests/e2e/page.mjs` 自动识别首页形态，**不需要额外参数**。
 
+---
+
+## 版本管理（一个开发任务 = 一个版本）
+
+日常开发在 **`dev`**（开发版）上，`main` 只存**稳定版**；每个任务一条 `task/<任务号>` 分支，
+合并回 `dev` 时打 `-dev.N` 预发布 tag，阶段验收通过才合进 `main` 并打正式版本号。
+
+```bash
+git switch dev
+git switch -c task/J2.1-camera-rig          # ① 开任务分支（名字带任务号）
+# …… 开发 + 跑门禁 ……
+git switch dev
+git merge --no-ff task/J2.1-camera-rig      # ② 合并回 dev，保留任务边界
+git tag -a v0.2.0-dev.1 -m "J2.1 完成"       # ③ 开发版快照
+```
+
+| 我需要…… | 看这里 |
+|---|---|
+| 分支模型 / 版本号怎么定 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §1–§2 |
+| 一个任务从头到尾怎么做 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §3 |
+| 什么时候发稳定版 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §4 |
+| 任务完成时该跑哪些门禁 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §5 |
+| 做坏了怎么退回去 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §6 |
+
+> ⚠️ `Magic-cabin` 自身就是仓库根，**不要在 `FrontProj/` 或 `Project/` 再 `git init`**
+> —— 那会让它变成 gitlink，任务级版本边界会全部失效。见 `docs/VERSIONING.md` §7。
+
+---
+
 ## 操作
 
 | 按键 | 动作 |
@@ -141,6 +171,7 @@ Magic-cabin/
 │  ├─ serve.mjs                # 零依赖静态服务器（默认托管 dist/，--legacy 托管仓库根）
 │  ├─ verify-j15.mjs           # ★ J1.5 门禁（75 项：构建形态 / 不变量 / cabin 摘要 / 产物）
 │  └─ verify-*.mjs             # J1 的搬迁一致性校验（19 项静态 + 11 项运行时）
+├─ .github/workflows/ci.yml    # ★ CI 门禁：typecheck → verify → build（见 docs/VERSIONING.md §5）
 ├─ src/
 │  ├─ content.config.ts        # ★ 内容集合 schema（Zod）
 │  ├─ content/                 # ★ 内容源（作者唯一手写的目录）
@@ -173,6 +204,7 @@ Magic-cabin/
 ├─ dist-single/                # 单文件产物（gitignore）
 └─ docs/
    ├─ BuildPlaning/            # ★ 建设规划（路线 J0–J8 + 模块映射 mapping.yaml）
+   ├─ VERSIONING.md            # ★ 版本管理规范（分支模型 / 版本号 / 任务 SOP / 发布回滚）
    ├─ J1.5-实施结果.md          # ★ J1.5 的 DoD 核对 / 落点 / 75 项门禁 / 遗留与交接
    ├─ MIGRATION.md             # 重构说明（搬迁记录 / 校验 / 映射索引 / 后续路线）
    ├─ baseline.md              # ★ 性能基线（由 tests/e2e/perf.mjs --update 生成）
@@ -207,6 +239,7 @@ Magic-cabin/
 | [`docs/BuildPlaning/04-模块增量开发与配置编排.md`](./docs/BuildPlaning/04-模块增量开发与配置编排.md) | 模块九步 SOP + 配置编排（Firefly 九条） |
 | [`docs/BuildPlaning/mapping.yaml`](./docs/BuildPlaning/mapping.yaml) | ★ **映射真源**：19 个条目 / 18 个编号模块的物品、交互、呈现通道、状态 |
 | [`docs/J1.5-实施结果.md`](./docs/J1.5-实施结果.md) | ★ **已实施阶段的记录**：DoD 核对、落点、75 项门禁、上游坑与遗留交接 |
+| [`docs/VERSIONING.md`](./docs/VERSIONING.md) | ★ **版本管理规范**：`main`/`dev` 分支模型、`J` 编号 ↔ 版本号映射、**一个任务一个版本**的 SOP、发布与回滚、门禁分级 |
 
 ## 上游设计依据
 
