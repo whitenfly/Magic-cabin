@@ -1,0 +1,67 @@
+# 魔法小屋 · CI 门禁
+#
+# 对应 docs/BuildPlaning/01-完善路线图.md §5.1 门禁流水线的前段：
+#   typecheck → verify → build
+# 完整流水线（visual / smoke / perf / deploy）见 docs/VERSIONING.md §5。
+#
+# 为什么 CI 只跑这三项：
+#   - `pnpm verify` 是零网络依赖的静态校验（J1.5 75 项 + 搬迁一致性 + F0.2/03/04/06），
+#     正是「站点那一半有没有碰过 3D 那一半」这条不变量的守门人，天然适合 CI；
+#   - `test:visual` / `test:perf` 需要先 build + serve，且对渲染后端敏感：
+#     CI 是 swiftshader，本地可能是 gpu，两者基线是分开的两套
+#     （perf.json / perf.gpu.json）。混用会得到假阳性，故不放进 CI。
+#
+# 需要「更严」时的做法：把 test:visual / test:smoke 加成独立 job，并在该 job 内
+# 自己起服务器（`pnpm build && pnpm serve &`），且只比对 swiftshader 那套基线。
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一分支的旧运行自动取消，省额度也省等待
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: 门禁（typecheck / verify / build）
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # 版本号从 package.json 的 packageManager 字段读取（pnpm@12.3.4），
+      # 保证 CI 与本机使用同一个包管理器版本，不在一处维护两遍。
+      - name: 启用 corepack（按 packageManager 固定 pnpm 版本）
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      # 静态门禁：J1.5 的 75 项（含 src/cabin/** 逐字节摘要 + 架构不变量 N12）
+      #          + 搬迁一致性 + F0.2 / F0.3 / F0.4 / F0.6
+      - name: 静态校验
+        run: pnpm verify
+
+      # 即使上面的门禁失败也继续构建：让日志一次给出完整结论，而不是修一个跑一次
+      - name: 构建（Astro 主产线）
+        if: always()
+        run: pnpm build
