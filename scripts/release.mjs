@@ -27,7 +27,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = process.cwd();
 const HISTORY = join(ROOT, 'GitPushHistory.md');
@@ -136,6 +137,63 @@ function gitBatch(cmds) {
   return result;
 }
 
+/* ─────────────── 「实际执行的 git 操作」采集（J2 工具改造）───────────────
+ *
+ * 需求来源：`GitPushHistory.md` 的每条记录此前只有「分支 @ head + 主题」，
+ * 看不出**到底跑了哪几条 git 命令** —— 事后无法复制复现，也无法核对
+ * "记录里的操作"与"真实发生的事"是否一致。
+ *
+ * 现在每次运行本工具时，凡**变更类**命令都会按原样记进本次记录条目。
+ * **只读查询一律不记**（`log` / `status` / `rev-parse` / `tag -l` /
+ * `branch --show-current` / `ls-remote`…）—— 否则每次 status 都会灌进几十条噪音。
+ */
+
+/** 是否属于"会改变仓库状态"的 git 命令 */
+function isMutatingGit(args) {
+  const [cmd, ...rest] = args;
+  const has = (...flags) => rest.some((a) => flags.some((f) => a === f || a.startsWith(f)));
+  switch (cmd) {
+    case 'switch':
+    case 'checkout':
+    case 'merge':
+    case 'commit':
+    case 'push':
+    case 'pull':
+    case 'fetch':
+    case 'rebase':
+    case 'reset':
+    case 'add':
+    case 'rm':
+    case 'mv':
+    case 'restore':
+    case 'cherry-pick':
+    case 'revert':
+    case 'stash':
+    case 'init':
+    case 'clone':
+      return true;
+    case 'tag':
+      // `tag -l` / `--points-at` / `--list` 是查询；`-a` / `-d` / `-s` / `-f` 才是写
+      return has('-a', '-d', '-s', '-f');
+    case 'branch':
+      // `branch --show-current` / `-l` / `-vv` 是查询；增删改名才是写
+      return has('-d', '-D', '-m', '-M', '-c', '-C', '--delete', '--move', '--copy');
+    case 'remote':
+      return rest.some((a) => ['add', 'remove', 'rm', 'rename', 'set-url'].includes(a));
+    default:
+      return false;
+  }
+}
+
+/** 命令行参数格式化：含空白或引号的加双引号，保证复制出去就能执行 */
+const fmtArg = (a) => (/[\s"]/.test(a) ? `"${String(a).replace(/"/g, '\\"')}"` : String(a));
+
+/** 本次进程实际执行**成功**的变更类命令（按执行顺序，含原命令） */
+const executedOps = [];
+
+/** 取本次已采集的命令（副本；测试与 `--print-ops` 用） */
+const opsSnapshot = () => executedOps.slice();
+
 /**
  * 执行 git 并返回 stdout。
  * @param {string[]} args
@@ -169,6 +227,9 @@ function git(args, { allowFail = true, timeout = 0 } = {}) {
   return finish();
 
   function finish() {
+    // ★ 采集"实际执行过的变更类命令"（原命令形式，可直接复制复现）。
+    //   只记**成功**的：失败的命令不该出现在"已执行操作"里。
+    if (status === 0 && isMutatingGit(args)) executedOps.push(`git ${args.map(fmtArg).join(' ')}`);
     if (status !== 0 && !allowFail) die(`git ${args.join(' ')} 失败：\n${out.trim()}`);
     return { ok: status === 0, out: out.replace(/\r\n/g, '\n'), status };
   }
@@ -290,6 +351,68 @@ function unpushedTags(st) {
   return st.localTags.filter((t) => t.startsWith('v') && tagVerdict(st, t) === TAG_STATE.UNPUSHED);
 }
 
+/**
+ * 生成「当前需要人工执行的推送命令」。
+ *
+ * ★ 三件事缺一不可：**dev、main、以及所有未推送的 tag**。
+ *
+ *   2026-09-14 的真实事故促成了这个函数：当时每个任务收尾只生成一条
+ *   `git push -u origin dev`（不含 main、不含 tag，也不带 `--follow-tags`），
+ *   阶段收尾又漏跑了 `pnpm ship` —— 结果 main 的 37 个提交与 11 个 tag
+ *   静静躺在本地，而 `GitPushHistory.md` 上"看不出少做了什么"。
+ *
+ * @returns {{ cmds: string[], unknown: string[] }} `cmds` = 待执行命令；`unknown` = 远端不可达时无法判定的 tag
+ */
+function pendingPushCommands(st) {
+  const cmds = [];
+  /** 分支：远端没这个分支 → `-u` 建立跟踪；落后 → 普通 push */
+  const branch = (name, info) => {
+    if (!info.exists) cmds.push(`git push -u origin ${name}`);
+    else if (info.ahead > 0) cmds.push(`git push origin ${name}`);
+  };
+  branch(DEV_BRANCH, st.dev);
+  branch(MAIN_BRANCH, st.main);
+
+  // tag：**逐个列出**（而不是 `--tags`）—— 这样每条命令都能被 `isCommandDone()`
+  // 逐字核对、自动翻 [x]；一行最多 CHUNK 个，避免命令过长。
+  //
+  // ★ 远端不可达时，tag 状态是 UNKNOWN（不是"已推送"）—— **也要列出来**：
+  //   "无法确认"绝不等于"不用推"，漏列的后果正是 2026-09-14 的事故
+  //   （记录里根本没有那条命令，于是没人知道少了什么）。
+  //   多列一条的命令是**无害**的：已推送的 tag 再推一次只会回 `Everything up-to-date`。
+  const un = unpushedTags(st);
+  const uv = st.remoteReachable === false ? unverifiedTags(st) : [];
+  const tags = [...un, ...uv];
+  const CHUNK = 6;
+  for (let i = 0; i < tags.length; i += CHUNK) {
+    cmds.push(`git push origin ${tags.slice(i, i + CHUNK).join(' ')}`);
+  }
+  return { cmds, unknown: uv };
+}
+
+/**
+ * 一条待执行命令是否**可由 git 状态证明**已完成（维护铁律第 3 条：标记不猜）。
+ *
+ * 目前只认推送类命令 —— 那是本工具唯一"只生成不执行"的动作：
+ *   · `git push [-u] origin <dev|main>`  → 对应分支的远端跟踪引用存在且不 ahead
+ *   · `git push origin v… v…`            → 列出的 tag **全部**已出现在远端
+ *   · `git push origin main --follow-tags` → 只看 main（tag 由它自己的命令负责）
+ */
+function isCommandDone(st, cmd) {
+  const push = /^git push (?:-u )?origin (.+)$/.exec(String(cmd).trim());
+  if (!push) return false;
+  const targets = push[1]
+    .split(/\s+/)
+    .filter((t) => t && !t.startsWith('-'));
+  if (targets.length === 0) return false;
+  return targets.every((t) => {
+    if (t === DEV_BRANCH) return st.dev.exists && st.dev.ahead === 0;
+    if (t === MAIN_BRANCH) return st.main.exists && st.main.ahead === 0;
+    if (t.startsWith('v')) return tagVerdict(st, t) === TAG_STATE.PUSHED;
+    return false;
+  });
+}
+
 /* ────────────────────────── GitPushHistory.md ────────────────────────── */
 const MARK = {
   autoBegin: '<!-- AUTO:BEGIN —— 以下区块由 scripts/release.mjs 追加维护（只增不改） -->',
@@ -312,6 +435,15 @@ const HEADER = `# Git 操作历史（本地专用 · 不进版本库）
 3. **标记不猜**：只有 git 状态能证明命令确实执行了，才翻成 \`[x]\`；否则保持 \`[ ]\`。
 4. **推送由人工执行**：工具只生成命令，绝不自动 push。
 5. 命令输出/报错如实记录——否则下次还会踩同一个坑。
+6. ★ **记录原命令**：每条时间轴记录都带「**实际执行**」段，逐条列出本次真正跑过的
+   **变更类** git 命令（\`switch\` / \`merge\` / \`tag -a\` / \`commit\` / \`branch -d\` …；
+   只读查询如 \`log\` / \`status\` / \`ls-remote\` 一律不列）。
+   这样既能事后复制复现，也能核对"记录"与"真实发生的事"是否一致。
+7. ★ **推送命令三件套**：任何生成推送命令的地方都必须覆盖 **dev、main、所有未推送的 tag**。
+   2026-09-14 的事故正是只生成了 dev 的推送命令：main 的 37 个提交与 11 个 tag
+   静静躺在本地，而记录上"看不出少做了什么"。
+8. ★ **阶段收尾必须跑 \`pnpm ship\`**：只有它会生成 main 与正式版 tag 的推送命令；
+   任务级 \`pnpm task:done\` 只管 dev。
 
 ---
 
@@ -386,45 +518,54 @@ function syncHistory({ entry = null, commands = null } = {}) {
 
 /**
  * 把「已验证执行完毕」的命令行 `[ ]` 翻成 `[x]`。
- * 判定依据只有 git 状态，不做任何猜测。
+ *
+ * 判定依据**只有 git 状态，不做任何猜测**（维护铁律第 3 条）：
+ * 逐行解析 `# [ ] <命令>`，交给 `isCommandDone()` 判断。
+ *
+ * ★ 早期版本用一组正则规则硬编码 `git push origin main` / `git push -u origin dev`
+ *   两种写法，遇到新的命令形式（如一行推多个 tag）就漏判 —— 现在改为按命令语义判定，
+ *   生成端怎么写都能被认出来。
  */
 function markCompleted(text) {
   const st = collect(false);
-  const rules = [
-    // 分支推送完成：远端跟踪引用存在且不 ahead
-    [() => st.main.exists && st.main.ahead === 0, /^# \[ \] git push origin main\b/],
-    [() => st.dev.exists && st.dev.ahead === 0, /^# \[ \] git push -u origin dev\b/],
-    [() => st.main.exists && st.main.ahead === 0, /^# \[ \] git push origin main$/],
-  ];
-  // 正式版 tag：逐个按 tagVerdict 判定
-  for (const t of st.localTags.filter((x) => x.startsWith('v'))) {
-    if (tagVerdict(st, t) === TAG_STATE.PUSHED) {
-      rules.push([() => true, new RegExp(`^# \\[ \\] git push origin( --follow-tags)? .*\\b${t.replace(/\./g, '\\.')}\\b`)]);
-      rules.push([() => true, new RegExp(`^# \\[ \\] git push origin ${t.replace(/\./g, '\\.')}$`)]);
-    }
-  }
-
-  let changed = false;
   const flipped = [];
   const lines = text.split('\n').map((line) => {
-    for (const [cond, re] of rules) {
-      if (re.test(line) && cond()) {
-        changed = true;
-        flipped.push(line.replace('# [ ]', '# [x]'));
-        return line.replace('# [ ]', '# [x]');
-      }
-    }
-    return line;
+    const m = /^# \[ \] (.+)$/.exec(line);
+    if (!m) return line;
+    if (!isCommandDone(st, m[1])) return line;
+    const done = `# [x] ${m[1]}`;
+    flipped.push(done);
+    return done;
   });
-  return { text: lines.join('\n'), changed, flipped, st };
+  return { text: lines.join('\n'), changed: flipped.length > 0, flipped, st };
 }
 
 /* ──────────────────────────── 记录条目构建 ──────────────────────────── */
-function buildEntry({ task, kind, st, body = [], commands = [], note = '' }) {
+/**
+ * 记录条目构建。
+ *
+ * 数据项（按顺序）：
+ *   1. 标题：`#### 时间 · 任务 · 种类`
+ *   2. `分支` / `tag`（HEAD 上的）
+ *   3. ★ `实际执行`：本次进程真正跑过的**变更类 git 原命令**（只读查询不列）
+ *   4. 自由正文（落点 / 门禁结果 / 依据…）
+ *   5. 待执行命令区块（由 `syncHistory` 渲染成 `# [ ] …` 复选框）
+ *   6. 备注
+ *
+ * @param {{task: string, kind?: string, st?: object, body?: string[], commands?: string[], note?: string, ops?: string[]}} spec
+ *        `ops` 显式传入时覆盖本次采集结果（供需要"只记某几条"的调用方使用）
+ */
+function buildEntry({ task, kind, st, body = [], commands = [], note = '', ops = undefined }) {
   const lines = [`#### ${now()} · ${task}${kind ? ` · ${kind}` : ''}`, ''];
   if (st) {
     lines.push(`- 分支：\`${st.branch}\` @ \`${st.head}\` —— ${st.subject}`);
     if (st.tagHere?.length) lines.push(`- tag：${st.tagHere.map((t) => `\`${t}\``).join('、')}`);
+  }
+  // ★ 实际执行的 git 命令（原命令，可直接复制复现）
+  const executed = ops === undefined ? opsSnapshot() : ops;
+  if (executed.length) {
+    lines.push('- 实际执行：');
+    for (const c of executed) lines.push(`  - \`${c}\``);
   }
   if (body.length) { lines.push(''); lines.push(...body); }
   if (commands.length) {
@@ -485,21 +626,25 @@ function cmdStart(args) {
   const r = git(['switch', '-c', name], { allowFail: false });
   ok(r.out.trim() || `已切到 ${name}`);
 
+  const after = collect(false);
+  const push = pendingPushCommands(after);
   const flipped = appendRecord(
     buildEntry({
       task: `开任务分支 ${name}`,
       kind: 'start',
-      st: collect(false),
+      st: after,
       body: [
         `- 依据：\`docs/VERSIONING.md\` §3；任务号 ${task}`,
         '- 下一步：开发 → `pnpm gate`（或 `pnpm task:done ' + task + '` 一并跑门禁+合并+打 tag）',
       ],
       note: '任务分支用完即删：`git branch -d` 由 `task:done` 自动完成。',
     }),
+    push.cmds.length ? push.cmds : null,
   );
   say('');
   reportFlipped(flipped);
   ok('已追加记录到 GitPushHistory.md');
+  if (push.cmds.length) printPending(after);
 }
 
 function reportFlipped(flipped) {
@@ -589,6 +734,7 @@ function cmdDone(args) {
   }
 
   const after = collect(false);
+  const push = pendingPushCommands(after);
   const flipped = appendRecord(
     buildEntry({
       task: `${task} 完成`,
@@ -600,9 +746,11 @@ function cmdDone(args) {
         `- 合并至：\`${DEV_BRANCH}\` @ \`${after.head}\``,
         `- 待补：\`docs/${task}-实施结果.md\`（DoD 核对 / 落点 / 门禁项数 / 遗留交接）`,
       ],
-      note: '阶段验收通过后，用 `pnpm ship` 生成正式版发布计划。',
+      note:
+        '★ **阶段收尾必须再跑 `pnpm ship`**（dev → main 合并 + 正式版 tag），' +
+        '否则 main 与正式 tag 会一直留在本地 —— 任务级 `done` 只管 dev。',
     }),
-    [`git push -u origin ${DEV_BRANCH}`],
+    push.cmds.length ? push.cmds : null,
   );
   say('');
   reportFlipped(flipped);
@@ -614,13 +762,15 @@ function printPending(st) {
   if (st.remoteReachable === false) warn('远端不可达（受限环境）——待推送状态按本地跟踪引用估算');
   if (!st.main.exists || st.main.ahead > 0) info(`main：${st.main.exists ? `${st.main.ahead} 个提交待推送` : '远端不存在'}`);
   if (!st.dev.exists || st.dev.ahead > 0) info(`dev：${st.dev.exists ? `${st.dev.ahead} 个提交待推送` : '远端不存在'}`);
-  const un = unpushedTags(st);
-  if (un.length) warn(`tag 确认未推送：${un.join('、')}`);
-  const uv = unverifiedTags(st);
-  if (uv.length) info(`tag 状态无法确认：${uv.join('、')}（远端不可达，不代表未推送）`);
-  if (st.main.exists && st.dev.exists && st.main.ahead === 0 && st.dev.ahead === 0 && un.length === 0) {
-    ok('分支与 origin 一致');
+  const { cmds, unknown } = pendingPushCommands(st);
+  if (unknown.length) info(`tag 状态无法确认：${unknown.join('、')}（远端不可达，不代表未推送）`);
+  if (cmds.length === 0) {
+    ok('分支与 tag 均已与 origin 同步');
+    return;
   }
+  say('');
+  warn('★ 以下推送命令必须由人工在**普通终端**执行（本工具绝不自动 push）');
+  for (const c of cmds) say(`  ${c}`);
 }
 
 function cmdShip(args) {
@@ -638,8 +788,10 @@ function cmdShip(args) {
       `# 手动：把 package.json 的 version 改为 ${ver}（去掉 -dev 后缀）`,
       `git commit -am "chore(release): v${ver}"`,
       `git tag -a v${ver} -m "v${ver} 正式版"`,
+      `# --follow-tags 会把 v${ver} 一起推上去（它是附注 tag 且指向 main 上的提交）`,
       `git push origin ${MAIN_BRANCH} --follow-tags`,
       `git switch ${DEV_BRANCH}`,
+      `# 回到 dev 后仍需推送 dev 与开发版 tag —— 用 pnpm ship 复查`,
     ];
     say('');
     for (const c of cmds) say(`  ${c.startsWith('#') ? `${C.d}${c}${C.x}` : c}`);
@@ -657,22 +809,21 @@ function cmdShip(args) {
     return;
   }
 
-  // 默认：生成「待推送」命令清单（只生成，不执行）
-  const cmds = [];
-  if (!st.main.exists || st.main.ahead > 0) cmds.push(`git push origin ${MAIN_BRANCH} --follow-tags`);
-  if (!st.dev.exists || st.dev.ahead > 0) cmds.push(`git push -u origin ${DEV_BRANCH}`);
+  // 默认：生成「待推送」命令清单（只生成，不执行）—— ★ 覆盖 dev / main / tag 三者
+  const { cmds, unknown } = pendingPushCommands(st);
   const un = unpushedTags(st);
-  if (un.length) cmds.push(`git push origin ${un.join(' ')}`);
 
   step('待推送命令（复制到普通终端执行）');
   if (cmds.length === 0) {
-    ok('无可生成的推送命令（分支已同步）');
-    if (st.remoteReachable === false) {
-      const uv = unverifiedTags(st);
-      if (uv.length) warn(`tag 状态无法确认：${uv.join('、')} —— 请用 git ls-remote --tags origin 人工确认`);
-    }
+    ok('分支与 tag 均已与 origin 同步');
   } else {
     for (const c of cmds) say(`  ${c}`);
+  }
+  if (unknown.length) {
+    warn(
+      `其中 ${unknown.length} 个 tag 的状态**无法确认**（远端不可达）—— 已一并列出；` +
+        '已推送过的再推一次只会回 `Everything up-to-date`，无害。',
+    );
   }
   say('');
   warn('本工具**不会**自动推送：推送一律由人工在普通终端完成');
@@ -680,7 +831,13 @@ function cmdShip(args) {
   const flipped = appendRecord(
     buildEntry({
       task: '推送计划（人工执行）', kind: 'ship', st,
-      body: [`- 依据：${st.remoteReachable === false ? '远端不可达，按本地跟踪引用估算' : '远端 tag 列表已核对'}`, '- 待人工执行的推送命令：'],
+      body: [
+        `- 依据：${st.remoteReachable === false ? '远端不可达，按本地跟踪引用估算' : '远端 tag 列表已核对'}`,
+        `- 覆盖范围：dev（${st.dev.exists ? `领先 ${st.dev.ahead}` : '远端不存在'}）、` +
+          `main（${st.main.exists ? `领先 ${st.main.ahead}` : '远端不存在'}）、未推送 tag（${un.length} 个）` +
+          ' —— **三者缺一不可**',
+        '- 待人工执行的推送命令：',
+      ],
       note: '执行完成后重跑 `pnpm git:status`；脚本会在能证明其已执行时把 `[ ]` 翻成 `[x]`。',
     }),
     cmds.length ? cmds : null,
@@ -723,6 +880,10 @@ function cmdStatus() {
     reportFlipped(flipped);
   } else {
     info('（status 不改动 GitPushHistory.md：仅在能证明命令已执行时才翻 [x]）');
+  }
+  if (pendingPushCommands(st).cmds.length) {
+    say('');
+    info(`要把上面的推送命令**写进记录的待执行命令区**（并纳入自动标记）：跑 \`pnpm ship\``);
   }
 }
 
@@ -826,15 +987,16 @@ function main() {
     say(`${C.b}魔法小屋 · 版本管理工具${C.x}   详见 docs/VERSIONING.md\n`);
     say('  start <任务号> [短名]   开任务分支');
     say('  verify [任务号]         跑门禁并记录（--quick 只跑 typecheck+verify）');
-    say('  done  <任务号>          收尾：门禁 → 合并回 dev → 打 -dev.N tag');
-    say('  ship [main]             生成推送 / 发布命令（★ 只生成，绝不执行 push）');
-    say('  status                  仓库状态 + 待推送 + tag 同步情况（只读）');
+    say('  done  <任务号>          收尾：门禁 → 合并回 dev → 打 -dev.N tag → 生成推送命令');
+    say('  ship                    生成待推送命令：★ dev + main + 所有未推送 tag（只生成，不执行）');
+    say('  ship main               生成正式版发布计划：dev→main 合并 + 正式 tag + 推送');
+    say('  status                  仓库状态 + 待推送 + tag 同步情况（只读；会把已完成的 [ ] 翻 [x]）');
     say('  history                 打印自动记录区');
     say('  sync [N]                幂等补记：把最近 N 个未记录的提交补进时间轴（默认 20）');
     say('  record "<说明>"         追加一条记录（--kind=commit|merge|manual，供 git 钩子调用）');
     say('');
     say(`  ${C.d}GitPushHistory.md 只增不改；唯一例外是把已执行的 [ ] 翻成 [x]。${C.x}`);
-    say(`  ${C.d}推送一律由人工执行。${C.x}`);
+    say(`  ${C.d}每条记录都带「实际执行」段（变更类 git 原命令）；推送一律由人工执行。${C.x}`);
     return;
   }
   switch (sub) {
@@ -850,4 +1012,25 @@ function main() {
   }
 }
 
-main();
+/*
+ * ★ 只在**直接执行**时跑 CLI。被 `import` 时（单元测试）不执行 main ——
+ *   这样"待推送命令生成"与"完成标记判定"这两处最容易出错、又最难靠肉眼验证的逻辑
+ *   能被测试覆盖，而不是只能"跑一遍看看"。
+ *   （2026-09-14 的事故就出在这里：`pendingPushCommands` 覆盖不全，
+ *     而当时没有任何测试能发现。）
+ */
+const isDirectRun =
+  Boolean(process.argv[1]) && resolvePath(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectRun) main();
+
+export {
+  // 供 tests/unit/release-tool.test.mjs 使用
+  pendingPushCommands,
+  isCommandDone,
+  isMutatingGit,
+  fmtArg,
+  buildEntry,
+  TAG_STATE,
+  DEV_BRANCH,
+  MAIN_BRANCH,
+};
