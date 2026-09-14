@@ -95,15 +95,28 @@ export default defineConfig({
     //
     // ⚠️ 这里面**不能**再列 `'astro'` / `'astro/loaders'`：那样会把 Astro 内部的
     //    `glob` 导出也拖进外部化路径，反而让 config 里的 `glob` 变成 `not defined`（试过，更糟）。
-    optimizeDeps: {
-      include: ['picomatch'],
-    },
-    ssr: {
-      noExternal: ['picomatch'],
-      optimizeDeps: {
-        include: ['picomatch'],
-      },
-    },
+    // ── ★ picomatch：**不要**把它放进 `noExternal`（这是 `astro dev` 崩溃的真正原因）──
+    //
+    // 现象：`pnpm dev` 启动后立刻崩在
+    //   `require is not defined  at eval (…/picomatch@4.0.7/node_modules/picomatch/index.js:3:14)`
+    //   `at ModuleRunner.directRequest (vite/dist/node/module-runner.js)`
+    //
+    // 根因：`picomatch@4` 是 **CJS**（内部用 `require`）。一旦用 `ssr.noExternal` /
+    //   `optimizeDeps.include` 把它**内联**进来，Vite 的 ModuleRunner 就会 `eval` 执行它 ——
+    //   那个作用域里没有 `require`，于是必崩。**反过来才是对的**：让它保持**外部化**，
+    //   交给 Node 的 `import()` 走 CJS↔ESM 互操作。
+    //
+    // 实测（2026-09-14）：这里此前加过「`ssr.noExternal: ['picomatch']` +
+    //   `optimizeDeps.include` + `ssr.optimizeDeps.include`」三键兜底，结果 `astro dev`
+    //   **必然崩溃**（当时的结论"只给 noExternal 不生效"是把两个不相干的问题混在了一起）；
+    //   把三键**全部移除**后：dev 正常启动（2.4s）→ 三个路由 200 → `?deterministic=1&frames=30`
+    //   下 3D 就绪 ✓、页面无异常；`astro build` 同样正常（8 页）。
+    //   验证脚本：`node scripts/oneoff/probe-dev-3d.mjs`。
+    //
+    // ⚠️ 所以这里**刻意什么都不写** —— 干净的默认行为就是正确行为。
+    //   Astro 自身有 3 处 `import picomatch`（`assets/vite-plugin-assets.js`、
+    //   `content/loaders/glob.js`、`core/cache/memory-provider.js`），它们走外部化路径时
+    //   都是好的；`glob.js` 那条另有问题，见 `src/blog/loaders.js`（两件事互不相干）。
 
     build: {
       target: 'es2020',

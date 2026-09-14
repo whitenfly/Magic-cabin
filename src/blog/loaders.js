@@ -11,14 +11,18 @@
  *   at ModuleRunner.directRequest (vite/dist/node/module-runner.js)
  * ```
  *
- * 成因链（在 Astro 7.3.2 + pnpm + Windows 上必现，已用一个**最小空白工程**复现过，
- * 与本项目的代码无关）：
+ * 成因链（在 Astro 7.3.2 + pnpm + Windows 上必现）：
  *   ① Astro 的 `syncContentCollections` 用 Vite 的 **ModuleRunner** 执行 `src/content.config.ts`；
  *   ② 该 config 一旦 `import { glob } from 'astro/loaders'`，`astro/loaders` 就被 Vite
- *      **外部化**（external）而不是内联打包 —— 实测此时 config 里 `glob` 会变成 `not defined`；
- *   ③ 外部化的模块由 Vite 逐个 `eval` 执行，而 `glob` 依赖的 `picomatch` 是 **CJS**，
- *      `eval` 出来的作用域里没有 `require` ⇒ 直接抛错。
- *   （`vite.ssr.noExternal` 对这条路径无效，试过 `['picomatch']`、`['astro/loaders','astro']` 均不生效。）
+ *      **外部化**（external）而不是内联打包 —— 实测此时 config 里的 `glob` 会变成 `not defined`；
+ *   ③ 所以 `glob()` 这条路径在本项目里**不可用**，与本文件无关。
+ *
+ * ⚠️ 另有一个**报错一模一样、成因却相反**的坑，别混在一起修（2026-09-14 实测）：
+ *   `picomatch@4` 是 **CJS**。一旦被 `ssr.noExternal` / `optimizeDeps.include` **内联**，
+ *   ModuleRunner 就会 `eval` 它，而那个作用域里没有 `require` ⇒ 同样报
+ *   `require is not defined at … picomatch/index.js`。
+ *   **保持它外部化（即什么都不配）才是对的** —— 详见 `astro.config.mjs` 的 picomatch 段。
+ *   （此前这里写着"`vite.ssr.noExternal` 无效"，那是把上面两件事混在一起得出的错误结论。）
  *
  * ## 本文件的做法
  *
@@ -49,8 +53,8 @@
  * 真需要时 Zod 会先报"字段类型不对"（`InvalidContentEntryDataError`），
  * 而不会静默产出一篇字段错误的文章 —— 这正是"构建期 fail-fast"想要的行为。
  *
- * > 若将来 `astro/loaders` 的外部化问题被上游修掉，把 `src/content.config.ts` 里的
- * > `fileCollection(...)` 换回 `glob(...)` 即可，本文件可整体删除。
+ * > 若将来 `astro/loaders` 的这条路径被上游修好，把 `src/content.config.ts` 里的
+ * > `markdownDir(...)` 换回 `glob(...)` 即可，本文件可整体删除。
  */
 
 /** Node 内置模块：用 `@vite-ignore` 的动态 import 取，绕开 Vite 的模块改写 */
