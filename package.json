@@ -27,6 +27,7 @@
     "verify:f04": "node scripts/verify-f04.mjs",
     "verify:f06": "node scripts/verify-f06.mjs",
     "verify:determinism": "node scripts/verify-determinism.mjs 3",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
     "test:visual": "node tests/visual/compare.mjs",
     "test:visual:additive": "node tests/visual/compare.mjs --mode=additive",
     "test:smoke": "node tests/e2e/smoke.mjs",
