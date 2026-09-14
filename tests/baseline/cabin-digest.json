@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-14",
   "totals": {
-    "files": 28,
-    "lines": 11374
+    "files": 30,
+    "lines": 11566
   },
-  "combined": "6fe2a35a730b1f15e8a717756fce36fdf5ea68d593141e8d2758eec6bb30ea0f",
+  "combined": "91fb1756bbd0cdab9ac091a8f855d8b5b6da5749b90b1d5c9bc706b1b7a81f55",
   "files": {
     "app/App.js": "5346e3e6dd63da0c",
     "app/clock.js": "bf08267716714873",
@@ -24,6 +24,8 @@
     "core/geometry/shapes2d.js": "ed730649b8266b07",
     "core/geometry/sketch.js": "979d07c75bbfe33a",
     "core/geometry/solid.js": "4d9fbb6774b0fadf",
+    "core/lighting/LightField.js": "549808a71202ed64",
+    "core/lighting/PointLightSource.js": "6079af75897af165",
     "core/materials/fill.frag.glsl.js": "cd46a6d90965cd7f",
     "core/materials/fill.vert.glsl.js": "17a7de109be1af7e",
     "core/materials/FillMaterial.js": "402438781c70291e",
@@ -32,7 +34,7 @@
     "core/README.md": "f9e6d693b9813b3d",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "6463d448cc163d8a",
-    "legacy/monolith.js": "10158807b98e29f7",
+    "legacy/monolith.js": "dceb66a298626eca",
     "props/README.md": "600f9c9259b2ee19",
     "systems/README.md": "5278ee9befdf972a",
     "world/layout.js": "f9838f2036b49850",

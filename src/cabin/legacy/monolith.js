@@ -33,6 +33,8 @@ import { createLineMaterials } from '../core/materials/lineMaterials.js'
 import { createFillMaterial } from '../core/materials/FillMaterial.js'
 import { createLitMaterialFactory } from '../core/materials/litMaterial.js'
 import { createLayout } from '../world/layout.js'
+import { createLightField } from '../core/lighting/LightField.js'
+import { createPointLightSource } from '../core/lighting/PointLightSource.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -7897,6 +7899,22 @@ export function installCabin(app) {
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
             let testCam = null;
             let ptLantern = 1, ptKot = 1, ptMc = 0, ptCb = 0, ptPlant = 0;
+            // J2.3：室内点光源改为**注册式**（原实现是 tickOnce() 里 8 行硬编码的 PP[i]/PC[i]/PG[i]）。
+            // ★ 注册顺序 = 槽位顺序：shader 的闪烁相位含 float(i)，顺序一换画面就变 ——
+            //   所以这 8 个的次序必须与原 PP[0]…PP[7] **完全一致**，位置/颜色/半径/yMin/yMax 也逐字照搬。
+            //   位置来自 cabin/world/layout.js（不变量 N9），强度用闭包读状态量，于是 core/ 里
+            //   不出现任何具体物件的名字（不变量 N1）。
+            const lightField = createLightField({ fillMaterial: FILL, warn: (m) => console.warn(m) });
+            lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [MTX, 2.52, MTZ], color: 0xffb066, radius: 4.6, strength: () => ptLantern, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [CCX, 1.14, CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [MC_X, 0.36, MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ptMc, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [KOT_X, 0.48, KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [CBX, 0.88, CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ptCb, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor2/candle', position: [NSX, FY + 1.00, NSZ], color: 0xffc06a, radius: 3.6, strength: () => candleP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => magicP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [PLX, 0.48, PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ptPlant, yMin: 0.0, yMax: 3.04 }));
+            // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
+            for (const src of lightField.sources) registry.registerLight(src);
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
             function tickOnce() {
@@ -8820,17 +8838,9 @@ export function installCabin(app) {
                 ptMc += ((mcRun > 0 ? 1 : 0) - ptMc) * 0.055;
                 ptCb += ((cbRun > 0 ? 1 : 0) - ptCb) * 0.055;
                 ptPlant += ((plantRun > 0 ? 1 : 0) - ptPlant) * 0.055;
-                {
-                    const PP = FILL.uniforms.uPtPos.value, PC = FILL.uniforms.uPtCol.value, PG = FILL.uniforms.uPtCfg.value;
-                    PP[0].set(MTX, 2.52, MTZ); PC[0].set(0xffb066); PG[0].set(4.6, ptLantern, 0.0, 3.04);
-                    PP[1].set(CCX, 1.14, CCZ); PC[1].set(0x6fa8ff); PG[1].set(5.6, 0.92, 0.0, 3.04);
-                    PP[2].set(MC_X, 0.36, MC_Z); PC[2].set(0x9b6fe8); PG[2].set(5.2, ptMc, 0.0, 3.04);
-                    PP[3].set(KOT_X, 0.48, KOT_Z); PC[3].set(0xffa858); PG[3].set(4.2, ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), 0.0, 3.04);
-                    PP[4].set(CBX, 0.88, CBZ); PC[4].set(0xb5a0f2); PG[4].set(3.6, ptCb, 0.0, 3.04);
-                    PP[5].set(NSX, FY + 1.00, NSZ); PC[5].set(0xffc06a); PG[5].set(3.6, candleP, 3.02, 6.9);
-                    PP[6].set(1.75, TBL_TOP + 0.52, -2.72); PC[6].set(0xffe08a); PG[6].set(4.6, magicP, 3.02, 6.9);
-                    PP[7].set(PLX, 0.48, PLZ); PC[7].set(0x9bc0e8); PG[7].set(3.8, ptPlant, 0.0, 3.04);
-                }
+                // J2.3：8 个槽位的填充交给光照场（原先是 8 行 PP[i]/PC[i]/PG[i] 硬编码）。
+                // 光源在初始化时注册过一次，这里只按注册顺序刷新强度 —— 新增一盏灯不再改本文件。
+                lightField.update(time, dt);
 
                 if (camShake > 0.002) {
                     camera.position.x += (runtimeRng() - 0.5) * camShake;
