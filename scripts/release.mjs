@@ -1029,6 +1029,18 @@ function cmdExec(args) {
       }),
     );
     reportFlipped(flipped);
+    // ★ 变更之后顺手看一眼**是否产生了新的未推送提交**（只用本地跟踪引用，不碰网络）。
+    //   目的是堵住"记录全绿、远端却落后"那个坑 —— 它曾让 main 的 37 个提交与 11 个 tag
+    //   滞留本地，而记录上看不出少了什么。这里即时提醒，比事后跑 status 才发现要早。
+    const aheadOf = (b) =>
+      Number(g(['rev-list', '--count', `origin/${b}..${b}`], { allowFail: true }).trim() || 0);
+    const aheadDev = aheadOf(DEV_BRANCH);
+    const aheadMain = aheadOf(MAIN_BRANCH);
+    if (aheadDev > 0 || aheadMain > 0) {
+      say('');
+      warn(`有未推送提交：${DEV_BRANCH} 领先 ${aheadDev} / ${MAIN_BRANCH} 领先 ${aheadMain}`);
+      info('把推送命令写进记录的待执行命令区：`pnpm ship`（推送一律由人工在普通终端执行）');
+    }
   } else {
     info('只读查询：已执行，按约定不进历史（§13.1）');
   }
