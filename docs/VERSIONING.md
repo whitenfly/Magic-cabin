@@ -33,10 +33,23 @@ git tag -a v0.2.0 -m "J2 小屋核心设施"
 ```bash
 pnpm task:start J2.1 camera-rig   # ① 开任务分支（自动前置检查 + 记录）
 # …… 开发 ……
-pnpm task:done J2.1               # ② 门禁 → 合并回 dev → 打 v0.2.0-dev.N tag → 记录
-pnpm ship                         # ③ 生成待人工执行的推送命令（工具绝不自动 push）
-pnpm git:status                   # ④ 随时查看分支 / 未推送 / tag 同步状态（只读）
+pnpm task:done J2.1               # ② 门禁 → 合并回 dev → 打 v0.2.0-dev.N tag → 记录 + 生成推送命令
+pnpm ship                         # ③ ★ 阶段收尾必做：生成 dev + main + tag 的推送命令并写进记录
+# ④ ★ 人工：把记录末尾 `# [ ]` 的那几条命令复制到**普通终端**执行（工具绝不自动 push）
+pnpm git:status                   # ⑤ 复查：已推送的命令会被自动翻成 `# [x]`
 ```
+
+> ### ★ 推送是流程的一部分，不是"想起来才做"
+>
+> **2026-09-14 的真实事故**：J2 阶段收尾后，`main` 的 37 个提交与 11 个 tag
+> 静静躺在本地，而 `GitPushHistory.md` 上"看不出少做了什么"——
+> 因为那时任务级 `done` 只生成 dev 的推送命令，阶段收尾又漏跑了 `pnpm ship`。
+>
+> 现在的规矩（工具已强制）：
+> 1. 任何生成推送命令的地方都**必须覆盖 dev、main、所有未推送 tag** 三者；
+> 2. 阶段收尾**必须**跑 `pnpm ship`，否则 main 与正式 tag 不会被列进待执行命令；
+> 3. 你执行完推送后跑一次 `pnpm git:status`，**能由 git 状态证明的命令会自动翻成 `[x]`**；
+>    没翻的说明它还没真正生效（或远端不可达、无法确认）。
 
 ---
 
@@ -150,17 +163,48 @@ git commit -m "J2.1 CameraRig：统一相机运动与视角切换
 
 ### ⑥ 合并回 `dev` 并打开发版 tag
 
+工具一条命令做完（`pnpm task:done J2.1`）：跑门禁 → `--no-ff` 合并回 `dev` →
+打 `v0.2.0-dev.N` → 删任务分支 → **生成推送命令并追加记录**。
+
+手工等价动作：
+
 ```bash
 git switch dev
 git merge --no-ff task/J2.1-camera-rig -m "merge J2.1 CameraRig"
 git tag -a v0.2.0-dev.1 -m "J2.1 CameraRig 完成（开发版）"
 git tag -a task/J2.1 -m "J2.1"
-git push origin dev --follow-tags
 git branch -d task/J2.1-camera-rig
 ```
 
 > **`--no-ff` 是关键**：它让每个任务在历史上是一个**独立可识别的合并节点**。
 > 将来要撤掉某个任务，一条 `git revert -m 1 <merge>` 就够，不需要手工挑文件。
+
+### ⑦ ★ 推送（必做，人工执行）
+
+工具**只生成命令，绝不自动 push**。推送需要能联网、能建立 SSH 通道的**普通终端**
+（受限沙箱里 Git 的 SSH 传输会 `couldn't create signal pipe` 直接失败）。
+
+```bash
+pnpm ship          # 生成「待推送命令」：dev + main + 所有未推送 tag，并写进 GitPushHistory.md
+```
+
+然后把记录末尾 `# [ ]` 的那几条复制到普通终端执行。典型形态：
+
+```powershell
+git push origin dev
+git push origin main
+git push origin v0.2.0 v0.2.0-dev.1 v0.2.0-dev.10     # tag 逐个列出，便于逐条核对
+```
+
+推送完成后复查（这一步会把**能证明已执行**的命令自动翻成 `[x]`）：
+
+```bash
+pnpm git:status    # 分支应显示 0 ahead；tag 列表应全变 ✓
+```
+
+> ⚠️ **为什么 tag 要单独推**：`git push origin dev` **不会**带上 tag
+> （除非显式 `--follow-tags`）。任务级 `done` 打的 `v0.2.0-dev.N` 因此必须靠
+> 上面那条 `git push origin <tag…>` 才会离开本地 —— 这正是事故里 11 个 tag 滞留的原因。
 
 ---
 
@@ -172,6 +216,10 @@ git branch -d task/J2.1-camera-rig
 2. 出现**用户可感知**的成果（例如「书架上的书能打开、能在书页里读完一篇文章」）。
 
 ```bash
+# ① ★ 生成发布计划（工具把它写进 GitPushHistory.md 的待执行命令区）
+pnpm ship main
+
+# ② 按计划执行（等价的手工动作如下）
 git switch dev && git pull
 git switch main && git pull
 git merge --no-ff dev -m "release: v0.2.0（J2 小屋核心设施）"
@@ -179,10 +227,25 @@ git merge --no-ff dev -m "release: v0.2.0（J2 小屋核心设施）"
 # 去掉 -dev 后缀：package.json version → 0.2.0
 git commit -am "chore(release): v0.2.0"
 git tag -a v0.2.0 -m "J2 小屋核心设施：CameraRig + 统一 Interactable + 持久化 + 内核"
+
+# ③ ★ 推送（必做）：main 与正式 tag 一起上去
 git push origin main --follow-tags
 
 git switch dev        # ★ 立刻回到 dev，别在 main 上写代码
+
+# ④ ★ 复查：dev 与开发版 tag 是否也有遗漏（这一步才覆盖"三件套"里的另外两件）
+pnpm ship
+pnpm git:status       # 全部同步后，记录里的 `# [ ]` 会被自动翻成 `# [x]`
 ```
+
+> ### ★ 阶段收尾的三步不能省
+>
+> `pnpm ship main`（合并计划）→ **人工推送** → `pnpm ship`（复查 dev 与开发版 tag）。
+> 2026-09-14 的事故就是只做了前两步里的"合并 + 打 tag"、没做推送与复查：
+> `main` 落后 37 个提交、11 个 tag 留在本地，而记录上看不出异常。
+>
+> 判断标准很简单：**`pnpm git:status` 里 `dev` 与 `main` 都显示 0 ahead、
+> 所有 tag 都带 `✓`，才算这个阶段真的发布完成。**
 
 发布说明直接引用 [`BuildPlaning/01-完善路线图.md`](./BuildPlaning/01-完善路线图.md) §5.3 的量化指标，例如：
 
@@ -290,7 +353,7 @@ git switch dev                               # 看完回来
 | 版本 | tag | 内容 | 日期 | 状态 |
 |---|---|---|---|---|
 | `0.1.5` | `v0.1.5` | `J0` 基线与护栏 + `J1` 工程化骨架 + `J1.5` Astro 落地 | 2026-09-14 | ✅ **稳定版** |
-| `0.2.0` | `v0.2.0` | `J2` 小屋核心设施 | — | ⬜ 计划 |
+| `0.2.0` | `v0.2.0` | `J2` 小屋核心设施（`CameraRig` + 统一 `Interactable` + 持久化 + 内核） | 2026-09-14 | ✅ **稳定版**（`v0.2.0-dev.1`–`dev.10` 为阶段内任务快照） |
 | `0.2.5` | `v0.2.5` | `J2.5` 配置编排层 | — | ⬜ 计划 |
 | `0.3.0` | `v0.3.0` | `J3` 物件模块化 | — | ⬜ 计划 |
 | `0.4.0` | `v0.4.0` | `J4` 系统模块化 | — | ⬜ 计划 |
@@ -323,11 +386,11 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 
 | 命令 | 作用 | 会做的事 |
 |---|---|---|
-| `pnpm task:start J2.1 camera-rig` | 开任务分支 | 前置检查（是否在 `dev`、工作区是否干净、`dev` 是否有未推送）→ `git switch -c task/J2.1-camera-rig` → 追加记录 |
+| `pnpm task:start J2.1 camera-rig` | 开任务分支 | 前置检查（是否在 `dev`、工作区是否干净、`dev` 是否有未推送）→ `git switch -c task/J2.1-camera-rig` → 追加记录（含**实际执行的原命令**）→ 打印待推送命令 |
 | `pnpm task:verify J2.1` | 跑门禁并记录 | `typecheck + verify + build`，逐项记录耗时与结果（`-- --quick` 只跑前两项） |
-| `pnpm task:done J2.1` | 收尾一个任务 | 校验工作区干净 → 跑完整门禁 → `git merge --no-ff` 回 `dev` → 打 `v0.2.0-dev.N` tag → 删任务分支 → 追加记录与推送命令 |
-| `pnpm git:status` | 仓库状态总览 | 分支 / HEAD / 工作区 / 未推送提交 / 每个 tag 的同步状态；并**自动把已验证执行的 `[ ]` 翻成 `[x]`**（除此之外不改动任何记录） |
-| `pnpm ship` | 生成推送命令 | 按实际 git 状态生成**待人工执行**的 push 命令并追加记录。**绝不执行 push** |
+| `pnpm task:done J2.1 [--base=0.2.0]` | 收尾一个任务 | 校验工作区干净 → 跑完整门禁 → `git merge --no-ff` 回 `dev` → 打 `v0.2.0-dev.N` tag → 删任务分支 → 追加记录（含原命令）**+ 生成待推送命令（dev / main / tag 三件套）** |
+| `pnpm git:status` | 仓库状态总览 | 分支 / HEAD / 工作区 / 未推送提交 / 每个 tag 的同步状态；**自动把已验证执行的 `[ ]` 翻成 `[x]`**（除此之外不改动任何记录）；有未推送时提示跑 `pnpm ship` |
+| `pnpm ship` | ★ **生成推送命令（三件套）** | 按实际 git 状态生成**待人工执行**的 push 命令并追加记录：**dev + main + 所有未推送 tag**（远端不可达时 tag 状态标"无法确认"但**仍列出**）。**绝不执行 push** |
 | `pnpm ship main` | 生成发布计划 | `dev` → `main` 的合并 + 正式版 tag 的一整套命令（含要手工改的 `package.json` version） |
 | `pnpm git:history` | 查看自动记录区 | 打印 `GitPushHistory.md` 的追加记录 |
 | `pnpm git:sync` | **幂等补记** | 把最近若干提交中尚未记录的补进时间轴；已记过的不会重复追加 |
@@ -338,6 +401,10 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 > **推送永远由人工执行。** 工具只生成命令：SSH 推送在不同环境下表现不一致
 > （实测受限沙箱里 `ssh.exe` 报 `couldn't create signal pipe, Win32 error 5`），
 > 交给人工在普通终端执行最可靠。工具会在能**证明**命令已执行时自动把 `[ ]` 翻成 `[x]`。
+>
+> **`--base=x.y.z` 的用途**：`Jx.y` 这个写法在本项目里有两种含义 —— 阶段内的第 y 个任务
+> （`J2.4` 弹簧与滑轨）与一个独立的 `.5` 子阶段（`J2.5` 配置编排层）。规范要求阶段内任务
+> **共用** `0.<x>.0-dev.N` 序列，脚本无法自行区分，所以用 `--base=0.2.0` 显式指定。
 
 ---
 
@@ -347,6 +414,36 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 
 `GitPushHistory.md` 是**本地专用的 Git 操作流水**：每阶段的 commit / tag / branch / push 命令与结果，
 以及**等待人工执行的命令**。它在 `.gitignore` 里，**不上传 GitHub**，但保留在工作区。
+
+**一条记录长什么样**（`J2.11` 起的格式）：
+
+```
+#### 2026-09-14 23:20 · 开任务分支 task/J2.11-release-flow-docs · start
+
+- 分支：`task/J2.11-release-flow-docs` @ `2fcadb0` —— fix(release): …
+- 实际执行：                          ← ★ 本次真正跑过的变更类 git 命令（原命令，可直接复制复现）
+  - `git switch -c task/J2.11-release-flow-docs`
+- 依据：`docs/VERSIONING.md` §3；任务号 J2.11
+
+> 任务分支用完即删：`git branch -d` 由 `task:done` 自动完成。
+```
+
+紧随其后是「待执行命令」区块（推送类命令，带复选框，等你执行）：
+
+```powershell
+# [ ] git push origin dev
+# [ ] git push origin main
+# [ ] git push origin v0.2.0 v0.2.0-dev.1 v0.2.0-dev.10
+```
+
+**记什么、不记什么**：
+
+| 记（变更类，会改仓库状态） | 不记（只读查询） |
+|---|---|
+| `switch` / `checkout` / `merge` / `commit` / `tag -a` / `branch -d` / `push` / `add` … | `log` / `status` / `rev-parse` / `tag -l` / `tag --points-at` / `branch --show-current` / `ls-remote` / `describe` … |
+
+> 只读查询**故意不记**：每次 `git:status` 都会跑十几条查询，记进去只会把历史变成噪音，
+> 反而看不出"真正发生了什么"。
 
 ### 12.2 维护铁律（工具严格遵守）
 
@@ -378,16 +475,24 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 
 ### 12.4 命令执行状态是怎么判定的
 
-| 命令 | 判定依据 | 翻成 `[x]` 的条件 |
+判定**只看 git 状态，不做任何猜测**（铁律第 3 条）。`release.mjs` 逐行解析
+`# [ ] <命令>`，交给 `isCommandDone()`：
+
+| 命令形态 | 判定依据 | 翻成 `[x]` 的条件 |
 |---|---|---|
-| `git push origin main …` | 本地远端跟踪引用 | `origin/main` 存在 且 `main` 不 ahead |
-| `git push -u origin dev` | 同上 | `origin/dev` 存在 且 `dev` 不 ahead |
-| `git push origin v0.2.0` | 远端 tag 列表 | `git ls-remote` 确认该 tag 已在远端 |
-| 其他命令 | —— | **不自动标记**（人工判断） |
+| `git push [-u] origin dev` | 本地远端跟踪引用 | `origin/dev` 存在 且 `dev` 不 ahead |
+| `git push [-u] origin main` | 同上 | `origin/main` 存在 且 `main` 不 ahead |
+| `git push origin main --follow-tags` | 同上（**只看分支**，tag 由它自己的命令负责） | `main` 不 ahead |
+| `git push origin v0.2.0 v0.2.0-dev.1 …` | 远端 tag 列表 | 该行列出的 tag **全部**已在远端 |
+| 其他命令（merge / tag / 计划类） | —— | **不自动标记**（人工判断） |
 
 **受限环境的表现**：在禁止创建命名管道的沙箱里 `git ls-remote` 必定失败（exit 128），
 此时脚本把 tag 状态标为 **`?` 未验证**，而**不是**「未推送」——
 这两者含义完全不同，不要混为一谈。
+
+⚠️ 但**"无法确认"绝不影响命令的生成**：`pnpm ship` 在远端不可达时**仍会列出**这些 tag 的推送命令
+（`isCommandDone` 对它们返回 false，所以推完之后会在能联网的终端里被正确翻成 `[x]`）。
+漏列才是危险的 —— 那正是 2026-09-14 事故的形态。
 
 ```powershell
 # 人工确认 tag 是否已推送（在能联网的普通终端执行）
@@ -410,3 +515,6 @@ git ls-remote --tags origin
 | 6 | 不在 `FrontProj/` 或 `Project/` 再 `git init` | 见 §7，会把本仓库变成 gitlink |
 | 7 | `GitPushHistory.md` 只增不改（除 `[ ]`→`[x]`） | 它是交接凭据，改了就失去可追溯性 |
 | 8 | 不给 `package.json` 加 `packageManager` 字段 | 见 §8.1，会重写 lockfile |
+| 9 | ★ **阶段收尾必须跑 `pnpm ship`，并把生成的推送命令执行完** | 否则 `main` 与正式 tag 滞留本地，而记录上"看不出少做了什么"（2026-09-14 事故） |
+| 10 | ★ **任务打的 `v0.2.0-dev.N` 必须用 `git push origin <tag…>` 单独推** | `git push origin dev` **不会**带上 tag —— 11 个 tag 滞留本地就是这个原因 |
+| 11 | ★ **推送完成后跑一次 `pnpm git:status`** | 它是"待执行命令"翻成 `[x]` 的唯一时机；不跑就永远停在 `[ ]` |
