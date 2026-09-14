@@ -40,6 +40,7 @@
 import { mountUI } from './dom.js'
 import { setDeterministicRuntime, sceneDigest, SCENE_SEED } from './app/rng.js'
 import { clock, STEP } from './app/clock.js'
+import { createApp } from './app/App.js'
 
 /** 等待 DOM 就绪（原实现把脚本放在 body 末尾，依赖 DOM 已解析；模块脚本是 defer 的，通常已就绪） */
 function domReady() {
@@ -196,8 +197,18 @@ export async function bootCabin() {
     window.__CABIN_WANT_STATS = true
   }
 
-  // ③ 加载实现（画面与重构前完全一致）
-  await import('./legacy/monolith.js')
+  // ③ 造应用内核（J2.5）：时钟 / 随机源 / 事件总线 / 注册中心 / 更新调度器都挂在它上面。
+  //    内核必须先于 3D 实现存在 —— 实现会把自己的登记动作接上去（installCabin）。
+  const app = createApp()
+  if (opts.stats) {
+    // 与 `window.__cabinRenderStats` 同一个开关：只在 `?stats=1` 时暴露，
+    // 正常游玩路径上不存在这个接口（沿用 J0.4/J0.6 的约定）。
+    window.__cabinApp = () => app.stats()
+  }
+
+  // ③.5 安装 3D 实现（画面与重构前完全一致）
+  const { installCabin } = await import('./legacy/monolith.js')
+  installCabin(app)
 
   // ③.5 J0.4：应用测试机位与小屋形态（截图回归用；不指定则完全保持默认，画面与正常游玩一致）
   const camLabel = applyTestCamera(opts)

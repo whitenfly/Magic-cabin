@@ -52,7 +52,19 @@ const {
 //    当成 runtime 的参数调用，抛出 "runtime(...) is not a function"。
 const runtimeRng = runtime;
 
-        (function () {
+/**
+ * 安装小屋（`J2.5`）：由 `boot.js` 造好应用内核之后调用。
+ *
+ * 这里是"3D 内部"与"应用内核"之间**唯一**的接缝 —— 内核交出 `registry` / `bus` /
+ * `scheduler`，小屋把自己的登记动作接上去。搬迁期（`J2`–`J4`）本函数体仍是原来的
+ * 自执行函数，只是**不再自动执行**：时机改由 boot 控制（DOM 就绪、测试开关设好之后），
+ * 这样内核才能先于场景存在。
+ *
+ * @param {object} app `createApp()` 的产物
+ */
+export function installCabin(app) {
+    const { registry, bus, scheduler } = app;
+    (function () {
             'use strict';
             const mqCoarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
             const mqFine = window.matchMedia ? window.matchMedia('(pointer: fine)').matches : true;
@@ -322,8 +334,17 @@ const runtimeRng = runtime;
             const smokePuffs = [];
             for (let i = 0; i < 5; i++) { const p = edge(new THREE.TorusGeometry(0.14, 0.035, 6, 20)); p.rotation.x = Math.PI / 2; p.userData.phase = i / 5; scene.add(p); smokePuffs.push(p); }
 
-            const magicMeshes = [];
-            function regMagic(o, onClick) { o.userData.onClick = onClick; o.traverse(m => { if (m.isMesh && !m.userData.noHit) { m.userData.magicRoot = o; magicMeshes.push(m); } }); return o; }
+            // J2.5：交互登记交给应用内核的注册中心（J2.6 会在它之上做统一契约）。
+            // ★ magicMeshes 仍是**同一个数组实例**（注册中心持有它），
+            //   准星射线（aimRay）与点击射线照旧直接用它做 intersectObjects —— 命中行为零改动。
+            const magicMeshes = registry.magicMeshes;
+            function regMagic(o, onClick) {
+                o.userData.onClick = onClick;
+                const meshes = [];
+                o.traverse(m => { if (m.isMesh && !m.userData.noHit) meshes.push(m); });
+                registry.registerMagic(o, meshes);   // 内部统一设置 magicRoot 并 push 进 magicMeshes
+                return o;
+            }
 
             const STAIR_N = 14;
             function buildStairs() {
@@ -8880,3 +8901,4 @@ const runtimeRng = runtime;
             }
             addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
         })();
+}
