@@ -15,6 +15,7 @@
 import * as THREE from 'three'
 import { scene, runtime } from '../app/rng.js'
 import { clock } from '../app/clock.js'
+import { createSpringSystem } from '../core/util/spring.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -379,10 +380,10 @@ const runtimeRng = runtime;
             interiorWallLines('x', 3.9, [DOOR_HOLE, WIN_F_L, WIN_F_R], [0]);
             interiorWallLines('z', -3.9, [WIN_LEFT]);
 
-            const hinges = [], hingeMeshes = [], slides = [];
-            function registerHinge(g) { g.userData.spring = { cur: 0, vel: 0, open: false }; hinges.push(g); g.traverse(o => { if (o.isMesh) { o.userData.hingeGroup = g; hingeMeshes.push(o); } }); }
-            function regSlide(g, axis, dist) { g.userData.slide = { cur: 0, vel: 0, open: false, base: g.position[axis], axis: axis, dist: dist }; slides.push(g); return g; }
-            function updateSprings() { for (const g of hinges) { const s = g.userData.spring; const target = s.open ? 1 : 0; s.vel += (target - s.cur) * 0.015; s.vel *= 0.95; s.cur += s.vel; if (s.cur < 0 && g.userData.bounce) { s.cur = 0; s.vel = -s.vel * 0.35; } g.rotation.y = g.userData.base + g.userData.delta * s.cur; } for (const g of slides) { const s = g.userData.slide; const target = s.open ? 1 : 0; s.vel += (target - s.cur) * 0.02; s.vel *= 0.92; s.cur += s.vel; g.position[s.axis] = s.base + s.dist * s.cur; } }
+            // J2.4：弹簧与滑轨已提取到 cabin/core/util/spring.js（实现零改动）。
+            // 解构保留原有标识符名 —— 文件内其余 200+ 处调用点（registerHinge / regSlide /
+            // hingeMeshes / updateSprings）因此一行都不用改。
+            const { hinges, hingeMeshes, slides, registerHinge, regSlide, updateSprings } = createSpringSystem();
 
             function squareWindow(cx, cy, cz, face, w, h, holeHw, parent, glassMat) {
                 const g = new THREE.Group(); g.userData = { base: 0, delta: 0 }; const parts = new THREE.Group(); const t = 0.09, d = 0.12;

@@ -45,6 +45,13 @@ function undoJ06(text) {
 
 console.log('\n【J0.6-1】反向还原后应与 J0.4 快照一致（证明只加了渲染统计钩子）')
 {
+  // ★ 搬迁期降级（J2 起）：J2 把 monolith 的实现逐个提取为模块（`cabin/core/**`、
+  //   `cabin/systems/**`），于是「撤销 J0.6 → 与 F0.4 快照逐字节一致」这条**历史链条**
+  //   必然断裂 —— 它证明的是"J0.6 当时只加了渲染统计钩子这一处"，而那个事实在 J0.6
+  //   收尾时就已被验过。此处把它降级为**参考项**（打印差异首位置，不计入失败），
+  //   而不是放宽阈值：`monolith` 被 `J4` 删除后，本脚本整体退役。
+  //   判据：文件里出现对 `cabin/core/**` 或 `cabin/systems/**` 的 import ⇒ 已进搬迁期。
+  const MIGRATING = /from '\.\.\/(core|systems)\//.test(cur)
   let restored = null
   try {
     restored = undoJ06(cur)
@@ -64,17 +71,23 @@ console.log('\n【J0.6-1】反向还原后应与 J0.4 快照一致（证明只�
     console.log(
       `  ${rawSame ? '✓' : '·'} 逐字节一致（参考）：${rawSame ? `${want.length} 字符` : `差异 ${Math.abs(a.length - want.length)} 字符`}`,
     )
-    check('空白归一化后一致（证明只差空行）', normSame, normSame ? '逻辑完全一致' : '存在非空白差异')
+    if (normSame) {
+      check('空白归一化后一致（证明只差空行）', true, '逻辑完全一致')
+    } else if (MIGRATING) {
+      console.log('  · 空白归一化后一致（证明只差空行）  → 已随搬迁期降级为参考项（见上方注释）')
+    } else {
+      check('空白归一化后一致（证明只差空行）', false, '存在非空白差异')
+    }
     if (!normSame) {
       const na = norm(a)
       const nw = norm(want)
       let i = 0
       while (i < Math.min(na.length, nw.length) && na[i] === nw[i]) i++
-      console.log('     首个差异位置:', i)
+      console.log(`     首个差异位置: ${i}${MIGRATING ? '（搬迁期预期：提取到模块的那一处）' : ''}`)
       console.log('     快照:', JSON.stringify(nw.slice(Math.max(0, i - 70), i + 70)))
       console.log('     还原:', JSON.stringify(na.slice(Math.max(0, i - 70), i + 70)))
     }
-    console.log(`  · J0.6 净增 ${cur.length - want.length} 字符（一处：渲染统计钩子）`)
+    if (!MIGRATING) console.log(`  · J0.6 净增 ${cur.length - want.length} 字符（一处：渲染统计钩子）`)
   }
 }
 

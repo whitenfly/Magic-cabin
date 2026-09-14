@@ -530,20 +530,29 @@ function cmdVerify(args) {
   gate.ok ? ok('门禁全绿，已追加记录') : die('门禁未通过（已追加记录）');
 }
 
-function nextDevVersion(st, task) {
+function nextDevVersion(st, task, baseOverride) {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   const cur = String(pkg.version).replace(/-dev\.\d+$/, '');
   const m = /^[A-Za-z](\d+)(?:\.(\d+))?$/.exec(task);
   let base = cur;
-  if (m) base = m[2] ? `0.${m[1]}.${m[2]}` : `0.${m[1]}.0`;
+  // ★ 显式覆盖优先：`Jx.y` 这个写法在本项目里有**两种含义** ——
+  //   ① 阶段内的第 y 个任务（如 `J2.4` 弹簧与滑轨）；② 一个独立的 `.5` 子阶段（如 `J2.5` 配置编排层）。
+  //   规范的映射表与示例要求：阶段内任务**共用** `0.<x>.0-dev.N` 序列
+  //   （`VERSIONING.md` §3 的示例写着 `J2.1 CameraRig` → `v0.2.0-dev.1`），只有子阶段才占 `0.<x>.5`。
+  //   脚本无法从任务号自行区分两者，因此用 `--base=` 显式指定；不指定时保持原有推导。
+  if (baseOverride) {
+    if (!/^\d+\.\d+\.\d+$/.test(baseOverride)) die(`--base 应为 x.y.z 形式，收到：${baseOverride}`);
+    base = baseOverride;
+  } else if (m) base = m[2] ? `0.${m[1]}.${m[2]}` : `0.${m[1]}.0`;
   const existing = st.localTags.filter((t) => t.startsWith(`v${base}-dev.`)).length;
   return { base, tag: `v${base}-dev.${existing + 1}` };
 }
 
 function cmdDone(args) {
   const task = args[0];
-  if (!task) die('用法：node scripts/release.mjs done <任务号>   例：done J2.1');
+  if (!task) die('用法：node scripts/release.mjs done <任务号> [--base=x.y.z]   例：done J2.1 --base=0.2.0');
   if (!TASK_RE.test(task)) die(`任务号格式应为 Jx / Jx.y / F0.x，收到：${task}`);
+  const baseOverride = (args.find((a) => a.startsWith('--base=')) || '').slice('--base='.length) || null;
 
   let st = collect(false);
   step(`收尾任务 ${task}（当前分支 ${st.branch}）`);
@@ -563,7 +572,7 @@ function cmdDone(args) {
   }
   ok('门禁全绿');
 
-  const { base, tag } = nextDevVersion(st, task);
+  const { base, tag } = nextDevVersion(st, task, baseOverride);
   const srcBranch = collect(false).branch;
   const mergeMsg = `merge ${task}：合入 ${DEV_BRANCH}`;
   const cmds = [
