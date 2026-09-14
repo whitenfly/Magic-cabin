@@ -45,10 +45,16 @@ jobs:
         with:
           node-version: 24
 
-      # 版本号从 package.json 的 packageManager 字段读取（pnpm@12.3.4），
-      # 保证 CI 与本机使用同一个包管理器版本，不在一处维护两遍。
-      - name: 启用 corepack（按 packageManager 固定 pnpm 版本）
-        run: corepack enable
+      # pnpm 版本在这里显式固定，与本机安装时使用的版本一致（见 node_modules/.modules.yaml）。
+      #
+      # 不用 corepack + package.json 的 packageManager 字段：pnpm 12 在读到该字段时会
+      # 重写 pnpm-lock.yaml，插入一坨包管理器自身的依赖（@pnpm/exe 各平台二进制），
+      # 使 lockfile 无谓膨胀，并让 CI 的 --frozen-lockfile 面临失败。本仓库的 lockfile
+      # 是判据的一部分，不引入这种副作用。
+      - name: 固定 pnpm 版本
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile

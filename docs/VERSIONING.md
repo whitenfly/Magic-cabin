@@ -260,6 +260,15 @@ git switch dev                               # 看完回来
   让门禁报警却查不出原因。
 - `*.png` / `*.mp3` 显式声明为 binary，避免 diff 噪音。
 
+### 8.1 不要给 `package.json` 加 `packageManager` 字段（实测坑）
+
+本仓库用 **pnpm 12**，而 pnpm 12 一旦读到 `package.json` 的 `packageManager` 字段，
+就会**重写 `pnpm-lock.yaml`**：插入「包管理器自身依赖」（`@pnpm/exe` 的各平台二进制条目，
+实测 +120 行），lockfile 无谓膨胀，还会让 CI 的 `pnpm install --frozen-lockfile` 面临失败。
+
+**所以 pnpm 版本固定在 `.github/workflows/ci.yml` 里显式声明**（`pnpm/action-setup` 的 `version`），
+不要在 `package.json` 里引入该字段。lockfile 是判据的一部分，不接受这种副作用。
+
 ---
 
 ## 9. 版本历史
