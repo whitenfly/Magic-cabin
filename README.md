@@ -276,4 +276,4 @@ Magic-cabin/
 | 内容 | Markdown + front-matter → Zod schema（`src/content.config.ts`）→ 静态页 / 归档 / 标签 / RSS |
 | 语言 | JS 为主，TS 渐进（`allowJs: true`）；新增代码用 JSDoc 标注类型 |
 | 资源 | **0 KB 外部模型/贴图** —— 全部几何与纹理程序化生成（`BB13`） |
-| 协议 | **MIT** —— 见 [`LICENSE`](./LICENSE)；上游原作为 [YIBI2333](https://github.com/YIBI2333) 的「线稿风格魔法小屋」，版权归属见文件内说明 |
+| 协议 | **MIT** —— 见 [`LICENSE`](./LICENSE)；上游原作为 [YIBI2333/line-art-style-magic-cabin](https://github.com/YIBI2333/line-art-style-magic-cabin) |
