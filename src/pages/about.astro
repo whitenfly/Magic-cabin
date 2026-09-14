@@ -1,0 +1,48 @@
+---
+/**
+ * `/about/` —— 关于本站
+ * ============================================================================
+ * 正文来自**内容集合 `pages`**（`src/content/pages/about.md`），不是写死在模板里。
+ * 对应模块 **M06 关于本站**（3D 侧的载体是二楼书桌上的魔法书本，通道 B）。
+ *
+ * 为什么页面的正文也走集合：M06 在 3D 里要读**同一份** DOM（`03` §6 的长文兜底形态），
+ * 若这里写死在 `.astro` 里，3D 侧就得再抄一遍 —— 那就出现了第二个真源（违反验收 `CH6`）。
+ */
+import { render } from 'astro:content'
+import { getEntry } from 'astro:content'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { isoDate } from '@/blog/posts.js'
+import { siteConfig } from '@/config/site.config.js'
+
+const entry = await getEntry('pages', 'about')
+if (!entry) {
+  throw new Error('缺少 src/content/pages/about.md —— /about/ 的正文来自这个文件（J1.5.3 的样例之一）')
+}
+const { Content } = await render(entry)
+---
+
+<BaseLayout pageTitle={entry.data.title} description={`关于 ${siteConfig.title}`}>
+  <main class="page">
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/archive/">归档</a>
+      </nav>
+
+      <article>
+        <h1>{entry.data.title}</h1>
+        {entry.data.updated && (
+          <p class="page-meta">
+            修订于 <time datetime={isoDate(entry.data.updated)}>{isoDate(entry.data.updated)}</time>
+          </p>
+        )}
+        <hr class="foyer-rule" />
+        <div class="page-body">
+          <Content />
+        </div>
+      </article>
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+</BaseLayout>

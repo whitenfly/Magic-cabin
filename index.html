@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>线稿风格魔女小屋</title>
+    <meta name="description" content="一个线稿风格的 3D 魔法小屋。操控一只软软的史莱姆在魔法小屋里生活。">
+
+    <link rel="stylesheet" href="./src/styles/cabin.css">
+
+    <!--
+      魔法小屋 —— 重构骨架（F0/F1 阶段）
+      ====================================================================
+      搬迁来源：line-art-style-magic-cabin-main/index.html（单文件 9811 行）
+        · 样式   → src/styles/cabin.css             （原 10–748 行）
+        · UI DOM → src/cabin/dom.js                 （原 753–835 行）
+        · 实现   → src/cabin/legacy/monolith.js     （原 844–9807 行）
+
+      本阶段原则：**只搬位置，不改实现**。页面表现与重构前完全一致。
+
+      两种运行方式（同一个入口，无需改动）：
+        A. Vite：      pnpm dev / pnpm build        —— 主力路径，正常环境下可用
+        B. 零构建：    pnpm serve                   —— 兜底路径，浏览器直接解析 ESM
+           （B 依赖下面的 importmap 解析裸模块名 `three`；
+             A 模式下 Vite 自行解析依赖，此表不参与）
+
+      门厅策略（ArtLine-Part/03 §8.3、08 §4.4）：
+      F6 阶段将改为「门厅 HTML 先渲染 → 3D 空闲时挂载」，届时本文件会新增
+      文章列表与 <noscript> 降级内容。
+    -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./node_modules/three/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>

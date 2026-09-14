@@ -1,0 +1,763 @@
+# ============================================================================
+#  魔法小屋 · 功能模块映射真源（mapping.yaml）
+# ============================================================================
+#  这份文件是"某个功能模块映射到哪件物品、怎么交互、怎么展示"的唯一真源。
+#
+#  ★ 作者怎么用：
+#     1. 找到要拍板的模块（看 status: proposed）
+#     2. 只改下面这些字段：item / itemRef / mount / render / interaction / configKeys
+#     3. 把 status 从 proposed 改成 confirmed  ← 这一步就是"拍板"
+#     4. 模块上线后改成 shipped，并在 notes 写偏差
+#
+#  ★ 模型 / 后续会话怎么用：
+#     1. 先读本文件的 legend 与 enums（字段取值是封闭集合，不要自创）
+#     2. 按 id 取模块；depends 决定它能不能现在做；batch 决定顺序
+#     3. 实现位置看 impl 字段；验收看 accept 字段
+#     4. 本文件与 05-模块映射方案.md / 04-模块增量开发与配置编排.md 冲突时，以本文件为准
+#
+#  ★ 维护规则：
+#     - 模块的"承载物品 / 交互 / 呈现通道"只在这里写一次，别处只做引用
+#     - 实现与映射不一致时改本文件并写清原因，不要偷偷改实现
+#     - 一个已上线模块必须配一个 src/config/<名字>.config.js（见 CF3）
+# ============================================================================
+
+version: 1
+updated: 2026-09-13
+sourceOfTruth: true
+authority: "FrontProj/docs/improve/07-最终定位与重构方案.md（定位）+ 本目录（路线与映射）"
+
+# ---------------------------------------------------------------------------
+# 字段说明
+# ---------------------------------------------------------------------------
+# id            模块编号（M01…M18）。大写 M + 两位数字，与 Blog-Part 命名一致
+# name          模块名
+# status        proposed | confirmed | shipped | dropped        ← 作者改这一项来拍板
+# batch         P1…P6，开发批次（见 04 §5.1）
+# tier          T1 直接命中型 | T2 容器型 | T3 视角型 | T4 状态型（见 Blog-Part/03 §2）
+# item          承载物品（可写"主 + 控制器"两件）
+# itemRef       物品在源码中的位置：原 index.html 行号 → 迁移后目标文件
+# mount         挂载点 ID（须在 src/cabin/app/mounts.js 注册；不变量 N9）
+# render        呈现通道与细节（四通道，见 03 §4）
+# interaction   交互契约（mode 必须是 both，见验收 BB2b）
+# commands      该模块调用/提供的命令名（沿用 Blog-Part/03 §5.1 的命名表）
+# data          数据来源（决定 S4 怎么写）
+# configKeys    该模块用到的配置键（须落在 src/config/<模块>.config.js）
+# impl          实际落地位置（S9 回填）
+# depends       前置条件（阶段或模块 id）
+# estimate      预估人日（S2–S8 合计）
+# accept        验收项（BB*/CH*/CF* 编号 + 该模块专项检查）
+# notes         备注 / 偏差留痕 / 待确认项
+# ---------------------------------------------------------------------------
+
+legend:
+  status:
+    proposed: "建议方案，等作者拍板（当前默认）"
+    confirmed: "作者已确认，可以开始实现"
+    shipped: "已实现并通过验收"
+    dropped: "确认不做（保留记录，避免反复讨论）"
+  tier:
+    T1: "直接命中型：物品本身就是内容载体，瞄准即见"
+    T2: "容器型：物品是个盒子/册子，打开后才见内容"
+    T3: "视角型：物品改变的是'你看哪儿'，需要 CameraRig 运镜"
+    T4: "状态型：物品只是状态指示器，几乎不需要点击（免费的信息传达）"
+  channel:
+    B: "CSS3D 真 DOM 平面 —— 需要【读】的长内容：可选中/可复制/可点链接/需要排版"
+    A: "Canvas 贴图 —— 小体量 + 只读 + 不需选中，且需要频繁重绘或氛围优先"
+    T4: "状态量 —— 信息只是一个数值（多少/多久/多热/多亮），映射到物件已有的连续属性"
+    D: "DOM 覆盖层（2D）—— 需要输入、长列表、复杂控件、无障碍刚需"
+  mode:
+    aim: "准星射线命中（第一人称 / 触屏）"
+    proximity: "玩家近距判定（固定视角 / 第三人称）"
+    both: "★ 两者都要（每个模块的主入口都必须是 both，见 BB2b / 风险 R1）"
+
+# ---------------------------------------------------------------------------
+# 全局约束（每个模块都要满足，不重复写在各模块里）
+# ---------------------------------------------------------------------------
+globalAccept:
+  - "BB2    该模块所有 label 语义化，不得出现字面量「交互」"
+  - "BB2b   主入口在 fixed / tp / fp 三种视角下均可激活"
+  - "BB3    关闭该模块（modules.config.js 置 false）后场景无报错，物品恢复纯装饰"
+  - "BB5    小屋侧未 import 任何 Firefly 模块"
+  - "CF1    关闭后该模块的 features/<id>/ 代码不被请求"
+  - "N2/N3  world 与 features 互不 import 具体实现（只经挂载点 ID 与命令名）"
+  - "N9     坐标/锚点全部来自 cabin/app/mounts.js，无手抄字面量"
+
+# ---------------------------------------------------------------------------
+# 待拍板决策（来自 03 §9）
+#   · status: open      → **模型不要自行选择**，也不要催；按 note / recommendation 执行即可
+#   · status: confirmed → 已拍板，实现与文档以 decision 为准
+# ---------------------------------------------------------------------------
+pendingDecisions:
+  - id: OD-1
+    question: "是否确认采用 Astro？"
+    recommendation: "采用（output: 'static'）"
+    impact: "J1.5；若回退 Vite MPA，则 J1.5 取消、J5 增至 4–6 人日"
+    status: confirmed
+    decision: "采用 Astro（output: 'static'）"
+    note: "选建议项。3D 侧零改动（单个 client:only 岛，不变量 N12）；J0.4 像素基线作为 J1.5 的回归门禁 —— 若 J1.5 后画面有差异，先修 J1.5、不改 cabin。"
+    decidedAt: "2026-09-13"
+
+  - id: OD-2
+    question: "是否保留「双击即玩」的单文件产物？"
+    recommendation: "保留双管线（+1 人日）"
+    impact: "构建配置；Astro 不便于产出相对 base + 全内联的 HTML"
+    status: confirmed
+    decision: "保留双管线：Astro 管站点 + vite.single.config.ts 管单文件产物（J8.6 定稿）"
+    note: "单文件产物同样跑 J0.4 截图回归，防止两条产线长期漂移。"
+    decidedAt: "2026-09-13"
+
+  - id: OD-3
+    question: "长文兜底策略？"
+    recommendation: "阈值 + 混合（页数 > readerConfig.maxPagesInBook 时切全屏滚动阅读层）"
+    impact: "J6 的结构；配置键 readerConfig.fallback"
+    status: open
+    note: "★ 作者已审阅并**主动暂缓**至 J5 之后：阈值 12 页是从「约 440 字/页」估出来的，等 J5 的排版跑起来量一次再定更准。期间按 recommendation 执行（配置值已就位，选建议项=无需改动），**不是阻塞项，不要重复追问**。"
+    deferUntil: "J5"
+
+  - id: OD-4
+    question: "移动端默认行为？"
+    recommendation: "只读门厅 + 「进入 3D」按钮；通道 B 在移动端降级为通道 D"
+    impact: "J1.5 / J6；原型只在桌面验证过"
+    status: open
+    note: "★ 作者已审阅并**主动暂缓**至 J6 前：配置值已按建议写好（mobile.channels=['D']），选建议项=无需改动；J8.3/J8.4 也会一并处理移动端性能与无障碍，**不是阻塞项，不要重复追问**。"
+    deferUntil: "J6"
+
+# ---------------------------------------------------------------------------
+# 开发批次（见 04 §5.1）
+# ---------------------------------------------------------------------------
+batches:
+  P1: { name: "内容骨架", modules: [M01], note: "由 J6 落地——它定义内容怎么进来、怎么被读" }
+  P2: { name: "内容发现", modules: [M02, M03a, M03b, M04], note: "内容能被找到：时间/关键词/随机/主题" }
+  P3: { name: "社交面",   modules: [M08, M10, M07], note: "站点具备社交面与身份" }
+  P4: { name: "氛围与个性化", modules: [M11, M13, M16, M17], note: "M17 是配置面板的落点，做完 CF2 才算真验收" }
+  P5: { name: "外部世界", modules: [M12, M14, M15], note: "依赖外部服务，默认关" }
+  P6: { name: "长尾收尾", modules: [M06, M05, M18], note: "M18 是通道 A 的首个真实用例" }
+
+# ===========================================================================
+#  模块
+# ===========================================================================
+
+modules:
+
+  # =========================================================================
+  - id: M01
+    name: "内容存档"
+    status: proposed
+    batch: P1
+    tier: T1
+    item: "一楼左墙三层书架（主）+ 左窗下魔法书堆（溢出）"
+    itemRef: "原 L1937–1970 addBook；L1972–2023 书堆三态 → cabin/world/floor1/bookshelf.js + bookPile.js"
+    mount: "shelf/main, shelf/pile"
+    render:
+      channels: [B]
+      detail: >-
+        通道 B：书页是 CSS3DRenderer 的真 DOM 平面，支持文字选中/复制、链接可点、
+        任意分辨率清晰；平面视角（相机垂直俯视）用于正式阅读。
+        长文超出 readerConfig.maxPagesInBook 时按 OD-3 切全屏滚动阅读层（通道 D）。
+      notes: "层次/正反面/装填时序三条硬约定见 03 §3.1–3.3；验收 CH1–CH4"
+    interaction:
+      mode: both
+      aimLabel: "《文章标题》（浮签显示日期/标签/阅读时长）"
+      proxLabel: "浏览书架（r=1.8）"
+      activate: "抽书（已有 userData.out）→ 相机缓动推近 → 翻开 → 平面视角 → 在书页中阅读"
+      exit: "合上书 → 飞回书架原位 → 相机归位 → 路由回到 /"
+    commands: ["shelf:open", "shelf:focus", "post:open", "post:related", "post:prev", "post:next"]
+    data: "src/blog/generated/posts.json（元数据）+ 正文 HTML 片段（SSG 同源）"
+    configKeys: ["shelf.*", "reader.*", "site.*"]
+    impl: null
+    depends: ["J5", "J6", "J2(CameraRig)", "J3(书架模块化)"]
+    estimate: 0
+    notes_estimate: "工时全部计入 J6（10–14 人日），不在 J7 里重复计算"
+    accept: ["BB4", "BB6", "BB7", "BB8", "BB11", "BB12", "BB14", "CH1", "CH2", "CH3", "CH4"]
+    notes: >-
+      核心模块，不可砍。工时计入 J6（见 notes_estimate）。
+      书架实测容量 ≈36 本，含书堆溢出 ≈56 本，超出必须构建失败（BB11）；
+      建议书架采用「策展视图」（架上 = 最新/精选 N 本），全量走 M02 归档。
+
+  # =========================================================================
+  - id: M02
+    name: "时间归档"
+    status: proposed
+    batch: P2
+    tier: T3
+    item: "毛茸茸大地毯（显示面）+ 二楼台历（月份控制器）"
+    itemRef: "原 L6651–6732 地毯 512×420 Canvas；L4005–4190 台历 12 页 → cabin/world/floor2/floorRug.js + calendar.js"
+    mount: "rug/floor, calendar/desk"
+    render:
+      channels: [A, T4]
+      detail: >-
+        通道 A：地毯是一块 512×420 的可重绘 Canvas 贴图 —— 年历热力图（每天一个点，点大小随字数）。
+        通道 T4：地毯顶部汇总行（开了多少天 / 共多少篇 / 多少字）作为常驻状态显示。
+        台历退为月份选择器：翻到某月 → 地毯上该月放大。
+      notes: "地毯是屋内最大的可重绘画布，『走到上面去看』是 3D 独有的表达"
+    interaction:
+      mode: both
+      aimLabel: "看看这一年的记录"
+      proxLabel: "看看这一年的记录（r=1.6）"
+      activate: "相机俯视推移（CameraRig.flyTo）→ 年历从地毯上浮现 → 台历可翻月"
+    commands: ["archive:open"]
+    data: "posts.json 的 published 日期聚合（构建期预算好一份 byDay 直方图）"
+    configKeys: ["archive.*"]
+    impl: null
+    depends: ["J2(CameraRig)", "J5"]
+    estimate: 1.2
+    accept: ["CH6", "CH7"]
+    notes: >-
+      地毯当前无任何 regMagic 注册且为纯 Plane + Line，需补一个 HITMAT 隐形命中体（风险 R7）。
+      通道 A 的贴图重绘应挂 decorLoop（贴图重绘类），不要挂主 loop（风险 R13）。
+
+  # =========================================================================
+  - id: M03a
+    name: "搜索"
+    status: proposed
+    batch: P2
+    tier: T3
+    item: "一楼水晶球占卜台"
+    itemRef: "原 L2631–2686（cbRun 涟漪 + cbHit 命中体）→ cabin/world/floor1/crystalBallStand.js"
+    mount: "orb/stand"
+    render:
+      channels: [D]
+      detail: >-
+        通道 D：DOM 搜索输入框贴在球体上方「光晕」处。
+        球面涟漪（已有 cbRun）作为「检索中」的视觉反馈：雾环转速 0.35→2.0+、星点 0.8→3.0、光晕透明度上升。
+      notes: "搜索是文本输入，必须走 DOM；水晶球只承担入口与状态反馈"
+    interaction:
+      mode: both
+      aimLabel: "让水晶球替你找一篇文章"
+      proxLabel: "让水晶球替你找一篇文章（r=1.8）"
+      activate: "球面泛涟漪 → 光晕升起 → DOM 搜索面板"
+    commands: ["search:open"]
+    data: "Pagefind 构建期索引（J5.8）"
+    configKeys: ["search.*"]
+    impl: null
+    depends: ["J5(Pagefind)", "J2"]
+    estimate: 0.8
+    accept: []
+    notes: "语义强度评「连」：需要一次引导（首次进场景提示，或靠近时主动泛一次涟漪）。"
+
+  # =========================================================================
+  - id: M03b
+    name: "随机一篇"
+    status: proposed
+    batch: P2
+    tier: T1
+    item: "二楼书桌扑克牌堆（11 张）"
+    itemRef: "原 L3629–3797（drawFace + 十阶段时间线）→ cabin/world/floor2/playingCards.js"
+    mount: "deck/desk"
+    render:
+      channels: [A]
+      detail: >-
+        通道 A：牌面是已有 Canvas 绘制（drawFace）——把「88px 主花色」换成文章标题，
+        「角标」换成标签与年份。11 张牌 = 11 篇候选池；文章数 > 11 时每次抽牌先随机选 11 篇入池。
+      notes: "牌背花纹（每张不同）可作为随机封面图的载体"
+    interaction:
+      mode: both
+      aimLabel: "抽一张牌"
+      proxLabel: "抽一张牌（r=1.5）"
+      activate: "洗牌十阶段动画（已有）→ 悬停 1.5s → 翻面显示标题 → 点击牌面进入阅读"
+    commands: ["post:random", "post:open"]
+    data: "posts.json 随机抽样"
+    configKeys: ["random.*"]
+    impl: null
+    depends: ["J3(扑克牌模块化)", "J5"]
+    estimate: 0.8
+    accept: ["CH7"]
+    notes: "语义原生（抽牌 = 随机），且十阶段动画已就绪，改造量低。"
+
+  # =========================================================================
+  - id: M04
+    name: "主题聚类"
+    status: proposed
+    batch: P2
+    tier: T1
+    item: "左墙试剂药水架（7 个试剂瓶）"
+    itemRef: "原 L2205–2245（makeReagent ×7，7 色液体）→ cabin/world/floor1/reagentRack.js"
+    mount: "reagent/rack"
+    render:
+      channels: [T4, A, D]
+      detail: >-
+        通道 T4：液面高度 = 该主题的文章数量 → liquidLevel = clamp(0.25 + ratio*0.75, 0.25, 1.0)
+                  （最少留 25% 液面，避免瓶子看起来是空的）。7 个瓶子 = 文章数最多的前 7 个标签。
+        通道 A：瓶下小标签木牌（液色 + 主题名）。
+        通道 D：超出 7 个主题时，架旁木牌「还有 N 个主题」→ 点击展开 DOM 全量列表。
+      notes: "系列（series）用架子上垂下的一条标签绳表达，与瓶子在视觉上区分"
+    interaction:
+      mode: both
+      aimLabel: "「标签名 · N 篇」"
+      proxLabel: "看看有哪些主题（r=1.8）"
+      activate: "瓶子晃动（已有 run=1.3）→ 书架上该主题的书高亮/前移"
+    commands: ["shelf:focus", "taxonomy:open"]
+    data: "posts.json 的 tags 计数（构建期聚合）"
+    configKeys: ["taxonomy.*"]
+    impl: null
+    depends: ["J3(试剂架模块化)", "J5", "M01"]
+    estimate: 0.9
+    accept: ["CH6"]
+    notes: >-
+      「一瓶一个主题，瓶里的量代表这个主题有多少文章」—— 第一眼就懂，是全场语义纯度最高的映射之一。
+      位置与书架不冲突：试剂架 x=-3.85,z=-0.1；书架 z 中心 -2.85（相距 2.2）。
+
+  # =========================================================================
+  - id: M05
+    name: "创作管线"
+    status: proposed
+    batch: P6
+    tier: T1
+    item: "滑轮置物台（稿纸 + 墨水瓶 + 羽毛笔）+ 抽纸盒 + 垃圾桶"
+    itemRef: "原 L2720–2860；L6157–6307 抽纸盒；L6091–6155 垃圾桶 → cabin/world/floor1/pulleyCart.js + floor2/tissueBox.js"
+    mount: "cart/paper, tissue/box, bin/floor"
+    render:
+      channels: [T4, A]
+      detail: >-
+        通道 T4：草稿在书架上以半透明幽灵书出现（状态显示，不需要点击）。
+        通道 A：抽出的纸上显示脚手架命令 `pnpm new-post "标题"`（点击复制）。
+      notes: "★ 建议裁剪版：只做「状态显示 + 一键复制命令」，不做 3D 内 Markdown 编辑器（Q14）"
+    interaction:
+      mode: both
+      aimLabel: "在桌上写一篇新的" 
+      proxLabel: "在桌上写一篇新的（r=1.6）"
+      activate: "抽纸七阶段动画（已有）→ 纸上显示命令 → 复制到剪贴板"
+    commands: ["draft:new", "draft:list"]
+    data: "posts.json 的 draft 标记；脚手架命令由 site.config.js 提供模板"
+    configKeys: ["authoring.*"]
+    impl: null
+    depends: ["J3"]
+    estimate: 0.8
+    accept: []
+    notes: >-
+      17 个模块中语义最弱的一个（真实写作工具是编辑器 + 终端）。默认建议 enabled=false，
+      物品保留为氛围（桌上摊着稿纸与羽毛笔）。属可裁剪批次 3。
+
+  # =========================================================================
+  - id: M06
+    name: "关于本站"
+    status: proposed
+    batch: P6
+    tier: T2
+    item: "二楼书桌上的魔法书本"
+    itemRef: "原 L4192–4450（6 张可翻页 + 12 个浮字符号）→ cabin/world/floor2/magicTome.js"
+    mount: "tome/desk"
+    render:
+      channels: [B]
+      detail: >-
+        通道 B：翻开后的书页是真 DOM，直接复用 blog/reader 的通道 B 能力（排版零成本）。
+        翻页动效与浮字（已有 opening→flipping→fanning→open 时间线）作为转场。
+      notes: "浮字的字符池可换成 about.md 的小标题关键词"
+    interaction:
+      mode: both
+      aimLabel: "翻开这本书"
+      proxLabel: "看看关于这里（r=1.5）"
+      activate: "书翻开（0.55s）→ 6 页翻过 → 扇页展开 → 浮出符文 → 书页显示关于内容"
+    commands: ["about:open"]
+    data: "src/content/pages/about.md"
+    configKeys: ["about.*"]
+    impl: null
+    depends: ["J5", "J6(通道 B 阅读器)"]
+    estimate: 0.8
+    accept: ["CH1", "CH2", "CH3"]
+    notes: "与 M01 的书不冲突：M01 是「我的文章」（很多本，在书架上）；M06 是「这间屋子的自述」（就一本，在书桌上）。"
+
+  # =========================================================================
+  - id: M07
+    name: "个人名片与导航"
+    status: proposed
+    batch: P3
+    tier: T1
+    item: "二楼魔女帽（导航）+ 一楼月光魔法盆栽（社交链接）"
+    itemRef: "原 L5862–6089；L2688–2718（盆栽 5 颗发光浆果）→ cabin/world/floor2/witchHat.js + floor1/moonlitPlant.js"
+    mount: "hat/box, plant/corner"
+    render:
+      channels: [D, A]
+      detail: >-
+        通道 D：魔女帽飞起（已有 rising 0.9s + 浮动）→ 全屋地图面板（各模块定位 + 点击传送，
+        同时兼作无障碍的「交互目标列表」）。
+        通道 A：盆栽 5 颗浆果 = 5 个社交链接（QQ / GitHub / Email / RSS / 友链），各有独立颜色与相位。
+      notes: "个人信息卡（头像/昵称/签名）放地图面板顶部，或帽子旁挂一块小木牌"
+    interaction:
+      mode: both
+      aimLabel: "戴上帽子看看全屋"
+      proxLabel: "戴上帽子看看全屋（r=1.6）"
+      activate: "帽子飞起 → 视野升起 → 全屋平面图；点击浆果 → 打开对应链接"
+    commands: ["nav:map", "profile:open"]
+    data: "site.config.js（导航/社交链接/个人信息）"
+    configKeys: ["site.nav", "site.profile", "site.social"]
+    impl: null
+    depends: ["J3", "M01(M01 模块就绪地图才有意义)"]
+    estimate: 1.0
+    accept: []
+    notes: >-
+      唯一跨楼层的位置瑕疵（帽子在二楼、盆栽在一楼）—— 建议以魔女帽为主入口、盆栽为独立子入口（Q13）。
+      全屋地图应当同时成为无障碍方案的一部分（Tab 面板，BB15）。
+
+  # =========================================================================
+  - id: M08
+    name: "评论互动"
+    status: proposed
+    batch: P3
+    tier: T2
+    item: "抽纸盒（写）+ 二楼计划板便签（看）"
+    itemRef: "原 L6157–6307；L4596–4884（计划板 + 3 便签 + 粉笔 + 黑板擦）→ cabin/world/floor2/tissueBox.js + planBoard.js"
+    mount: "tissue/box, board/wall"
+    render:
+      channels: [D, T4, A]
+      detail: >-
+        通道 D：评论/留言的完整界面（列表 + 输入 + 分页）—— 需要输入，必须走 DOM。
+        通道 T4：计划板角落的粉笔字「已有 N 位访客」（纯显示）。
+        通道 A：每张贴纸的 canvas（颜色区分作者，已有 drawNote 字号自适应）。
+      notes: "『抽一张纸写上留言，贴到板上』—— 完整、自然、且全部已有代码"
+    interaction:
+      mode: both
+      aimLabel: "抽一张纸 / 便签文字"
+      proxLabel: "看看大家的留言（r=1.8）"
+      activate: "抽纸 → 便签编辑器（已有 openNoteEditor）→ 贴到板上；或打开 DOM 评论层"
+    commands: ["comment:open", "moments:open", "friends:open", "announce:open"]
+    data: "评论后端（建议 Giscus，Q7）+ 本地 JSON（友链/公告/动态）"
+    configKeys: ["comments.*", "friends.*", "announcement.*", "moments.*"]
+    impl: null
+    depends: ["J3", "J2(持久化)"]
+    estimate: 1.5
+    accept: []
+    notes: >-
+      视觉上要把「动态（我发的）」与「评论（别人发的）」分开：动态 = 抽纸盒抽出的纸（带时间戳），
+      评论 = 贴到板上的便签。动态若走 Memos 需注意它是外部服务（建议构建期静态化）。
+
+  # =========================================================================
+  - id: M09
+    name: "打赏"
+    status: proposed
+    batch: null
+    tier: null
+    item: "（不映射到场景）"
+    itemRef: null
+    mount: null
+    render:
+      channels: [D]
+      detail: "按钮保留在文章页底部（DOM 阅读层内），场景中不出现"
+    interaction: { mode: null, aimLabel: null, proxLabel: null, activate: null }
+    commands: []
+    data: "site.config.js 的打赏方式配置"
+    configKeys: ["sponsor.*"]
+    impl: null
+    depends: ["J5"]
+    estimate: 0.2
+    accept: []
+    notes: >-
+      17 个模块中唯一不映射的一个。「许愿罐」在魔法小屋的氛围里容易显得市侩，破坏沉浸感（Q15）。
+      它的存在证明本方案不是「什么都往屋里塞」。
+
+  # =========================================================================
+  - id: M10
+    name: "照片相册"
+    status: proposed
+    batch: P3
+    tier: T1
+    item: "前墙挂画扩展为相框组 + 玻璃雪景球（彩蛋）"
+    itemRef: "原 L6388–6489（支持 gif + 4 级图床代理）；L3799–3916 雪景球 → cabin/world/floor2/wallPicture.js + snowGlobe.js"
+    mount: "frames/wall, snowglobe/desk"
+    render:
+      channels: [A, D]
+      detail: >-
+        通道 A：每个相框内的照片贴图（复用现有 picG 的等比缩放居中 + 图床代理）。
+        通道 D：相册网格层（瀑布流 / 标签筛选 / 搜索）。
+        加密相册 = 一块盖着布的画框（布能持续显示「这里有一本加密相册」，比密码框的语义更好）。
+      notes: "雪景球是彩蛋式备选（摇一摇看球里的小世界），不是主入口"
+    interaction:
+      mode: both
+      aimLabel: "「相册名 · N 张」"
+      proxLabel: "看看相册（r=1.8）"
+      activate: "相框放大 → DOM 相册层；加密相册 → 掀布需口令"
+    commands: ["gallery:open", "gallery:unlock"]
+    data: "本地相册 JSON + 图片文件（建站时静态化的图床链接或 public/img）"
+    configKeys: ["gallery.*"]
+    impl: null
+    depends: ["J3"]
+    estimate: 1.2
+    accept: []
+    notes: "挂画已经是一个可用相框（支持 gif + 防盗链中转）；扩展方式是把一幅变成多幅。"
+
+  # =========================================================================
+  - id: M11
+    name: "音频播放"
+    status: proposed
+    batch: P4
+    tier: T2
+    item: "一楼暖桌上的收音机"
+    itemRef: "原 L3011–3046（4 音符飘动 + 2 个旋钮）→ cabin/world/floor1/kotatsu.js"
+    mount: "radio/kotatsu"
+    render:
+      channels: [D, T4]
+      detail: >-
+        通道 T4：音符飘动的节奏 = 播放进度/节拍（常驻显示，已有 radioNoteRun）。
+        通道 D：播放列表 / 歌词 / 音量面板（点击机身打开）。
+      notes: "收音机尺寸偏小（0.20 × 0.115 × 0.10），已有 2 个旋钮；点击分区触发不同功能"
+    interaction:
+      mode: both
+      aimLabel: "打开 / 关掉收音机"
+      proxLabel: "打开 / 关掉收音机（r=1.5）"
+      activate: "音符飘动（已有）→ 播放；机身不同区域 = 上下曲 / 音量"
+    commands: ["music:toggle", "music:track", "music:volume"]
+    data: "本地音频清单（建议 local 模式；Meting 依赖第三方 API 稳定性，Q8）"
+    configKeys: ["music.*"]
+    impl: null
+    depends: ["J3", "J2(持久化:播放状态)"]
+    estimate: 1.0
+    accept: []
+    notes: >-
+      免费的场景联动：夜晚（time:hour）音量自动降低；阅读文章时（post:open）降低音量；
+      暖桌开启（kotatsuOn）时音符与暖光呼吸同步（已有基础）。自动播放受浏览器策略限制，
+      必须由用户点击触发（打开收音机本身就是一次点击，天然合规，风险 R12）。
+
+  # =========================================================================
+  - id: M12
+    name: "影音收藏"
+    status: proposed
+    batch: P5
+    tier: T3
+    item: "二楼书桌上的星象仪（浑天仪，4 个环）"
+    itemRef: "原 L4452–4488（双黄铜环 + 内层双环 + 3 层光晕）→ cabin/world/floor2/starGlobe2.js"
+    mount: "astro/desk"
+    render:
+      channels: [T4, D]
+      detail: >-
+        通道 T4：4 个环 = 4 个平台（Bilibili / Bangumi / VNDB / MAL）；环上的光点 = 收藏条目；
+                 光的亮度 = 评分；光点距环心的位置 = 观看进度；未启用的平台那个环不发光。
+        通道 D：条目详情面板（封面 + 标题 + 状态 + 评分）。
+      notes: "NSFW blur = 光点模糊（降低 opacity）；NSFW hide = 光点不出现"
+    interaction:
+      mode: both
+      aimLabel: "「平台名 · N 条」"
+      proxLabel: "看看我在追什么（r=1.8）"
+      activate: "转动星象仪（已有 spinG）→ 切到该平台 → 星图点亮"
+    commands: ["aggregator:open"]
+    data: "★ 构建期抓取（static 模式）；失败时构建告警，运行时表现为「那个环不亮」（风险 R10）"
+    configKeys: ["aggregator.*"]
+    impl: null
+    depends: ["J3", "外部 API 可用性"]
+    estimate: 1.5
+    accept: []
+    notes: >-
+      4 个平台在 Firefly 里默认全是关闭的（siteConfig.pages），正好对应「默认 4 个环都不发光」。
+      默认 modulesConfig.M12 = false。属可裁剪批次 2。
+
+  # =========================================================================
+  - id: M13
+    name: "站点统计"
+    status: proposed
+    batch: P4
+    tier: T1
+    item: "二楼烟囱墙魔法时钟"
+    itemRef: "原 L6309–6386（drawClock 每秒重绘，当前不可点击）→ cabin/world/floor2/wallClock.js"
+    mount: "clock/wall"
+    render:
+      channels: [T4, A, D]
+      detail: >-
+        通道 T4（主力）：表盘外圈刻 365 天，指针走一圈 = 一年 → 「这间屋子开了多少天」是连续变化的量，
+                          与「指针在走动」同构，用户不点也能看到（T4 的典型价值）。
+        通道 A：12 个刻度位各标一个数字（文章数/分类数/标签数/总字数），指针指到哪个就放大显示。
+        通道 D：钟背面的铭牌 → 版本 / 构建时间 / 环境信息面板。
+      notes: "★ 三个通道读同一个 stats 对象，不得各自算一遍（验收 CH6）"
+    interaction:
+      mode: both
+      aimLabel: "听钟报时"
+      proxLabel: "听钟报时（r=1.8）"
+      activate: "钟敲响 + 指针停到某个统计项 → 放大该刻度；点击背面 → DOM 统计面板"
+    commands: ["stats:open"]
+    data: "构建期算好的 stats（文章数/分类数/标签数/总字数/运行天数/构建信息）"
+    configKeys: ["stats.*", "site.siteStartDate"]
+    impl: null
+    depends: ["J3", "J5(构建期统计)"]
+    estimate: 1.0
+    accept: ["CH6"]
+    notes: >-
+      挂钟当前不可点击（由 decorLoop 每帧驱动重绘），需补 HITMAT 命中体（风险 R7）。
+      「运行天数」建议保留 T4 形态——它是全场最优雅的一处「免费信息传达」。
+
+  # =========================================================================
+  - id: M14
+    name: "热点榜单"
+    status: proposed
+    batch: P5
+    tier: T4
+    item: "一楼书架顶层的旋转星铃"
+    itemRef: "原 L2080–2100（4 颗八面体星环绕 + 进度 carP）→ cabin/world/floor1/starBell.js"
+    mount: "bell/shelf-top"
+    render:
+      channels: [T4, A, D]
+      detail: >-
+        通道 T4：转速 = 榜单更新活跃度；数据不可用时「星铃静止」（比「加载失败」优雅得多）；
+                 4 颗星 = 4 个领域分榜（若服务提供分领域数据）。
+        通道 A：榜面条目（小体量、只读）。
+        通道 D：完整榜单面板（点击展开）。
+      notes: "风铃/星铃是「随风而动」的物件，「实时变动」是它的天性"
+    interaction:
+      mode: both
+      aimLabel: "看看外面的热点"
+      proxLabel: "看看外面的热点（r=1.6）"
+      activate: "转速加快（已有 carP）→ 展开 DOM 榜单"
+    commands: ["trending:open"]
+    data: "★ 需作者确认数据源（Q17：Firefly 里是内网地址 192.168.1.100:3456）。公网部署必须裁掉或改构建期静态化"
+    configKeys: ["trending.*"]
+    impl: null
+    depends: ["J3", "Q17 数据源决策"]
+    estimate: 1.2
+    accept: ["CH6"]
+    notes: "默认 modulesConfig.M14 = false（依赖外部服务）。属可裁剪批次 2。"
+
+  # =========================================================================
+  - id: M15
+    name: "收藏导航"
+    status: proposed
+    batch: P5
+    tier: T1
+    item: "屋外路牌"
+    itemRef: "原 L1294 drawSign（字号自适应）/ L1300 / L8261（近距 r=2.2）→ cabin/world/outdoor/signpost.js"
+    mount: "sign/outdoor"
+    render:
+      channels: [A, D]
+      detail: >-
+        通道 A：箭头方向 = 分组；铭牌文字（复用 drawSign 的字号自适应规则）。
+        通道 D：书签列表（分组 + 搜索 + 首字母/分组锚点导航）。
+      notes: "路牌是入口，不是容器——13 个书签放不下，展开后走 DOM"
+    interaction:
+      mode: both
+      aimLabel: "「分组名」"
+      proxLabel: "我常去的地方（r=2.2，已有）"
+      activate: "相机推移至箭头前 → DOM 书签列表"
+    commands: ["booknav:open"]
+    data: "本地书签 JSON（分组/权重）；favicon 可走第三方或本地缓存"
+    configKeys: ["booknav.*"]
+    impl: null
+    depends: ["J3"]
+    estimate: 0.8
+    accept: []
+    notes: >-
+      需要把现有单块牌子（drawSign 只画一行）扩展为多个箭头/多块牌子（几何量中等）。
+      位置在屋外 (3.1, 6.3)，还没进屋就能看到——符合「书签导航（找路）」的定位。
+
+  # =========================================================================
+  - id: M16
+    name: "字体设定"
+    status: proposed
+    batch: P4
+    tier: T1
+    item: "一楼滑轮置物台上层的墨水瓶 + 羽毛笔"
+    itemRef: "原 L2757–2836（8 个花体符号 Sprite 池 + 7 秒书写时间线）→ cabin/world/floor1/pulleyCart.js"
+    mount: "quill/cart"
+    render:
+      channels: [T4, D]
+      detail: >-
+        通道 T4：羽毛笔飞出 → 在空中用当前字体写出文章标题（已有 Sprite 池与时间线）。
+        通道 D：字体选择面板（正文/标题/代码块分区选择）。
+      notes: "「换一支羽毛笔 = 换一种笔迹」—— 比「抽屉里的字帖」强得多的映射，且动效已做好"
+    interaction:
+      mode: both
+      aimLabel: "换一种笔迹"
+      proxLabel: "换一种笔迹（r=1.4）"
+      activate: "羽毛笔书写（已有）→ 打开字体选择面板 → 换字体后笔迹随之变化"
+    commands: ["font:choose"]
+    data: "site.config.js 的字体清单（建议只保留中文与少量等宽字体，Q5）"
+    configKeys: ["fonts.*"]
+    impl: null
+    depends: ["J3", "J2(设置持久化)"]
+    estimate: 0.7
+    accept: []
+    notes: "与 M05 同在置物台上但不冲突：M05 用纸堆（写新文章），M16 用墨水瓶 + 羽毛笔（换笔迹）。"
+
+  # =========================================================================
+  - id: M17
+    name: "显示设定"
+    status: proposed
+    batch: P4
+    tier: T2
+    item: "二楼床头柜抽屉"
+    itemRef: "原 L3344–3358（regSlide + drawerG）→ cabin/world/floor2/nightstand.js"
+    mount: "drawer/nightstand"
+    render:
+      channels: [D]
+      detail: >-
+        通道 D：显示设置面板（视角 / 画质 / 天气 / 时间 / 阅读偏好 / 字体）。
+        ★ 面板由 settingsSchema 自动生成并自动持久化（ArtLine-Part/02 §3.7）。
+      notes: "★ 这是决策 5 的落点：src/config/display.config.js 决定哪些项对用户可见"
+    interaction:
+      mode: both
+      aimLabel: "拉开抽屉"
+      proxLabel: "拉开抽屉（r=1.4）"
+      activate: "抽屉滑出（已有 regSlide）→ 设置面板"
+    commands: ["display:settings", "prefs:reading"]
+    data: "settingsSchema（app/store.js）+ localStorage（前缀 cabin:）"
+    configKeys: ["display.*", "cabin.*", "reader.*"]
+    impl: null
+    depends: ["J2.5(配置层)", "J2(持久化)"]
+    estimate: 0.8
+    accept: ["CF1", "CF2", "CF3", "CF4"]
+    notes: >-
+      ★ 这个模块是配置编排体系的真验收：它做完并跑通 CF2，才证明「加一个设置项 = 改 1 个文件」成立。
+      文章加密的「开锁动作」也归这里（书脊挂小锁 → 抽屉里取钥匙）。
+
+  # =========================================================================
+  - id: M18
+    name: "背单词（SRS）"
+    status: proposed
+    batch: P6
+    tier: T1
+    item: "大魔女坩埚（★建议，待作者拍板；备选：试剂架旁的固定木台 / 二楼书桌）"
+    itemRef: "原 L2102–2194（坩埚 + 塞子 + 搅拌动效）→ cabin/world/floor1/cauldron.js"
+    mount: "cauldron/stove"
+    render:
+      channels: [A, D]
+      detail: >-
+        通道 A（首个真实用例）：单词卡面是 Canvas 贴图 —— 投一个词进锅里，它「煮」出音标与释义。
+        内容是小体量（词 + 音标 + 释义 + 例句）、只读、不需要选中复制，且换卡频繁 → 正合通道 A。
+        通道 D：完整复习界面（词书管理 / 统计图表 / 四档反馈 / 导入导出）—— 重界面仍走 DOM。
+      notes: >-
+        ★ 决策 2 的直接产物。它是「小体量内容用方案 A」的验证案例：
+        若这里跑通，后续所有小体量内容都有现成路径（见 03 §4.3）。
+    interaction:
+      mode: both
+      aimLabel: "往锅里投入一个词"
+      proxLabel: "看看今天要背什么（r=1.6）"
+      activate: "投入词 → 锅面沸腾（已有 stirRun 搅拌动效）→ 卡面浮现 → 四档反馈 → 投入下一个"
+    commands: ["srs:open", "srs:review", "srs:rate"]
+    data: >-
+      ★ 小屋自己的 IndexedDB（库名自定，**不要用 firefly-srs**）；
+      FSRS 算法为纯逻辑，可参考 Firefly 的 utils/srs/fsrs.ts（复制参考，非 import）。
+      词库 22 MB 不宜全量保留，建议 2–5 本常用（Q9）。
+    configKeys: ["srs.*"]
+    impl: null
+    depends: ["J3(坩埚模块化)", "J2(持久化)", "M17(设置项落地方式)"]
+    estimate: 2.0
+    accept: ["CH6", "CH7"]
+    notes: >-
+      ★ 本模块不在原 17 模块内（Blog-Part/02 未收录 SRS），是本路线新增的第 18 个模块。
+      排序上放最后：它不阻塞任何内容能力，但能验证四通道模型是否成立。
+      默认 modulesConfig.M18 = false。
+
+# ===========================================================================
+#  统计（由模型/脚本读取；作者不必手工维护）
+# ===========================================================================
+summary:
+  # 计数口径：「编号模块」把 M03 算一个（它拆成 a/b 两个载体）；「条目」按本文件的 - id: 计。
+  # 与 Blog-Part/02 的「17 个模块」口径一致（那里 M03a/M03b 也是同一模块的两件载体）。
+  moduleNumbers: 18             # M01…M18（M03 算一个）
+  entries: 19                   # 本文件的 - id: 条数（M03a、M03b 各占一条）
+  mappedToScene: 18             # 19 - 1（M09 不映射）
+  notMapped: [M09]              # 打赏：只在文章页底部保留按钮
+  newModules: [M18]             # 原 17 编号模块之外新增（背单词 / SRS）
+  newPropsRequired: 0           # 全部复用现有道具（M18 用已有的大魔女坩埚）
+  hitmatRequired: [M02, M13]    # 需补隐形命中体的两件（纯线框/未注册，风险 R7）
+  cameraRigRequired: [M02, M07, M10, M12, M13, M15]  # 需要 CameraRig 运镜的模块
+  estimateSum: 18.2             # 各模块 estimate 之和（不含 M01，其工时计入 J6）
+  estimateNote: >-
+    J7 的排期区间取 16–24 人日：下界高于 estimateSum 是因为挂载点表、设置面板、
+    命令总线等共享工作不在单个模块的 estimate 里；上界留出返工与验收余量。
+  channelUsage:
+    B:  [M01, M06]              # 需要「读」的长内容（CSS3D 真 DOM）
+    A:  [M02, M03b, M04, M05, M07, M08, M10, M13, M14, M15, M18]   # 小体量只读内容（Canvas 贴图）
+    T4: [M02, M04, M05, M08, M11, M12, M13, M14, M16]              # 状态量（免费的信息传达）
+    D:  [M03a, M04, M07, M08, M09, M10, M11, M12, M13, M14, M15, M16, M17, M18]  # 需要输入/长列表/无障碍
+  status:
+    proposed: 19
+    confirmed: 0
+    shipped: 0
+    dropped: 0
+  note: "状态数为本文件的参考快照；门禁以运行时统计为准（见 05 §5.1）"

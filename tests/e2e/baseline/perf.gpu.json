@@ -1,0 +1,109 @@
+{
+  "spec": "J0.6 性能基线",
+  "profile": "gpu",
+  "profileLabel": "本机 / 真实 GPU",
+  "generatedAt": "2026-09-13T14:14:16.329Z",
+  "url": "http://127.0.0.1:5173/index.html?deterministic=1&stats=1",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "rounds": 5,
+  "env": {
+    "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 1,
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 Laptop GPU (0x00002D59) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "seed": "20260214"
+  },
+  "metrics": {
+    "readyMs": {
+      "median": 504,
+      "min": 491,
+      "max": 549
+    },
+    "bootMs": {
+      "median": 468,
+      "min": 447,
+      "max": 513
+    },
+    "fps": {
+      "median": 78.05,
+      "min": 75.78,
+      "max": 84.49
+    },
+    "cold": {
+      "readyMs": 853,
+      "bootMs": 729,
+      "fps": 105.62,
+      "calls": 3138,
+      "triangles": 86158
+    }
+  },
+  "render": {
+    "frame": 648,
+    "calls": 3138,
+    "triangles": 86158,
+    "renderLines": 61252,
+    "renderPoints": 2638,
+    "geometries": 2843,
+    "textures": 38,
+    "programs": 15,
+    "sceneObjects": 5365,
+    "sceneMeshes": 1812,
+    "sceneLines": 1907,
+    "scenePoints": 7
+  },
+  "thresholds": {
+    "calls": 0.1,
+    "triangles": 0.1,
+    "geometries": 0.1,
+    "textures": 0.1,
+    "sceneObjects": 0.1,
+    "readyMs": 0.3,
+    "fps": 0.25
+  },
+  "quality": {
+    "fpsSpread": 0.112,
+    "readySpread": 0.115,
+    "fpsTrend": -0.096,
+    "stable": true,
+    "note": "轮间波动与趋势均在正常范围"
+  },
+  "samples": [
+    {
+      "readyMs": 506,
+      "bootMs": 471,
+      "fps": 84.49,
+      "calls": 3138,
+      "triangles": 86158
+    },
+    {
+      "readyMs": 491,
+      "bootMs": 447,
+      "fps": 82.49,
+      "calls": 3138,
+      "triangles": 86158
+    },
+    {
+      "readyMs": 502,
+      "bootMs": 459,
+      "fps": 78.05,
+      "calls": 3138,
+      "triangles": 86158
+    },
+    {
+      "readyMs": 549,
+      "bootMs": 513,
+      "fps": 75.78,
+      "calls": 3138,
+      "triangles": 86158
+    },
+    {
+      "readyMs": 504,
+      "bootMs": 468,
+      "fps": 76.4,
+      "calls": 3138,
+      "triangles": 86158
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "spec": "J0.4 最小截图回归",
+  "note": "同一机位 + 同一种子 + 定格 120 帧 ⇒ PNG 逐字节相同。sha256 是判据，PNG 是证据。",
+  "url": "http://127.0.0.1:5173/index.html",
+  "query": "?deterministic=1&frames=120&frameStep=0.016666666666666666[&cam=<机位的 cam>]",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "frames": 120,
+  "frameStep": 0.016666666666666666,
+  "seed": "20260214",
+  "sceneDigest": "d601adc5-d765a3b0-ca1926d0-20fe2cf9-43764e4d-49ae5605",
+  "poses": [
+    {
+      "name": "default-fixed",
+      "label": "默认固定视角",
+      "note": "相机保持默认（打开页面的第一眼）；小屋切到完整外观",
+      "cam": null,
+      "house": "full",
+      "file": "default-fixed.png",
+      "bytes": 182422,
+      "sha256": "04b442fc09ea06b60b2bbfd157e96b5a60216783ddef70eb72d3e94f1cba9ef6",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "stats": {
+        "colors": 230,
+        "edgeRatio": 0.1994,
+        "topColorRatio": 0.716,
+        "mean": {
+          "r": 235,
+          "g": 236,
+          "b": 235
+        }
+      },
+      "clock": {
+        "mode": "manual",
+        "now": 2,
+        "dt": 0.016667,
+        "frame": 120
+      },
+      "seed": "20260214",
+      "sceneDigest": "d601adc5-d765a3b0-ca1926d0-20fe2cf9-43764e4d-49ae5605"
+    },
+    {
+      "name": "floor1-indoor",
+      "label": "一楼室内",
+      "note": "大门内侧 1.6m 高处，朝屋内左后方看",
+      "cam": [
+        0,
+        1.6,
+        3,
+        -1.6,
+        1.1,
+        -1.2
+      ],
+      "house": "full",
+      "file": "floor1-indoor.png",
+      "bytes": 117059,
+      "sha256": "ee3e5e61a710069f701ee660de5e7f2aad429a9f75f7d0d69e764885970707bb",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "stats": {
+        "colors": 376,
+        "edgeRatio": 0.1772,
+        "topColorRatio": 0.8455,
+        "mean": {
+          "r": 235,
+          "g": 235,
+          "b": 234
+        }
+      },
+      "clock": {
+        "mode": "manual",
+        "now": 2,
+        "dt": 0.016667,
+        "frame": 120
+      },
+      "seed": "20260214",
+      "sceneDigest": "d601adc5-d765a3b0-ca1926d0-20fe2cf9-43764e4d-49ae5605"
+    },
+    {
+      "name": "floor2-desk",
+      "label": "二楼书桌",
+      "note": "楼梯口上方 1.43m，朝后墙方向；覆盖半宽 ≈4.1m，大床与书桌同时完整入画",
+      "cam": [
+        0.2,
+        4.55,
+        2.95,
+        0.2,
+        3.85,
+        -2.6
+      ],
+      "house": "full",
+      "file": "floor2-desk.png",
+      "bytes": 138670,
+      "sha256": "06b7affdd8c25b9ab75c68918a1662b18f219feb19120a7961b52723e618942b",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "stats": {
+        "colors": 463,
+        "edgeRatio": 0.1587,
+        "topColorRatio": 0.851,
+        "mean": {
+          "r": 236,
+          "g": 235,
+          "b": 235
+        }
+      },
+      "clock": {
+        "mode": "manual",
+        "now": 2,
+        "dt": 0.016667,
+        "frame": 120
+      },
+      "seed": "20260214",
+      "sceneDigest": "d601adc5-d765a3b0-ca1926d0-20fe2cf9-43764e4d-49ae5605"
+    }
+  ]
+}

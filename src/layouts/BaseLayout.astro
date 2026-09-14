@@ -1,0 +1,383 @@
+---
+/**
+ * 站点外壳（Astro 侧）
+ * ============================================================================
+ * 职责边界（docs/BuildPlaning/03 §5.4）：
+ *   本文件只负责 **HTML 骨架 + 站点页 chrome**；3D 由 `<slot />` 里的**唯一一个岛**负责。
+ *
+ * 四条要点（都是 J1.5 的硬约束）：
+ *
+ * ① `<slot />` **排在 body 最前**。3D 实现把 canvas 追加到 `document.body`（monolith 第 73 行），
+ *    而 canvas 是 inline 元素、没有任何定位样式 —— 它在 body 流里的**位置取决于它前面还有没有兄弟**。
+ *    把站点内容放到 canvas 之后，才能保证两版页面里 canvas 都在 (0,0)、尺寸都等于视口
+ *    ⇒ `J0.4` 的像素基线在 Astro 版下**依然成立**（DoD：截图回归与基线一致）。
+ *
+ * ② **门厅 = 同一份 DOM，靠显示位切换，而不是写两份列表。**
+ *    之前想把列表放进 `<noscript>` —— 那是错的：`<noscript>` 的内容只对禁 JS 可见，
+ *    爬虫/阅读器拿到的是"另一份"内容，两份容易漂移。现在的做法是：
+ *      · 门厅 `#cabin-foyer` 由 Astro **构建期渲染成纯 HTML** ⇒ 禁 JS 直接可读（验收 `BB8`）；
+ *      · 默认它就是可见内容（首屏先出文字）；
+ *      · 唯一需要 3D 独占视口的是**视觉回归**与"直接开玩"，两者都走 `?bare=1`（见 ③）。
+ *
+ * ③ `?bare=1`：跳过门厅的渲染与合成，让 Astro 版页面回到与 `J0.4` 基线**完全相同**的起点。
+ *    这不是给用户看的开关，也不是"测试后门" —— 它是**同一条产品启动路径**上的一个呈现位选择：
+ *    3D 的启动、参数解析（`?deterministic` / `?cam` / `?house`）全部照旧，只是不叠门厅文字。
+ *
+ * ④ `cabin.css` 是 `J1` 逐字节搬迁的产物，**从 `src/styles/` 原地引用**，一个字都不改。
+ */
+import { siteConfig } from '@/config/site.config.js'
+import '@/styles/cabin.css'
+
+const { title, subtitle, description, author, language } = siteConfig
+const origin = Astro.site ?? new URL('https://example.com/')
+const canonical = new URL(Astro.url.pathname, origin).href
+const ogImage = new URL('/img/og-default.png', origin).href
+
+/** 见 ③：`?bare=1` ⇒ 纯 3D（视觉回归 / 直接开玩） */
+const bare = Astro.url.searchParams.has('bare')
+
+/**
+ * 门厅**只属于首页**：它由 `index.astro` 通过具名插槽 `foyer` 提供内容。
+ * 文章页 / 归档页 / 标签页不提供这个插槽 ⇒ 不渲染门厅块（否则会在正文下面
+ * 多出一段"最近写下的 + 空列表"，那是首页的语义，不是它们的）。
+ */
+const hasFoyer = Astro.slots.has('foyer')
+---
+
+<!DOCTYPE html>
+<html lang={language.slice(0, 2)}>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>{Astro.props.pageTitle ? `${Astro.props.pageTitle} · ${title}` : title}</title>
+    <meta name="description" content={Astro.props.description ?? description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="application/rss+xml" title={title} href="/rss.xml" />
+    <!--
+      图标直接内联（URL 编码的 SVG data URI），**不落 public/ 一个文件**：
+      理由与"零依赖 RSS"同源 —— 它是一段 200 字节的常量，多一个请求不如少一个请求。
+      （这不是"业务 DOM 结构"，不涉及不变量 N6。）
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23faf4e4'/%3E%3Cpath d='M6 15 16 6l10 9' fill='none' stroke='%238a4fd6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M9 15v11h14V15' fill='none' stroke='%238a4fd6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='14' y='19' width='4' height='7' fill='%23b8912a'/%3E%3C/svg%3E"
+    />
+
+    <!-- OG / 社交卡片 -->
+    <meta property="og:type" content={Astro.props.ogType ?? 'website'} />
+    <meta property="og:site_name" content={title} />
+    <meta property="og:title" content={Astro.props.pageTitle ?? title} />
+    <meta property="og:description" content={Astro.props.description ?? description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={Astro.props.ogImage ?? ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="author" content={author.name} />
+
+    <style is:global>
+      /* ── 站点侧样式（Astro 独有；cabin.css 一个字都不动）────────────────
+         调色板与 J6 的阅读层同源：羊皮纸 / 烫金 / 衬线（上游风险 R17）。
+         目的：门厅即使只是"3D 加载前的文字先出"，也不能有"跳出现代网页"的观感。 */
+      :root {
+        --paper: #faf4e4;
+        --ink: #3a3226;
+        --gold: #b8912a;
+        --gold-soft: #d9bd6d;
+        --serif: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', Georgia, 'Times New Roman', serif;
+      }
+
+      body {
+        color: var(--ink);
+        font-family: var(--serif);
+        line-height: 1.75;
+      }
+
+      /* ── 门厅 ─────────────────────────────────────────────────────── */
+      #cabin-foyer {
+        box-sizing: border-box;
+        height: 100%;
+        overflow: auto;
+        padding: clamp(1.5rem, 5vh, 4rem) clamp(1rem, 6vw, 5rem);
+        background: radial-gradient(120% 80% at 50% 0%, #fffdf6 0%, var(--paper) 60%, #f3ead4 100%);
+      }
+      .foyer-inner {
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+      #cabin-foyer h1 {
+        margin: 0;
+        font-size: clamp(1.9rem, 5vw, 3rem);
+        letter-spacing: 0.06em;
+      }
+      #cabin-foyer .subtitle {
+        margin: 0.35rem 0 0;
+        color: #7b6c50;
+        font-size: 1rem;
+      }
+      .foyer-rule {
+        height: 1px;
+        margin: 1.6rem 0;
+        border: 0;
+        background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
+      }
+      .foyer-latest-label {
+        margin: 0 0 0.6rem;
+        color: var(--gold);
+        font-size: 0.85rem;
+        letter-spacing: 0.28em;
+      }
+      #cabin-foyer ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #cabin-foyer li {
+        padding: 0.55rem 0;
+        border-bottom: 1px dashed #e0d5b8;
+      }
+      #cabin-foyer li:last-child {
+        border-bottom: 0;
+      }
+      #cabin-foyer a {
+        color: inherit;
+        text-decoration: none;
+      }
+      #cabin-foyer a:hover .post-title,
+      #cabin-foyer a:focus-visible .post-title {
+        color: var(--gold);
+      }
+      #cabin-foyer .post-title {
+        font-size: 1.08rem;
+      }
+      #cabin-foyer .post-meta {
+        color: #8d7f63;
+        font-size: 0.82rem;
+      }
+      #cabin-foyer .post-summary {
+        margin: 0.15rem 0 0;
+        color: #6f6350;
+        font-size: 0.9rem;
+      }
+      .foyer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        align-items: center;
+        margin-top: 2rem;
+      }
+      #cabin-enter {
+        padding: 0.6rem 1.5rem;
+        border: 1px solid var(--gold);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--gold);
+        font: inherit;
+        letter-spacing: 0.12em;
+        cursor: pointer;
+      }
+      #cabin-enter:hover,
+      #cabin-enter:focus-visible {
+        background: var(--gold);
+        color: var(--paper);
+      }
+      .foyer-actions .more {
+        color: #8d7f63;
+        font-size: 0.9rem;
+        text-decoration: underline dotted;
+      }
+      #cabin-foyer footer {
+        margin-top: 2.5rem;
+        color: #9a8d73;
+        font-size: 0.8rem;
+      }
+
+      /* 3D 起不来时的一句提示（不弹错误框，保持页面可用） */
+      #cabin-foyer-note {
+        display: none;
+      }
+      [data-cabin-state='failed'] #cabin-foyer-note {
+        display: block;
+        margin-top: 0.5rem;
+        color: #a3623a;
+      }
+      [data-cabin-state='failed'] #cabin-enter {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      /* ── 其余站点页（文章 / 归档 / 标签 / 关于）────────────────────── */
+      .page {
+        box-sizing: border-box;
+        min-height: 100%;
+        overflow: auto;
+        padding: clamp(1.5rem, 6vh, 4rem) clamp(1rem, 6vw, 5rem);
+        background: radial-gradient(120% 80% at 50% 0%, #fffdf6 0%, var(--paper) 60%, #f3ead4 100%);
+      }
+      .page-inner {
+        max-width: 44rem;
+        margin: 0 auto;
+      }
+      .page h1 {
+        margin: 0 0 0.2rem;
+        font-size: clamp(1.6rem, 4vw, 2.4rem);
+        letter-spacing: 0.04em;
+      }
+      .page h2 {
+        margin: 2rem 0 0.5rem;
+        font-size: 1.2rem;
+      }
+      .page-nav {
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+        margin-bottom: 2rem;
+        color: #8d7f63;
+        font-size: 0.9rem;
+      }
+      .page-nav a {
+        color: inherit;
+      }
+      .page-meta {
+        color: #8d7f63;
+        font-size: 0.85rem;
+      }
+      .page-body {
+        font-size: 1.02rem;
+      }
+      .page-body h2,
+      .page-body h3 {
+        margin: 2rem 0 0.6rem;
+        scroll-margin-top: 1rem;
+      }
+      .page-body p {
+        margin: 0.9rem 0;
+      }
+      .page-body a {
+        color: var(--gold);
+      }
+      .page-body img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #e0d5b8;
+        border-radius: 4px;
+      }
+      .page-body blockquote {
+        margin: 1.2rem 0;
+        padding: 0.2rem 1.1rem;
+        border-left: 3px solid var(--gold-soft);
+        color: #6f6350;
+      }
+      .page-body code {
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+        background: #f0e8d5;
+        font-family: 'JetBrains Mono', Consolas, monospace;
+        font-size: 0.9em;
+      }
+      .page-body pre {
+        overflow: auto;
+        padding: 1rem 1.2rem;
+        border: 1px solid #e6dcc2;
+        border-radius: 6px;
+        background: #f7f1e1;
+      }
+      .page-body pre code {
+        padding: 0;
+        background: none;
+      }
+      .page-body hr {
+        height: 1px;
+        margin: 2rem 0;
+        border: 0;
+        background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
+      }
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .tag-list a {
+        padding: 0.15rem 0.7rem;
+        border: 1px solid #e0d5b8;
+        border-radius: 999px;
+        color: var(--ink);
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      .tag-list a:hover {
+        border-color: var(--gold);
+        color: var(--gold);
+      }
+      .post-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .post-list > li {
+        padding: 0.9rem 0;
+        border-bottom: 1px dashed #e0d5b8;
+      }
+      .post-list > li:last-child {
+        border-bottom: 0;
+      }
+      .post-list a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .post-list a:hover .post-title {
+        color: var(--gold);
+      }
+      .post-title {
+        font-size: 1.1rem;
+      }
+      .pin {
+        margin-right: 0.35rem;
+        color: var(--gold);
+        font-size: 0.8em;
+      }
+      .year-head {
+        margin: 2rem 0 0.4rem;
+        color: var(--gold);
+        font-size: 0.85rem;
+        letter-spacing: 0.28em;
+      }
+      .page footer {
+        margin-top: 3rem;
+        color: #9a8d73;
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ★ 3D 岛（全站唯一一个 `client:only`）—— 必须排在 body 最前，见上方注释 ① ★ -->
+    <slot />
+
+    <!-- ★ 门厅：构建期渲染成纯 HTML，禁 JS 可直接读；`?bare=1` 或非首页时整块不渲染 ★ -->
+    {!bare && hasFoyer && (
+      <div id="cabin-foyer">
+        <div class="foyer-inner">
+          <header>
+            <h1>{title}</h1>
+            {subtitle && <p class="subtitle">{subtitle}</p>}
+          </header>
+          <hr class="foyer-rule" />
+          <slot name="foyer" />
+          <div class="foyer-actions">
+            <button id="cabin-enter" type="button" hidden>
+              推门进入小屋
+            </button>
+            <a class="more" href="/archive/">看看全部 →</a>
+          </div>
+          <p id="cabin-foyer-note">小屋的门暂时推不开，先用目录读吧。</p>
+          <footer set:html={siteConfig.footerHtml} />
+        </div>
+      </div>
+    )}
+  </body>
+</html>

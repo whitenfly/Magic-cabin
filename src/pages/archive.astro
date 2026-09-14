@@ -1,0 +1,48 @@
+---
+/**
+ * `/archive/` —— 全部文章（按年分组）
+ * ============================================================================
+ * 对应模块 **M02 时间归档**（3D 侧的载体是毛茸茸大地毯的年历格 + 二楼台历）。
+ * 本页是它的**站点侧通道 D（DOM 覆盖层）形态**：3D 给出"哪一年写了多少"的直观感，
+ * 这里给出"点得进去"的完整入口 —— 两者读**同一份**集合，不各算一遍（验收 `CH6` 的同一原则）。
+ *
+ * 门厅的"看看全部"指向这里。
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import PostList from '@/components/PostList.astro'
+import { groupByYear, loadPosts } from '@/blog/posts.js'
+import { siteConfig } from '@/config/site.config.js'
+
+const posts = await loadPosts()
+const years = await groupByYear()
+---
+
+<BaseLayout pageTitle="归档" description="全部文章，按年份排列。">
+  <main class="page">
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/tags/">按标签看</a>
+      </nav>
+
+      <h1>归档</h1>
+      <p class="page-meta">共 {posts.length} 篇 · 按年份倒序</p>
+      <hr class="foyer-rule" />
+
+      {years.map(({ year, posts: list }) => (
+        <>
+          <p class="year-head">{year}</p>
+          <PostList items={list} showSummary={false} />
+        </>
+      ))}
+
+      {years.length === 0 && (
+        <p class="page-meta">
+          还没有文章。<code>src/content/posts/</code> 里放一个 <code>.md</code> 就会出现在这里。
+        </p>
+      )}
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+</BaseLayout>

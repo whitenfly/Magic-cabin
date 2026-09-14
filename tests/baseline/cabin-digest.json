@@ -1,0 +1,23 @@
+{
+  "what": "J1.5 期间的 src/cabin/** 逐字节摘要",
+  "why": "本项目不是 git 仓库，用逐字节摘要代替「git diff 为空」这条 DoD 判据",
+  "note": "⚠️ J3/J4 开始掏空 legacy/ 时会合法地变化。变化前必须先在 J1.5 的结果文档里记一笔原因，再重跑 --record。",
+  "recordedAt": "2026-09-13",
+  "totals": {
+    "files": 10,
+    "lines": 9959
+  },
+  "combined": "ff2a8d19cae0ce355607460e32d070a53cfeed099ce29ed95bd7d2f5a2e3cb5e",
+  "files": {
+    "app/clock.js": "bf08267716714873",
+    "app/README.md": "57f5d3e6336fad25",
+    "app/rng.js": "4d3198dd7142a550",
+    "boot.js": "f4ca09d7f7d8e804",
+    "core/README.md": "f9e6d693b9813b3d",
+    "dom.js": "6463d448cc163d8a",
+    "legacy/monolith.js": "21df31a0ccba1401",
+    "props/README.md": "600f9c9259b2ee19",
+    "systems/README.md": "5278ee9befdf972a",
+    "world/README.md": "c1acb1851828d7ff"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  // 魔法小屋 —— TypeScript 配置（J1.5 起扩展 Astro 支持）
+  //
+  // 入口：`pnpm typecheck` → `tsc --noEmit`
+  //   ✅ 覆盖：`src/**/*.js`（含 `cabin/**` 与 `blog/**`）、`src/**/*.ts`（`content.config.ts`）、`tests/**/*.mjs`
+  //   ⚠️ **不覆盖 `.astro` 文件本身** —— 那需要 `@astrojs/check`（另一个依赖）。
+  //      本项目现阶段不引入它：`.astro` 里的脚本会被打包器在构建期校验，
+  //      而 `J1.5` 的原则是"能不引依赖就不引"（与"零依赖 RSS"同一条理由）。
+  //      若将来确实需要 `.astro` 的模板级类型检查，再 `pnpm add -D @astrojs/check`。
+  //
+  // `extends: astro/tsconfigs/base` 提供 Astro 需要的编译选项与 `astro/client` 类型：
+  //   · 让 `import.meta.env.PUBLIC_*`、`import.meta.glob` 等有类型
+  //   · 让 `astro:content` / `astro:actions` 这类**虚拟模块**在编辑器里可解析
+  //     （它们由 `astro sync` 生成到 `.astro/`，见 .gitignore）
+  //
+  // ⚠️ `strict: false` 是**刻意保留**的：本项目的 J1–J4 是"搬迁期零优化"，
+  //    把 9000 行 legacy 代码一次拉到 strict 会与"只搬位置不改实现"冲突。
+  //    路线图 `02` §7 已记录：新代码用 JSDoc 标注类型，`tsconfig` 逐目录打开 checkJs，
+  //    是否全量 TS 留到 `J8` 再定。
+  "extends": "astro/tsconfigs/base",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "useDefineForClassFields": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": [".astro/types.d.ts", "src/**/*.ts", "src/**/*.js", "src/**/*.astro", "tests/**/*.mjs"],
+  "exclude": ["node_modules", "dist", "dist-single", "dist-vite"]
+}

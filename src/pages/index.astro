@@ -1,0 +1,53 @@
+---
+/**
+ * `/` —— 门厅 + 3D 岛（J1.5.2 + J1.5.4）
+ * ============================================================================
+ * 这一页同时承担两件互相拉扯的事，解法写在 `BaseLayout.astro` 的注释 ②/③ 里：
+ *
+ *   ① **无 JS 可读、爬虫可读**（验收 `BB8`）：文章列表在构建期就是纯 HTML。
+ *   ② **有 JS 时把视口让给 3D**（决策 3 / K18）：3D 站稳后门厅自己退场。
+ *
+ * 页面结构（顺序有意义，不要调换）：
+ *   `<BaseLayout>` 内先渲染 `CabinMount`（岛）→ 再渲染 `foyer` 具名插槽（文字）。
+ *   原因见 `BaseLayout.astro` 注释 ①：canvas 直接追加到 `document.body`，
+ *   它在文档流里的位置取决于前面有没有兄弟节点 —— 这决定了 `J0.4` 的像素基线是否继续成立。
+ *
+ * ⚠️ 本文件**不得**出现 3D 的实现细节：启动、参数解析、场景装配全在 `cabin/**` 与那个岛里。
+ *    这里只有"内容选择"（哪几篇、按什么顺序、显示多少条），而它由 `home.config.js` 决定。
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CabinMount from '@/components/CabinMount.astro'
+import PostList from '@/components/PostList.astro'
+import { loadPosts } from '@/blog/posts.js'
+import { homeConfig } from '@/config/home.config.js'
+
+const posts = await loadPosts()
+/** 门厅只列最新 N 篇（`home.config.latestCount`）；全量入口是 `/archive/` */
+const latest = posts.slice(0, homeConfig.latestCount)
+const bare = Astro.url.searchParams.has('bare')
+---
+
+<BaseLayout>
+  <!--
+    ★ 全站唯一的 3D 岛（不变量 N12 的唯一例外）★
+    **它没有 `client:*` 指令，这是正确的，不是遗漏。**
+
+    三个写法都在这里踩过，记录原因以免有人"顺手补上"：
+      · `client:only="cabin"` —— Astro 需要一个**真实的前端框架渲染器**（React/Vue/Svelte…）
+        来做水合的 hint；本项目没有任何前端框架，构建时直接报 `NoClientOnlyHint`。
+      · `client:load` —— 对 `.astro` 组件无效：Astro 会明确告诉你
+        "Astro components do not render in the client and should not have a hydration directive"。
+      · **正确写法：什么都不加。** 纯 `.astro` 组件里的 `<script>` 本来就是
+        "只在浏览器执行、编译成独立模块被页面引用"——这正是"一个岛"要的语义，
+        而且**天然不做 SSR**；想显式声明加载时机，由 `CabinMount.astro` 内部
+        读 `cabin.config.foyer` 决定（`preload` 立即 / `button` 等用户推门）。
+
+    结论：3D 依然是"一个岛、零 SSR、`src/cabin/**` 一行不改"。
+  -->
+  <CabinMount bare={bare} />
+
+  <Fragment slot="foyer">
+    <p class="foyer-latest-label">{homeConfig.text.latest}</p>
+    <PostList items={latest} />
+  </Fragment>
+</BaseLayout>

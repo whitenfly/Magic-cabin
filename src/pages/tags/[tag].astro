@@ -1,0 +1,46 @@
+---
+/**
+ * `/tags/<tag>/` —— 单个标签下的文章
+ * ============================================================================
+ * ⚠️ 标签是中文（`小屋`、`建造日志`…）⇒ 构建产物里会出现**百分号编码的目录名**
+ *    （`dist/tags/%E5%B0%8F%E5%B1%8B/index.html`）。这是 URL 规范的正常结果，
+ *    不是构建错误 —— 任何静态托管与 `scripts/serve.mjs` 都会正确解码后命中它。
+ *
+ * ⚠️ `Astro.params.tag` 已经是**解码后**的值（Astro 负责 decodeURIComponent），
+ *    所以这里直接与 front-matter 的标签做等值比较即可，**不要再 decode 一次**
+ *    （中文标签 decode 两次不会报错，但含 `%` 的标签会坏）。
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import PostList from '@/components/PostList.astro'
+import { groupByTag } from '@/blog/posts.js'
+import { siteConfig } from '@/config/site.config.js'
+
+export async function getStaticPaths() {
+  const tags = await groupByTag()
+  return tags.map(({ tag, posts }) => ({
+    params: { tag },
+    props: { tag, posts },
+  }))
+}
+
+const { tag, posts } = Astro.props
+---
+
+<BaseLayout pageTitle={`#${tag}`} description={`标签「${tag}」下的全部文章。`}>
+  <main class="page">
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/tags/">全部标签</a>
+      </nav>
+
+      <h1>#{tag}</h1>
+      <p class="page-meta">共 {posts.length} 篇</p>
+      <hr class="foyer-rule" />
+
+      <PostList items={posts} />
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+</BaseLayout>

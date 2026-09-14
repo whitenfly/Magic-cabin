@@ -1,0 +1,43 @@
+---
+/**
+ * `/tags/` —— 标签总览
+ * ============================================================================
+ * 对应模块 **M04 主题聚类**（3D 侧的载体是左墙试剂药水瓶架：一个标签 = 一瓶药水）。
+ * 药水架只有 7 个瓶位，因此站点侧的这页是**没有容量上限的那一份**：
+ * 3D 里"瓶子不够"时，用户仍然能在这里看到全部标签（`ArtLine-Part` 的风险处理原则）。
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { groupByTag } from '@/blog/posts.js'
+import { siteConfig } from '@/config/site.config.js'
+
+const tags = await groupByTag()
+---
+
+<BaseLayout pageTitle="标签" description="按主题聚类浏览全部文章。">
+  <main class="page">
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/archive/">按时间看</a>
+      </nav>
+
+      <h1>标签</h1>
+      <p class="page-meta">共 {tags.length} 个主题</p>
+      <hr class="foyer-rule" />
+
+      <ul class="tag-list">
+        {tags.map(({ tag, posts }) => (
+          <li>
+            <a href={`/tags/${tag}/`}>
+              #{tag} <span class="page-meta">{posts.length}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {tags.length === 0 && <p class="page-meta">还没有任何标签。</p>}
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+</BaseLayout>

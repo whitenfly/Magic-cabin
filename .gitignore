@@ -1,0 +1,26 @@
+node_modules/
+dist/
+dist-single/
+*.local
+.DS_Store
+.vite/
+
+# pnpm 在受限环境下产生的 crashpad 日志
+debug.log
+pnpm-debug.log*
+
+# 构建期产物（服务脚本状态文件、分析中间产物）
+.cache/
+
+# 博客内容构建产物（J5 起产出：posts.json + 正文 HTML 片段）
+# 见 src/blog/README.md —— 它是构建产物，不进版本库
+src/blog/generated/
+
+# Astro 构建产物（J1.5 起）
+.astro/
+
+# 验证产物（headless 截图与运行时 DOM 快照，见 scripts/verify-runtime.mjs）
+_shots/
+
+# ⚠️ tests/visual/baseline/*.png 与 tests/e2e/baseline/perf.json 必须提交
+#    —— 它们是判据本身（截图基线 / 性能基线），不要加进本文件

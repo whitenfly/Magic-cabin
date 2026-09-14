@@ -1,0 +1,47 @@
+{
+  "name": "magic-cabin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J1.5：Astro 落地）",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "sync": "astro sync",
+    "build:single": "vite build --config vite.single.config.ts",
+    "serve": "node scripts/serve.mjs",
+    "serve:open": "node scripts/serve.mjs --open",
+    "serve:lan": "node scripts/serve.mjs --host",
+    "serve:legacy": "node scripts/serve.mjs --legacy",
+    "serve:single": "node scripts/serve.mjs --dir=dist-single",
+    "status": "node scripts/ctl.mjs status",
+    "stop": "node scripts/ctl.mjs stop",
+    "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify-j15.mjs && node scripts/verify-migration.mjs && node scripts/verify-f02.mjs && node scripts/verify-f03.mjs && node scripts/verify-f04.mjs && node scripts/verify-f06.mjs",
+    "verify:j15": "node scripts/verify-j15.mjs",
+    "verify:migration": "node scripts/verify-migration.mjs",
+    "verify:f02": "node scripts/verify-f02.mjs",
+    "verify:f03": "node scripts/verify-f03.mjs",
+    "verify:f04": "node scripts/verify-f04.mjs",
+    "verify:f06": "node scripts/verify-f06.mjs",
+    "verify:determinism": "node scripts/verify-determinism.mjs 3",
+    "test:visual": "node tests/visual/compare.mjs",
+    "test:visual:additive": "node tests/visual/compare.mjs --mode=additive",
+    "test:smoke": "node tests/e2e/smoke.mjs",
+    "test:perf": "node tests/e2e/perf.mjs --compare",
+    "baseline:visual": "node tests/visual/capture.mjs --update",
+    "baseline:perf": "node tests/e2e/perf.mjs --update",
+    "verify:visual": "node tests/visual/capture.mjs --rounds=3",
+    "analyze:png": "node scripts/analyze-png.mjs",
+    "links": "node scripts/check-links.mjs docs/*.md README.md"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "astro": "^7.3.2",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,744 @@
+/* 魔法小木屋 —— 样式（原 index.html 第 10–748 行原样搬迁）
+ *
+ * 内容零改动。F1 阶段的搬迁原则：只搬位置，不改实现。
+ * 后续可拆分为 base / ui / editors / touch 等模块（见 docs/MIGRATION.md）。
+ */
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #fdfbf6
+        }
+
+        canvas {
+            display: block;
+            touch-action: none
+        }
+
+        #menuDot {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid #bbb;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 30px;
+            color: #888;
+            text-align: center;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .18);
+            z-index: 10;
+            user-select: none;
+            transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s, color .2s
+        }
+
+        #menuDot:hover {
+            color: #8fae6e;
+            transform: rotate(180deg) scale(1.12);
+            box-shadow: 0 2px 10px rgba(143, 174, 110, .4)
+        }
+
+        #menuDot:active {
+            transform: rotate(180deg) scale(.92)
+        }
+
+        #menuPanel {
+            position: fixed;
+            top: 52px;
+            right: 14px;
+            background: rgba(255, 255, 255, .97);
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font: 12px/1.6 monospace;
+            color: #444;
+            z-index: 10;
+            width: 208px;
+            box-sizing: border-box;
+            max-height: calc(100vh - 70px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, .15);
+            user-select: none;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-12px) scale(.92);
+            transition: opacity .28s ease, transform .28s cubic-bezier(.34, 1.4, .64, 1), visibility .28s
+        }
+
+        #menuPanel.open {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1)
+        }
+
+        #menuPanel .title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+            letter-spacing: 1px
+        }
+
+        #menuPanel .sub {
+            font-weight: bold;
+            font-size: 11px;
+            color: #7c9b5e;
+            letter-spacing: 3px;
+            margin: 2px 0 6px
+        }
+
+        #menuPanel .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            cursor: pointer
+        }
+
+        #menuPanel .sep {
+            height: 1px;
+            background: #ddd;
+            margin: 10px 0
+        }
+
+        .toggle {
+            width: 38px;
+            height: 20px;
+            border-radius: 10px;
+            background: #ccc;
+            position: relative;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background .3s ease, box-shadow .3s
+        }
+
+        .toggle:hover {
+            box-shadow: 0 0 0 3px rgba(143, 174, 110, .2)
+        }
+
+        .toggle.on {
+            background: #8fae6e;
+            box-shadow: 0 0 8px rgba(143, 174, 110, .5)
+        }
+
+        .toggle .knob {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+            transition: left .3s cubic-bezier(.34, 1.56, .64, 1), transform .3s cubic-bezier(.34, 1.56, .64, 1)
+        }
+
+        .toggle.on .knob {
+            left: 21px
+        }
+
+        .toggle:active .knob {
+            transform: scale(1.25)
+        }
+
+        #wxChips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px
+        }
+
+        .wxChip {
+            padding: 4px 9px;
+            border: 1px solid #bbb;
+            border-radius: 12px;
+            background: #f5f5f5;
+            color: #555;
+            font: 11px monospace;
+            cursor: pointer;
+            transition: border-color .2s, color .2s, background .2s, box-shadow .2s
+        }
+
+        .wxChip:hover {
+            border-color: #8fae6e;
+            color: #7c9b5e;
+            background: #f2f7ee
+        }
+
+        .wxChip.on {
+            background: #8fae6e;
+            border-color: #8fae6e;
+            color: #fff;
+            box-shadow: 0 0 6px rgba(143, 174, 110, .4)
+        }
+
+        .sliderRow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 7px 0
+        }
+
+        .sliderRow .slbl {
+            width: 32px;
+            font-size: 11px;
+            color: #666;
+            flex-shrink: 0
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            flex: 1;
+            height: 4px;
+            background: #d8d8d8;
+            border-radius: 2px;
+            outline: none;
+            margin: 0;
+            cursor: pointer
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #8fae6e;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+            cursor: pointer
+        }
+
+        input[type=range]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8fae6e;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+            cursor: pointer
+        }
+
+        .viewBtn {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            padding: 7px 10px;
+            margin: 6px 0;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            background: #f5f5f5;
+            color: #555;
+            cursor: pointer;
+            font: 12px monospace;
+            transition: border-color .2s, color .2s, background .2s, box-shadow .2s
+        }
+
+        .viewBtn:hover {
+            border-color: #8fae6e;
+            color: #7c9b5e;
+            background: #f2f7ee
+        }
+
+        .viewBtn.on {
+            background: #8fae6e;
+            border-color: #8fae6e;
+            color: #fff;
+            box-shadow: 0 0 8px rgba(143, 174, 110, .4)
+        }
+
+        #resetBtn {
+            margin-top: 2px;
+            background: #fdf3f3;
+            border-color: #d8b0b0;
+            color: #a05a5a
+        }
+
+        #resetBtn:hover {
+            border-color: #c07070;
+            color: #b05050;
+            background: #fbeaea
+        }
+
+        #resetBtn:active {
+            transform: scale(.96)
+        }
+
+        .aboutBox {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: 2px
+        }
+
+        .authorName {
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            color: #666;
+            letter-spacing: 1px
+        }
+
+        .aboutLink {
+            display: block;
+            text-align: center;
+            padding: 6px 10px;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            background: #f5f5f5;
+            color: #555;
+            text-decoration: none;
+            transition: border-color .2s, color .2s, background .2s, box-shadow .2s, transform .15s
+        }
+
+        .aboutLink:hover {
+            border-color: #8fae6e;
+            color: #7c9b5e;
+            background: #f2f7ee;
+            box-shadow: 0 0 8px rgba(143, 174, 110, .3)
+        }
+
+        .aboutLink:active {
+            transform: scale(.96)
+        }
+
+        #spellSlots {
+            display: flex;
+            gap: 6px;
+            margin: 2px 0 6px
+        }
+
+        .slot {
+            flex: 1;
+            height: 46px;
+            border: 1.5px solid #c5c5c5;
+            border-radius: 8px;
+            background: #f7f7f7;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            user-select: none;
+            transition: border-color .2s, background .2s, box-shadow .2s, transform .15s
+        }
+
+        .slot:hover {
+            border-color: #8fae6e
+        }
+
+        .slot:active {
+            transform: scale(.93)
+        }
+
+        .slot .ico {
+            font-size: 19px;
+            line-height: 1;
+            min-height: 20px;
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif
+        }
+
+        .slot .kb {
+            font-size: 9px;
+            color: #999;
+            letter-spacing: 1px;
+            white-space: nowrap
+        }
+
+        .slot.on {
+            border-color: #8fae6e;
+            background: #e9f2e0;
+            box-shadow: 0 0 8px rgba(143, 174, 110, .45)
+        }
+
+        .slot.on .kb {
+            color: #7c9b5e
+        }
+
+        .slot.empty {
+            border-style: dashed;
+            background: transparent;
+            cursor: default;
+            opacity: .45
+        }
+
+        .slot.empty:hover {
+            border-color: #c5c5c5
+        }
+
+        .slot.empty:active {
+            transform: none
+        }
+
+        #signEditor {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px) scale(.9);
+            background: rgba(255, 255, 255, .98);
+            border: 1px solid #bbb;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font: 12px/1.5 monospace;
+            color: #444;
+            z-index: 10;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .3s ease, transform .35s cubic-bezier(.34, 1.5, .64, 1), visibility .3s
+        }
+
+        #signEditor.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0) scale(1)
+        }
+
+        #signEditor .lbl {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        #signInput {
+            font: 14px monospace;
+            padding: 6px 10px;
+            width: 200px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color .25s, box-shadow .25s
+        }
+
+        #signInput:focus {
+            border-color: #8fae6e;
+            box-shadow: 0 0 0 3px rgba(143, 174, 110, .25)
+        }
+
+        #signOk {
+            font: 12px monospace;
+            padding: 7px 16px;
+            margin-left: 8px;
+            border: 1px solid #8fae6e;
+            background: #8fae6e;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background .2s, transform .15s, box-shadow .2s
+        }
+
+        #signOk:hover {
+            background: #7c9b5e;
+            box-shadow: 0 2px 8px rgba(124, 155, 94, .5)
+        }
+
+        #signOk:active {
+            transform: scale(.93)
+        }
+
+        #hint {
+            position: fixed;
+            left: 50%;
+            bottom: 72px;
+            transform: translateX(-50%);
+            background: rgba(46, 150, 100, .92);
+            color: #fff;
+            border-radius: 20px;
+            padding: 7px 20px;
+            font: 13px/1 monospace;
+            z-index: 5;
+            box-shadow: 0 3px 12px rgba(46, 150, 100, .4);
+            opacity: 0;
+            transition: opacity .2s;
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+        #hint.show {
+            opacity: 1
+        }
+
+        #hint b {
+            color: #c8f5d8;
+            margin: 0 2px
+        }
+
+        #clock {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            background: rgba(255, 255, 255, .9);
+            border: 1px solid #ccc;
+            border-radius: 14px;
+            padding: 5px 12px;
+            font: 12px monospace;
+            color: #555;
+            z-index: 5;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .12);
+            user-select: none;
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+        #crosshair {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255, 255, 255, .95);
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(0, 0, 0, .55), inset 0 0 3px rgba(0, 0, 0, .35);
+            z-index: 6;
+            pointer-events: none;
+            display: none
+        }
+
+        #crosshair.show {
+            display: block
+        }
+
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 2px;
+            height: 2px;
+            margin: -1px 0 0 -1px;
+            background: #fff;
+            border-radius: 50%
+        }
+
+        #lockTip {
+            position: fixed;
+            left: 50%;
+            top: 60%;
+            transform: translateX(-50%);
+            background: rgba(46, 150, 100, .88);
+            color: #fff;
+            border-radius: 16px;
+            padding: 6px 16px;
+            font: 12px/1 monospace;
+            z-index: 6;
+            box-shadow: 0 2px 10px rgba(46, 150, 100, .4);
+            opacity: 0;
+            transition: opacity .25s;
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+        #lockTip.show {
+            opacity: 1
+        }
+
+        #flashOverlay {
+            position: fixed;
+            inset: 0;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9
+        }
+
+        #joyZone {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 45vw;
+            height: 60vh;
+            z-index: 4;
+            display: none;
+            touch-action: none
+        }
+
+        body.touch #joyZone {
+            display: block
+        }
+
+        #joyBase {
+            position: fixed;
+            width: 116px;
+            height: 116px;
+            border-radius: 50%;
+            border: 2px solid rgba(46, 150, 100, .55);
+            background: rgba(255, 255, 255, .22);
+            z-index: 4;
+            display: none;
+            pointer-events: none;
+            transform: translate(-50%, -50%)
+        }
+
+        #joyKnob {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 48px;
+            height: 48px;
+            margin: -24px 0 0 -24px;
+            border-radius: 50%;
+            background: rgba(46, 150, 100, .78);
+            border: 2px solid #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .3)
+        }
+
+        .touchBtn {
+            position: fixed;
+            z-index: 4;
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, .85);
+            background: rgba(46, 150, 100, .62);
+            color: #fff;
+            font: bold 14px monospace;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .25)
+        }
+
+        body.touch .touchBtn {
+            display: flex
+        }
+
+        .touchBtn.pressed {
+            background: rgba(46, 150, 100, .95);
+            transform: scale(.9)
+        }
+
+        #btnJump {
+            right: 20px;
+            bottom: 110px
+        }
+
+        #btnAct {
+            right: 20px;
+            bottom: 38px
+        }
+
+        #btnSprint {
+            right: 104px;
+            bottom: 38px
+        }
+
+        #btnCast {
+            right: 104px;
+            bottom: 110px;
+            background: rgba(150, 90, 200, .62)
+        }
+
+        #btnCast.pressed {
+            background: rgba(150, 90, 200, .95)
+        }
+
+        body.touch #hint {
+            bottom: 185px
+        }
+
+        body.touch #signInput {
+            font-size: 16px
+        }
+
+        /* ===== 便签编辑器 + 挂画链接编辑器 ===== */
+        #noteEditor,
+        #picEditor {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px) scale(.9);
+            background: rgba(255, 255, 255, .98);
+            border: 1px solid #bbb;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font: 12px/1.5 monospace;
+            color: #444;
+            z-index: 10;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .3s ease, transform .35s cubic-bezier(.34, 1.5, .64, 1), visibility .3s
+        }
+
+        #noteEditor.show,
+        #picEditor.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0) scale(1)
+        }
+
+        #noteEditor .lbl,
+        #picEditor .lbl {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        #noteInput {
+            font: 14px monospace;
+            padding: 6px 10px;
+            width: 200px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color .25s, box-shadow .25s
+        }
+
+        #picInput {
+            font: 14px monospace;
+            padding: 6px 10px;
+            width: 260px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color .25s, box-shadow .25s
+        }
+
+        #noteInput:focus,
+        #picInput:focus {
+            border-color: #8fae6e;
+            box-shadow: 0 0 0 3px rgba(143, 174, 110, .25)
+        }
+
+        #noteOk,
+        #picOk {
+            font: 12px monospace;
+            padding: 7px 16px;
+            margin-left: 8px;
+            border: 1px solid #8fae6e;
+            background: #8fae6e;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background .2s, transform .15s, box-shadow .2s
+        }
+
+        #noteOk:hover,
+        #picOk:hover {
+            background: #7c9b5e;
+            box-shadow: 0 2px 8px rgba(124, 155, 94, .5)
+        }
+
+        #noteOk:active,
+        #picOk:active {
+            transform: scale(.93)
+        }
+
+        body.touch #noteInput,
+        body.touch #picInput {
+            font-size: 16px
+        }

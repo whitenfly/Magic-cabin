@@ -1,0 +1,92 @@
+---
+/**
+ * `/posts/<slug>/` —— 完整静态正文（J1.5.4 的门厅之外那一半）
+ * ============================================================================
+ * 这一页是**内容站的脊梁**：SEO、OG、JSON-LD、无 JS 可读全文全靠它（验收 `BB8`）。
+ *
+ * 与 3D 的关系（`docs/BuildPlaning/03` §5.4 的三个契约）：
+ *   `J6.7` 的深链接要落到**同一个规范 URL** `/posts/<slug>/`（验收 `BB7`）。
+ *   因此本文件的 `hrefOf()` 与 3D 侧的 `pushState` 必须用同一条 slug 规则 ——
+ *   真源是 `src/blog/posts.js`（两边都读它，而不是各自拼字符串）。
+ *
+ * ⚠️ `J1.5` 阶段这里**不做**：remark/rehype 插件、Shiki 高亮、Pagefind、JSON-LD 的完整字段。
+ *    那些属于 `J5.2`–`J5.5`。本阶段的目标是"路由能生成、正文能出、URL 规则定死"。
+ */
+import { render } from 'astro:content'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { isoDate, loadPosts, slugOf, summaryOf } from '@/blog/posts.js'
+import { siteConfig } from '@/config/site.config.js'
+
+export async function getStaticPaths() {
+  const posts = await loadPosts()
+  return posts.map((post) => ({
+    params: { slug: slugOf(post) },
+    props: { post },
+  }))
+}
+
+const { post } = Astro.props
+const { Content } = await render(post)
+const description = summaryOf(post, 160)
+
+/** JSON-LD：让每篇文章成为一条可被搜索引擎理解的结构化数据 */
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: post.data.title,
+  description,
+  datePublished: post.data.date.toISOString(),
+  dateModified: (post.data.updated ?? post.data.date).toISOString(),
+  author: { '@type': 'Person', name: siteConfig.author.name },
+  keywords: (post.data.tags ?? []).join(', '),
+}
+---
+
+<BaseLayout
+  pageTitle={post.data.title}
+  description={description}
+  ogType="article"
+  ogImage={post.data.cover}
+>
+  <main class="page" data-slug={slugOf(post)}>
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/archive/">全部文章</a>
+      </nav>
+
+      <article>
+        <h1>{post.data.title}</h1>
+        <p class="page-meta">
+          <time datetime={isoDate(post.data.date)}>{isoDate(post.data.date)}</time>
+          {post.data.updated && (
+            <span> · 修订于 <time datetime={isoDate(post.data.updated)}>{isoDate(post.data.updated)}</time></span>
+          )}
+          {post.data.series && (
+            <span> · 系列「{post.data.series}」第 {post.data.seriesOrder ?? '?'} 篇</span>
+          )}
+        </p>
+
+        {(post.data.tags ?? []).length > 0 && (
+          <ul class="tag-list" style="margin:0.8rem 0 1.6rem">
+            {post.data.tags.map((tag) => (
+              <li>
+                <a href={`/tags/${tag}/`}>#{tag}</a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <hr class="foyer-rule" />
+
+        <div class="page-body">
+          <Content />
+        </div>
+      </article>
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+</BaseLayout>

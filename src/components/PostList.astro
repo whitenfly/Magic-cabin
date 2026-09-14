@@ -1,0 +1,51 @@
+---
+/**
+ * 文章列表（站点侧，纯展示、零客户端 JS）
+ * ============================================================================
+ * 三处共用同一个组件：首页门厅、`/archive/`、`/tags/<tag>/`。
+ * **三处不各写一份** —— 否则排序、摘要、链接规则会各自漂移。
+ *
+ * 样式类名都在 `BaseLayout.astro` 的全局样式里（`.post-list` / `.post-title` / `.post-meta` …）。
+ */
+import { hrefOf, isoDate, summaryOf } from '@/blog/posts.js'
+
+const { items, showSummary = true, heading = null } = Astro.props
+---
+
+{
+  heading && (
+    <ul class="post-list">
+      <li style="border:0;padding:0">
+        <h2 style="margin:0">{heading}</h2>
+      </li>
+    </ul>
+  )
+}
+
+<ul class="post-list">
+  {
+    items.map((post) => (
+      <li>
+        <a href={hrefOf(post)}>
+          {post.data.pinned && <span class="pin" title="置顶">★</span>}
+          <span class="post-title">{post.data.title}</span>
+          <div class="post-meta">
+            <time datetime={isoDate(post.data.date)}>{isoDate(post.data.date)}</time>
+            {(post.data.tags ?? []).length > 0 && (
+              <span> · {(post.data.tags ?? []).join(' / ')}</span>
+            )}
+          </div>
+          {showSummary && <p class="post-summary">{summaryOf(post)}</p>}
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+{
+  items.length === 0 && (
+    <p class="post-meta">
+      还没有文章。<code>src/content/posts/</code> 里放一个 <code>.md</code> 就会出现在这里。
+    </p>
+  )
+}

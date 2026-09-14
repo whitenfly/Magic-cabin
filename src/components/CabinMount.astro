@@ -1,0 +1,124 @@
+---
+/**
+ * ★ 3D 岛的宿主组件（J1.5.2）★
+ * ============================================================================
+ * **全站唯一一处允许 Astro 触碰 3D 的地方。**
+ *
+ * 架构不变量 `N12`（02 §5）：
+ *   ① 3D 侧不得 import `*.astro`
+ *   ② Astro 侧不得 import `cabin/**` 的实现 —— **唯一例外就是本文件里的这一次挂载**
+ *
+ * 为什么这个岛是 `client:only`：
+ *   小屋启动的第一帧就要操作 WebGL 与 `document.body`，没有任何"服务端渲染"的语义。
+ *   交给 SSR 只会产出一段水合时立刻被丢弃的 HTML，还多付一次序列化成本。
+ *
+ * 为什么 `src/cabin/**` **一行不改**：
+ *   `src/main.js` 已经是一个"零依赖入口"（`void bootCabin()`），岛只需要 import 它。
+ *   3D 侧完全不知道自己在 Astro 里还是在一个裸 HTML 里运行 —— 这正是决策 3 要的边界。
+ *
+ * 门厅交接（K18 / `ArtLine-Part/03` §8.3）：
+ *   本组件**不写"加载中"文案**（那属于门厅），只负责在 3D 站稳之后把首屏让给小屋。
+ *   判据是 `html[data-cabin="ready"]` —— `boot.js` 在最后写入的标记。
+ *
+ * 组件本身只产出一个**零尺寸的标记节点**（`display:none`），
+ * 真正的逻辑全在下面的模块脚本里 —— 这样岛上不会多出一层会影响布局的 DOM。
+ *
+ * 参数：`bare`（`?bare=1`）—— 纯 3D 模式：立即启动、不等待、不接管门厅。
+ *   这条路供 `J0.4` 视觉回归与"直接开玩"使用（见 `BaseLayout.astro` 注释 ③）。
+ */
+import { cabinConfig } from '@/config/cabin.config.js'
+
+const { bare = false } = Astro.props
+
+/** 是否立即启动 3D：`?bare=1`，或已配置为"必须由用户推门" */
+const immediate = Boolean(bare) || cabinConfig.foyer.desktop === 'button'
+---
+
+<span
+  id="cabin-mount"
+  data-bare={bare ? '1' : '0'}
+  data-foyer-desktop={cabinConfig.foyer.desktop}
+  data-foyer-mobile={cabinConfig.foyer.mobile}
+  hidden
+></span>
+
+<script>
+  // ⚠️ 这里直接 import 3D 的启动函数，**而不是 `src/main.js`**：
+  //    `main.js` 是**零构建路径的入口**（它 import 之后就 `void bootCabin()`，
+  //    没有任何导出，由 `index.html` 的 `<script type="module">` 拉起）。
+  //    岛需要的是"函数"，把它 import 进来会在打包期报 `Missing export`；
+  //    而且那样会在零构建路径之外**多跑一次**启动。
+  //    直接指向 `cabin/boot.js` 与 `main.js` 指向的是**同一个函数**，不新增第二个真源。
+  import { bootCabin } from '../cabin/boot.js'
+  import { cabinConfig } from '../config/cabin.config.js'
+  import { homeConfig } from '../config/home.config.js'
+
+  // ── 3D 启动：全站唯一的挂载点 ────────────────────────────────────────
+  // ⚠️ 这里是**唯一**允许触碰 3D 的地方（不变量 N12）。
+  //    不要在这里加业务逻辑 —— 事件监听、DOM 结构、场景装配都属于 cabin/** 或 blog/**。
+  void bootCabin()
+
+  // ── 门厅交接：3D 就绪后把首屏让给小屋 ───────────────────────────────
+  // 时序由 src/config/ 驱动（`cabin.config.foyer` + `home.config.mountDelayMs`），
+  // 组件里不发明第二套默认值（不变量 N11：config 是唯一的默认值来源）。
+  const mountEl = document.getElementById('cabin-mount')
+  const html = document.documentElement
+  const foyerEl = document.getElementById('cabin-foyer')
+  const enterBtn = document.getElementById('cabin-enter')
+
+  /** `?bare=1` → 立即；否则按 foyer 策略 */
+  const bare = mountEl?.dataset.bare === '1'
+  /** 桌面端是否由用户显式"推门"（'button'）还是 3D 自己在后台起来（'preload'） */
+  const gated = cabinConfig.foyer.desktop === 'button'
+  /** 是否触摸优先设备（与 monolith 第 40–41 行的判据同源） */
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false
+
+  /** 3D 是否已经挂载完成（boot.js 最后写入的标记） */
+  const cabinReady = () => html.dataset.cabin === 'ready'
+
+  /** 等 3D 就绪；超时按"起不来"处理，门厅继续留在原位（不弹错误框） */
+  function whenCabinReady(timeoutMs) {
+    return new Promise((resolve) => {
+      if (cabinReady()) return resolve(true)
+      const t0 = Date.now()
+      const tick = () => {
+        if (cabinReady()) return resolve(true)
+        if (Date.now() - t0 > timeoutMs) return resolve(false)
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+  }
+
+  /** 把门厅从 DOM 里摘掉：3D 已经在画布上，门厅再留着只会抢滚轮与指针事件 */
+  function retireFoyer() {
+    foyerEl?.remove()
+  }
+
+  function failCabin(buttonText) {
+    html.dataset.cabinState = 'failed'
+    if (enterBtn) {
+      enterBtn.hidden = false
+      if (buttonText) enterBtn.textContent = buttonText
+    }
+  }
+
+  if (!foyerEl) {
+    // `?bare=1`（或门厅被关掉）：什么都不用做，3D 已经独占视口
+  } else if (bare || (!gated && !coarse)) {
+    // 桌面预载：先让文字出来，等 3D 站稳再接管（`mountDelayMs` 把主线程先让给首屏 HTML）
+    setTimeout(() => {
+      void whenCabinReady(15000).then((ok) => (ok ? retireFoyer() : failCabin()))
+    }, homeConfig.mountDelayMs)
+  } else {
+    // 移动端 / 'button' 策略：门厅就是主页，进 3D 需要用户显式动作（决策点 OD-4 的建议默认值）
+    if (enterBtn) {
+      enterBtn.hidden = false
+      enterBtn.addEventListener('click', () => {
+        if (cabinReady()) return retireFoyer()
+        enterBtn.textContent = '正在推门…'
+        void whenCabinReady(20000).then((ok) => (ok ? retireFoyer() : failCabin('门推不开，再试一次')))
+      })
+    }
+  }
+</script>

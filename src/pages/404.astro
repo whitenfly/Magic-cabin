@@ -1,0 +1,34 @@
+---
+/**
+ * `/404/` —— 未找到
+ * ============================================================================
+ * 保持进屋的路：任何死链都不应该把用户困在一张白页上。
+ * ⚠️ `pnpm serve`（`scripts/serve.mjs`）在托管 `dist/` 时会把这个文件当作 404 正文返回。
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { siteConfig } from '@/config/site.config.js'
+---
+
+<BaseLayout pageTitle="找不到这一页" description="这一页不在屋里。">
+  <main class="page">
+    <div class="page-inner">
+      <nav class="page-nav">
+        <a href="/">← 回到小屋</a>
+        <a href="/archive/">归档</a>
+      </nav>
+
+      <h1>找不到这一页</h1>
+      <p class="page-meta">可能是链接写错了，也可能是我把东西挪了地方。</p>
+      <hr class="foyer-rule" />
+      <p>从这几个入口进去吧：</p>
+      <ul class="tag-list">
+        <li><a href="/">门厅</a></li>
+        <li><a href="/archive/">归档</a></li>
+        <li><a href="/tags/">标签</a></li>
+        <li><a href="/about/">关于</a></li>
+      </ul>
+
+      <footer set:html={siteConfig.footerHtml} />
+    </div>
+  </main>
+</BaseLayout>
