@@ -1,10 +1,14 @@
-# 版本管理规范（Git 分支 / 版本号 / 发布与回滚）
+# 版本管理规范（Git 分支 / 版本号 / 发布与回滚）★ 强制执行
 
 > 本文档是**版本管理的唯一入口**：分支怎么用、版本号怎么定、一个开发任务如何变成一个版本、
 > 出错怎么退回去。制定依据是 [`BuildPlaning/01-完善路线图.md`](./BuildPlaning/01-完善路线图.md)
 > 的执行原则 3「**一步一提交，一提交一验证**」——本文把它放大到**一个开发任务 = 一个版本**。
 >
 > 路线图回答"**做什么、按什么顺序做**"；本文只回答"**做完之后怎么留下一个可回退的版本**"。
+>
+> ★ **后续所有阶段的开发都必须遵守本文流程。** 流程已工具化（`scripts/release.mjs` + git 钩子）：
+> 不必记命令，跑 `pnpm task:start` / `pnpm task:done` / `pnpm ship` 即可，动作会自动记入
+> `GitPushHistory.md`（见 §11、§12）。
 
 ---
 
@@ -23,6 +27,16 @@ git tag -a v0.2.0 -m "J2 小屋核心设施"
 ```
 
 **核心规矩一句话**：**只有 `main` 上的 commit 才配叫「稳定版」**；`dev` 上的东西永远是「开发版」，哪怕门禁全绿。
+
+**推荐直接用工具**（命令细节见 §11，每个动作都会自动记入 `GitPushHistory.md`）：
+
+```bash
+pnpm task:start J2.1 camera-rig   # ① 开任务分支（自动前置检查 + 记录）
+# …… 开发 ……
+pnpm task:done J2.1               # ② 门禁 → 合并回 dev → 打 v0.2.0-dev.N tag → 记录
+pnpm ship                         # ③ 生成待人工执行的推送命令（工具绝不自动 push）
+pnpm git:status                   # ④ 随时查看分支 / 未推送 / tag 同步状态（只读）
+```
 
 ---
 
@@ -299,3 +313,90 @@ git log v0.1.5..HEAD --oneline          # 基线之后都干了什么
 git log --oneline --grep="J2.1"         # 某个任务的全部提交
 git show v0.1.5 --stat                  # 某个版本改了什么
 ```
+
+---
+
+## 11. 版本管理命令速查（★ 工具化）
+
+流程已封装成 `scripts/release.mjs`，通过 `package.json` 脚本调用。**不需要记 git 命令细节**，
+每个动作都会自动追加到 `GitPushHistory.md`（§12）。
+
+| 命令 | 作用 | 会做的事 |
+|---|---|---|
+| `pnpm task:start J2.1 camera-rig` | 开任务分支 | 前置检查（是否在 `dev`、工作区是否干净、`dev` 是否有未推送）→ `git switch -c task/J2.1-camera-rig` → 追加记录 |
+| `pnpm task:verify J2.1` | 跑门禁并记录 | `typecheck + verify + build`，逐项记录耗时与结果（`-- --quick` 只跑前两项） |
+| `pnpm task:done J2.1` | 收尾一个任务 | 校验工作区干净 → 跑完整门禁 → `git merge --no-ff` 回 `dev` → 打 `v0.2.0-dev.N` tag → 删任务分支 → 追加记录与推送命令 |
+| `pnpm git:status` | 仓库状态总览 | 分支 / HEAD / 工作区 / 未推送提交 / 每个 tag 的同步状态。**只读，不改任何文件** |
+| `pnpm ship` | 生成推送命令 | 按实际 git 状态生成**待人工执行**的 push 命令并追加记录。**绝不执行 push** |
+| `pnpm ship main` | 生成发布计划 | `dev` → `main` 的合并 + 正式版 tag 的一整套命令（含要手工改的 `package.json` version） |
+| `pnpm git:history` | 查看自动记录区 | 打印 `GitPushHistory.md` 的追加记录 |
+| `pnpm hooks:install` | 安装 git 钩子 | 把 `scripts/hooks/*` 装到 `.git/hooks/`（换机器 / 重新 clone 后跑一次） |
+
+**`pnpm task:done` 等价于手工执行**（§3 的 ③④⑤⑥ 步），它是推荐路径。
+
+> **推送永远由人工执行。** 工具只生成命令：SSH 推送在不同环境下表现不一致
+> （实测受限沙箱里 `ssh.exe` 报 `couldn't create signal pipe, Win32 error 5`），
+> 交给人工在普通终端执行最可靠。工具会在能**证明**命令已执行时自动把 `[ ]` 翻成 `[x]`。
+
+---
+
+## 12. 自动记录与 `GitPushHistory.md`
+
+### 12.1 它是什么
+
+`GitPushHistory.md` 是**本地专用的 Git 操作流水**：每阶段的 commit / tag / branch / push 命令与结果，
+以及**等待人工执行的命令**。它在 `.gitignore` 里，**不上传 GitHub**，但保留在工作区。
+
+### 12.2 维护铁律（工具严格遵守）
+
+1. **只增不改**：历史记录一旦写入就不再修改，新记录追加在末尾。
+2. **唯一允许的原地改动**：把**已执行**命令的 `[ ]` 翻成 `[x]`（完成标记）。
+3. **标记不猜**：只有 git 状态能证明命令确实执行了才翻；证明不了就保持 `[ ]`。
+4. **推送由人工执行**：工具绝不自动 push。
+5. 失败与报错如实记录——否则下次还会踩同一个坑。
+
+### 12.3 自动记录怎么发生
+
+`scripts/hooks/` 下有两条钩子，`pnpm hooks:install` 安装到 `.git/hooks/`：
+
+| 钩子 | 触发时机 | 记录内容 |
+|---|---|---|
+| `post-commit` | 每次 `git commit` 成功后 | 分支 / HEAD / 提交主题 / 该 commit 上的 tag |
+| `post-merge` | 每次 `git merge` 成功后 | 同上（git 在 merge 时执行 post-merge 而非 post-commit，两者不会重复） |
+
+钩子的设计原则是**绝不阻塞 git**：输出全部丢弃、任何异常都以 `exit 0` 收场、
+且**跳过一切网络请求**（否则每次提交都要等 `ls-remote`，断网时会一直挂着）。
+
+> ⚠️ `.git/hooks/` 不受版本控制，clone 不到新机器 —— 所以钩子源文件放在 `scripts/hooks/` 并提交，
+> 换环境后跑一次 `pnpm hooks:install` 即可恢复自动化。
+
+### 12.4 命令执行状态是怎么判定的
+
+| 命令 | 判定依据 | 翻成 `[x]` 的条件 |
+|---|---|---|
+| `git push origin main …` | 本地远端跟踪引用 | `origin/main` 存在 且 `main` 不 ahead |
+| `git push -u origin dev` | 同上 | `origin/dev` 存在 且 `dev` 不 ahead |
+| `git push origin v0.2.0` | 远端 tag 列表 | `git ls-remote` 确认该 tag 已在远端 |
+| 其他命令 | —— | **不自动标记**（人工判断） |
+
+**受限环境的表现**：在禁止创建命名管道的沙箱里 `git ls-remote` 必定失败（exit 128），
+此时脚本把 tag 状态标为 **`?` 未验证**，而**不是**「未推送」——
+这两者含义完全不同，不要混为一谈。
+
+```powershell
+# 人工确认 tag 是否已推送（在能联网的普通终端执行）
+git ls-remote --tags origin
+```
+
+### 12.5 强制红线
+
+| # | 红线 | 为什么 |
+|---|---|---|
+| 1 | 不在 `main` 上直接开发 | `main` 是稳定版；所有改动经 `dev` 合并进来 |
+| 2 | 不在 `dev` 上打正式版 tag（不带 `-dev` 的那种） | 否则「稳定版」失去意义 |
+| 3 | 任务收尾必须走 `pnpm task:done`（或手写等价流程） | 保证「一个任务 = 一个可回退的版本」边界 |
+| 4 | 门禁未全绿不合并 | 视觉 / 冒烟 / 性能基线是判据，不是装饰 |
+| 5 | 不改写已推送的历史（`push --force` 到 `main`/`dev`） | 会让他人和 CI 的引用失效 |
+| 6 | 不在 `FrontProj/` 或 `Project/` 再 `git init` | 见 §7，会把本仓库变成 gitlink |
+| 7 | `GitPushHistory.md` 只增不改（除 `[ ]`→`[x]`） | 它是交接凭据，改了就失去可追溯性 |
+| 8 | 不给 `package.json` 加 `packageManager` 字段 | 见 §8.1，会重写 lockfile |

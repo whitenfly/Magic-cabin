@@ -134,6 +134,20 @@ git tag -a v0.2.0-dev.1 -m "J2.1 完成"       # ③ 开发版快照
 | 什么时候发稳定版 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §4 |
 | 任务完成时该跑哪些门禁 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §5 |
 | 做坏了怎么退回去 | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §6 |
+| **有哪些命令、怎么用** | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §11 |
+| **操作记录写在哪、怎么自动记** | [`docs/VERSIONING.md`](./docs/VERSIONING.md) §12 |
+
+**流程已工具化**（`scripts/release.mjs` + git 钩子），日常只需要四条命令：
+
+```bash
+pnpm task:start J2.1 camera-rig   # 开任务分支
+pnpm task:done J2.1               # 收尾：门禁 → 合并回 dev → 打 -dev.N tag
+pnpm ship                         # 生成待人工执行的推送命令（不自动 push）
+pnpm git:status                   # 只读：分支 / 未推送 / tag 同步状态
+```
+
+> 每个动作都会**自动追加**到 `GitPushHistory.md`（本地专用、不进版本库，规则见 §12）：
+> `post-commit` / `post-merge` 钩子负责记录，换机器后跑一次 `pnpm hooks:install` 恢复。
 
 > ⚠️ `Magic-cabin` 自身就是仓库根，**不要在 `FrontProj/` 或 `Project/` 再 `git init`**
 > —— 那会让它变成 gitlink，任务级版本边界会全部失效。见 `docs/VERSIONING.md` §7。

@@ -1,0 +1,16 @@
+#!/bin/sh
+# 魔法小屋 · post-commit 钩子：提交后自动把这次提交写进 GitPushHistory.md
+#
+# 设计原则：绝不阻塞 git。
+#   - 一切输出丢弃（>/dev/null 2>&1）
+#   - 任何失败都以 exit 0 收场
+#   - 记录目标 GitPushHistory.md 已在 .gitignore 中，不会污染提交
+#
+# 恢复方式（换机器 / 重新 clone 后）：pnpm hooks:install
+# 详见 docs/VERSIONING.md §12
+
+if command -v node >/dev/null 2>&1; then
+  node scripts/release.mjs record "提交" --kind=commit >/dev/null 2>&1 || true
+fi
+
+exit 0

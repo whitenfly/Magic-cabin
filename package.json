@@ -34,7 +34,14 @@
     "baseline:perf": "node tests/e2e/perf.mjs --update",
     "verify:visual": "node tests/visual/capture.mjs --rounds=3",
     "analyze:png": "node scripts/analyze-png.mjs",
-    "links": "node scripts/check-links.mjs docs/*.md README.md"
+    "links": "node scripts/check-links.mjs docs/*.md README.md",
+    "task:start": "node scripts/release.mjs start",
+    "task:verify": "node scripts/release.mjs verify",
+    "task:done": "node scripts/release.mjs done",
+    "git:status": "node scripts/release.mjs status",
+    "git:history": "node scripts/release.mjs history",
+    "ship": "node scripts/release.mjs ship",
+    "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "three": "0.128.0"
