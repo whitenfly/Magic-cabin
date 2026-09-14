@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 YIBI2333 (original author — 线稿风格魔法小屋 / line-art-style-magic-cabin)
+Copyright (c) 2026 whitenfly (Magic-cabin — 模块化重构、Astro 站点与内容管线)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 版权归属说明（中文，仅为澄清，不改变上述 MIT 条款）
+
+本项目是**衍生作品**，包含两部分来源：
+
+| 来源 | 范围 | 版权 |
+|---|---|---|
+| **YIBI2333** —— 原始「线稿风格魔法小屋」（单文件版，约 9811 行） | `src/cabin/legacy/monolith.js` 及由其搬迁而来的 3D 实现、场景几何与交互设计、程序化生成的纹理与音效编排 | 原作者所有 |
+| **whitenfly** —— Magic-cabin 模块化重构与扩展 | 工程化骨架、Astro 站点与内容管线、`src/config` 配置层、`src/blog` 内核、四条测试安全网（视觉 / 冒烟 / 性能 / 静态门禁）、`docs/` 规划与实施记录 | 本项目维护者所有 |
+
+两部分**均以 MIT 协议授权**，使用、修改、分发时请保留本文件（含上述版权声明）。
+
+- 上游项目：`line-art-style-magic-cabin`（作者 [YIBI2333](https://github.com/YIBI2333)）
+- 本项目仓库：<https://github.com/whitenfly/Magic-cabin>
+
+> 说明：MIT 许可证**要求保留版权声明与许可声明**，但不要求衍生作品继续使用 MIT。
+> 本项目选择继续使用 MIT。

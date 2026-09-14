@@ -180,6 +180,7 @@ Magic-cabin/
 ├─ vite.single.config.ts       # ★ J1.5.6 第二条产线（单文件产物）
 ├─ vite.config.ts              # ⬜ 只承担零构建兜底（受限环境唯一能跑的路径，不可删）
 ├─ index.html                  # ⬜ 零构建入口（importmap + ./src/main.js）
+├─ LICENSE                     # ★ MIT 协议（含上游 YIBI2333 与本项目的版权归属说明）
 ├─ public/sounds/*.mp3         # 11 个音效
 ├─ scripts/
 │  ├─ serve.mjs                # 零依赖静态服务器（默认托管 dist/，--legacy 托管仓库根）
@@ -275,4 +276,4 @@ Magic-cabin/
 | 内容 | Markdown + front-matter → Zod schema（`src/content.config.ts`）→ 静态页 / 归档 / 标签 / RSS |
 | 语言 | JS 为主，TS 渐进（`allowJs: true`）；新增代码用 JSDoc 标注类型 |
 | 资源 | **0 KB 外部模型/贴图** —— 全部几何与纹理程序化生成（`BB13`） |
-| 协议 | MIT（原作者 YIBI2333） |
+| 协议 | **MIT** —— 见 [`LICENSE`](./LICENSE)；上游原作为 [YIBI2333](https://github.com/YIBI2333) 的「线稿风格魔法小屋」，版权归属见文件内说明 |

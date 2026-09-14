@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.5",
   "type": "module",
+  "license": "MIT",
   "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J1.5：Astro 落地）",
   "scripts": {
     "dev": "astro dev",
