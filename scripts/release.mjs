@@ -892,21 +892,131 @@ function cmdHistory() {
   say(autoBody(text).trim());
 }
 
+/**
+ * 从 `git reflog` 的一行里解析出被合并的分支名。
+ *
+ * 输入形如：`merge task/J2.11-release-flow-docs: Merge made by the 'ort' strategy.`
+ * （`reflog -1 --format=%gs` 的输出）
+ *
+ * 抽成纯函数是为了可测 —— 这是"钩子路径能否重建出命令"的关键一步。
+ */
+function parseMergeSource(reflogSubject) {
+  const m = /^merge\s+(.+?):/.exec(String(reflogSubject).trim());
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * ★ 钩子路径：由 git 状态**重建**等价命令。
+ *
+ * 为什么需要它：`post-commit` / `post-merge` 钩子是 git 拉起的**独立进程**，
+ * 它只知道"发生了一次提交/合并"，**拿不到用户敲的那条命令行**——
+ * 所以钩子写出的记录里没有「实际执行」段（那段是**本进程**跑过的命令）。
+ *
+ * 但 git 自己把关键信息都记下来了，足以还原出一条**等价且可复制复现**的命令：
+ *   · 被合并的分支   ← `git reflog -1 --format=%gs`（`merge <branch>: Merge made by …`）
+ *   · 是否 `--no-ff` ← `git rev-list --parents -n 1 HEAD` 的父提交个数（2 个 = 合并提交）
+ *   · `-m` 的内容    ← `git log -1 --pretty=%s`
+ *
+ * ⚠️ 记录里会**明确标注"重建"**，与工具路径的「实际执行」（原样捕获）区分开 ——
+ *    两者可信度不同，混在一起会让人误以为钩子也看见了原命令。
+ *
+ * @returns {string|null} 重建出的命令；无法判定时返回 `null`（宁可不写，也不猜）
+ */
+function reconstructOp(kind) {
+  if (kind === 'merge') {
+    const reflog = g(['reflog', '-1', '--format=%gs'], { allowFail: true }).trim();
+    const src = parseMergeSource(reflog);
+    if (!src) return null;
+    const subject = g(['log', '-1', '--pretty=%s'], { allowFail: true }).trim();
+    const parents = g(['rev-list', '--parents', '-n', '1', 'HEAD'], { allowFail: true }).trim().split(/\s+/).length - 1;
+    const flag = parents >= 2 ? '--no-ff ' : '';
+    return `git merge ${flag}${src}${subject ? ` -m "${subject}"` : ''}`;
+  }
+  if (kind === 'commit') {
+    const subject = g(['log', '-1', '--pretty=%s'], { allowFail: true }).trim();
+    return subject ? `git commit -m "${subject}"` : null;
+  }
+  return null;
+}
+
+/* ─────────── exec：模型执行 git 的**唯一**入口（J2 工具改造）───────────
+ *
+ * 需求边界（2026-09-14 明确）：**模型在开发中自动执行的每一条 git 命令都必须被记录**；
+ * **不包括人工在终端敲的命令** —— 所以不走 git 的 trace2（那会把人工命令也卷进来，
+ * 还得改用户级 git config）。边界划在"模型走这个入口"上，更精确，也不动用户环境。
+ *
+ * 用法（模型在会话里执行 git 时一律走它，不直接敲 git）：
+ *
+ *     node scripts/release.mjs exec -- git add -A
+ *     node scripts/release.mjs exec -- git commit -F .cache/commit-msg.txt
+ *     node scripts/release.mjs exec -- git tag -l "v0.2*"        # 只读查询同样记录
+ *
+ * 工具代为执行后，本次命令会**原样**写进本次记录（含只读查询）——
+ * 于是"模型跑过什么"既不依赖事后回忆，也不依赖 git 的追踪机制。
+ */
+/**
+ * 从 `exec` 的参数里取出真正的 git 参数（纯函数，可测）。
+ *
+ * 支持两种写法：
+ *   `exec -- git status --short`  → `['status', '--short']`
+ *   `exec git status --short`     → 同上（`--` 是可选的，但推荐写，避免歧义）
+ */
+function parseExecArgs(args) {
+  const sep = args.indexOf('--');
+  let argv = sep >= 0 ? args.slice(sep + 1) : args;
+  if (argv[0] === 'git' || argv[0] === 'git.exe') argv = argv.slice(1);
+  return argv;
+}
+
+function cmdExec(args) {
+  const argv = parseExecArgs(args);
+  if (argv.length === 0) die('用法：node scripts/release.mjs exec -- git <args…>');
+  step(`exec: git ${argv.map(fmtArg).join(' ')}`);
+  const r = git(argv, { allowFail: true });
+  if (r.out) process.stdout.write(r.out);
+  const flipped = appendRecord(
+    buildEntry({
+      task: `git ${argv[0]}${argv[1] && !argv[1].startsWith('-') ? ` ${argv[1]}` : ''}`,
+      kind: 'exec',
+      st: collectLight(),
+      // ★ 显式传入（不依赖 isMutatingGit 的采集）：只读查询也要留下原命令
+      ops: [`git ${argv.map(fmtArg).join(' ')}`],
+      body: [`- 退出码：${r.status}${r.status === 0 ? '' : '  ⚠️ 非零'}`],
+      note: '本命令由模型通过 exec 入口执行并自动记录（见 docs/VERSIONING.md §13）。',
+    }),
+  );
+  reportFlipped(flipped);
+  if (r.status !== 0) process.exitCode = r.status;
+}
+
 function cmdRecord(args) {
   const kindArg = args.find((a) => a.startsWith('--kind='));
   const kind = kindArg ? kindArg.slice('--kind='.length) : 'manual';
   const task = args.filter((a) => !a.startsWith('--')).join(' ') || '(未命名)';
+  // 事后补登记：--ops="git add -A"（可多次传入）—— 给"忘了走 exec"的场景兜底
+  const extraOps = args.filter((a) => a.startsWith('--ops=')).map((a) => a.slice('--ops='.length));
   const KIND_DESC = {
     commit: 'git 钩子自动记录：产生了一次提交',
     merge: 'git 钩子自动记录：完成了一次合并',
     manual: '手工记录',
   };
+  // ★ 钩子是 git 拉起的独立进程，**拿不到用户敲的命令行** —— 由 git 状态重建一条等价命令，
+  //   并明确标注是"重建"（与工具路径的「实际执行」原样捕获区分开，两者可信度不同）。
+  const rebuilt = reconstructOp(kind);
+  const body = [`- 来源：${KIND_DESC[kind] ?? kind}`];
+  if (rebuilt) {
+    body.push(`- **重建**命令（钩子拿不到原文，此处由 git 状态还原）：\`${rebuilt}\``);
+  } else if (kind === 'merge' || kind === 'commit') {
+    body.push('- ⚠️ 命令无法重建（reflog 信息不足）—— 需要精确原命令请走 `pnpm task:done`');
+  }
   const flipped = appendRecord(
     buildEntry({
       task,
       kind,
       st: collectLight(),
-      body: [`- 来源：${KIND_DESC[kind] ?? kind}`],
+      body,
+      // 钩子进程自己没跑变更命令 ⇒ 默认空；--ops 显式补登记时用传入的
+      ops: extraOps,
     }),
   );
   if (process.stdout.isTTY === true) {
@@ -993,7 +1103,8 @@ function main() {
     say('  status                  仓库状态 + 待推送 + tag 同步情况（只读；会把已完成的 [ ] 翻 [x]）');
     say('  history                 打印自动记录区');
     say('  sync [N]                幂等补记：把最近 N 个未记录的提交补进时间轴（默认 20）');
-    say('  record "<说明>"         追加一条记录（--kind=commit|merge|manual，供 git 钩子调用）');
+    say('  exec -- git <args…>     ★ 模型执行 git 的**唯一入口**（自动记录原命令，含只读查询）');
+    say('  record "<说明>"         追加一条记录（--kind=…，--ops="git …" 事后补登记，供 git 钩子调用）');
     say('');
     say(`  ${C.d}GitPushHistory.md 只增不改；唯一例外是把已执行的 [ ] 翻成 [x]。${C.x}`);
     say(`  ${C.d}每条记录都带「实际执行」段（变更类 git 原命令）；推送一律由人工执行。${C.x}`);
@@ -1007,6 +1118,7 @@ function main() {
     case 'status': return cmdStatus();
     case 'history': return cmdHistory();
     case 'sync': return cmdSync(rest);
+    case 'exec': return cmdExec(rest);
     case 'record': return cmdRecord(rest);
     default: die(`未知子命令：${sub}（用 --help 看用法）`);
   }
@@ -1030,6 +1142,8 @@ export {
   isMutatingGit,
   fmtArg,
   buildEntry,
+  parseMergeSource,
+  parseExecArgs,
   TAG_STATE,
   DEV_BRANCH,
   MAIN_BRANCH,

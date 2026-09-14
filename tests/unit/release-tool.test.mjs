@@ -21,6 +21,8 @@ import {
   isMutatingGit,
   fmtArg,
   buildEntry,
+  parseMergeSource,
+  parseExecArgs,
   TAG_STATE,
 } from '../../scripts/release.mjs'
 
@@ -186,4 +188,48 @@ test('★ 记录条目包含「实际执行」段与原命令', () => {
 test('没有执行任何变更命令时不出现空的「实际执行」段', () => {
   const entry = buildEntry({ task: '只读操作', st: { branch: 'dev', head: 'abc1234', subject: 'x', tagHere: [] }, ops: [] })
   assert.ok(!entry.includes('实际执行'), '空段落不该出现')
+})
+
+/* ───────────── ⑤ 钩子路径：由 git 状态重建命令（钩子拿不到原命令行） ───────────── */
+
+test('★ parseMergeSource：从 reflog 主题解析出被合并的分支', () => {
+  assert.equal(
+    parseMergeSource("merge task/J2.11-release-flow-docs: Merge made by the 'ort' strategy."),
+    'task/J2.11-release-flow-docs',
+  )
+  assert.equal(parseMergeSource('merge dev: Fast-forward'), 'dev')
+  assert.equal(parseMergeSource('merge origin/main: Merge made by the ort strategy.'), 'origin/main')
+})
+
+test('parseMergeSource：非合并行一律返回 null（宁可不写，也不猜）', () => {
+  for (const line of [
+    'checkout: moving from task/J2.11 to dev',
+    'commit: docs(versioning): 把推送写成必做步骤',
+    'commit (amend): fix(release): 工具改造',
+    '',
+    '   ',
+  ]) {
+    assert.equal(parseMergeSource(line), null, `不该解析：${JSON.stringify(line)}`)
+  }
+})
+
+/* ───────────── ⑥ exec 入口：模型执行 git 的唯一通道（只记模型，不记人工） ───────────── */
+
+test('★ parseExecArgs：剥离 `--` 与 `git`，留下真正的 git 参数', () => {
+  assert.deepEqual(parseExecArgs(['--', 'git', 'add', '-A']), ['add', '-A'])
+  assert.deepEqual(parseExecArgs(['--', 'git', 'commit', '-F', '.cache/commit-msg.txt']), ['commit', '-F', '.cache/commit-msg.txt'])
+  // `--` 可选（写它是推荐做法，避免与 git 自身的选项混淆）
+  assert.deepEqual(parseExecArgs(['git', 'status', '--short']), ['status', '--short'])
+  assert.deepEqual(parseExecArgs(['status', '--short']), ['status', '--short'])
+  // 末尾的 git.exe（Windows）也认
+  assert.deepEqual(parseExecArgs(['--', 'git.exe', 'tag', '-l']), ['tag', '-l'])
+})
+
+test('parseExecArgs：空参数返回空数组（调用方据此报用法错误）', () => {
+  assert.deepEqual(parseExecArgs([]), [])
+  assert.deepEqual(parseExecArgs(['--', 'git']), [])
+})
+
+test('parseExecArgs：只剥掉第一个 git（参数里再有 git 字样不动它）', () => {
+  assert.deepEqual(parseExecArgs(['--', 'git', 'log', '--grep=git']), ['log', '--grep=git'])
 })

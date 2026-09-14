@@ -43,6 +43,7 @@
     "git:status": "node scripts/release.mjs status",
     "git:history": "node scripts/release.mjs history",
     "git:sync": "node scripts/release.mjs sync",
+    "git:exec": "node scripts/release.mjs exec",
     "ship": "node scripts/release.mjs ship",
     "hooks:install": "node scripts/install-hooks.mjs"
   },
