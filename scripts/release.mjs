@@ -735,10 +735,64 @@ function collectLight() {
   const b = gitBatchMap([
     ['branch', ['branch', '--show-current']],
     ['head', ['rev-parse', '--short', 'HEAD']],
+    ['headFull', ['rev-parse', 'HEAD']],
     ['subject', ['log', '-1', '--pretty=%s']],
     ['tagHere', ['tag', '--points-at', 'HEAD']],
   ]);
-  return { branch: b.branch || '(detached)', head: b.head, subject: b.subject, tagHere: b.tagHere.split('\n').filter(Boolean) };
+  return {
+    branch: b.branch || '(detached)',
+    head: b.head,
+    headFull: b.headFull,
+    subject: b.subject,
+    tagHere: b.tagHere.split('\n').filter(Boolean),
+  };
+}
+
+/**
+ * 幂等补记：把最近若干提交中**尚未记录**的补进时间轴。
+ *
+ * 存在的理由：git 钩子在某些受限环境里跑不起来（实测沙箱禁止命名管道，
+ * Git 执行 hook 时用的 sh.exe 直接 fatal），但「自动记录」这件事不能因此丢掉。
+ * 于是提供一条可重复执行的补偿命令：已经记过的 commit 不会重复追加。
+ */
+function cmdSync(args) {
+  const nArg = args.find((a) => /^\d+$/.test(a));
+  const limit = nArg ? Number(nArg) : 20;
+
+  const raw = g(['log', `-${limit}`, '--pretty=%H%x1f%h%x1f%s%x1f%ci']);
+  const commits = raw
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [full, short, subject, date] = l.split('\x1f');
+      return { full, short, subject, date: (date ?? '').slice(0, 16) };
+    });
+
+  const text = readHistory();
+  const missing = commits.filter((c) => !text.includes(c.full));
+
+  step(`补记检查：最近 ${commits.length} 个提交，未记录 ${missing.length} 个`);
+  if (missing.length === 0) {
+    ok('时间轴已是最新，无需补记');
+    return;
+  }
+
+  // 按时间正序追加（git log 是新→旧）
+  for (const c of missing.reverse()) {
+    const entry = [
+      `#### ${c.date} · 提交 · sync`,
+      '',
+      `- 分支记录：\`${c.short}\` —— ${c.subject}`,
+      `- 完整哈希：\`${c.full}\``,
+      '- 来源：`pnpm git:sync` 幂等补记（钩子未触发时的补偿路径）',
+      '',
+    ].join('\n');
+    syncHistory({ entry });
+  }
+
+  const flipped = syncHistory({});
+  ok(`已补记 ${missing.length} 条`);
+  reportFlipped(flipped);
 }
 
 /* ────────────────────────────── 入口 ────────────────────────────── */
@@ -752,6 +806,7 @@ function main() {
     say('  ship [main]             生成推送 / 发布命令（★ 只生成，绝不执行 push）');
     say('  status                  仓库状态 + 待推送 + tag 同步情况（只读）');
     say('  history                 打印自动记录区');
+    say('  sync [N]                幂等补记：把最近 N 个未记录的提交补进时间轴（默认 20）');
     say('  record "<说明>"         追加一条记录（--kind=commit|merge|manual，供 git 钩子调用）');
     say('');
     say(`  ${C.d}GitPushHistory.md 只增不改；唯一例外是把已执行的 [ ] 翻成 [x]。${C.x}`);
@@ -765,6 +820,7 @@ function main() {
     case 'ship': return cmdShip(rest);
     case 'status': return cmdStatus();
     case 'history': return cmdHistory();
+    case 'sync': return cmdSync(rest);
     case 'record': return cmdRecord(rest);
     default: die(`未知子命令：${sub}（用 --help 看用法）`);
   }

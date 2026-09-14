@@ -330,6 +330,7 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 | `pnpm ship` | 生成推送命令 | 按实际 git 状态生成**待人工执行**的 push 命令并追加记录。**绝不执行 push** |
 | `pnpm ship main` | 生成发布计划 | `dev` → `main` 的合并 + 正式版 tag 的一整套命令（含要手工改的 `package.json` version） |
 | `pnpm git:history` | 查看自动记录区 | 打印 `GitPushHistory.md` 的追加记录 |
+| `pnpm git:sync` | **幂等补记** | 把最近若干提交中尚未记录的补进时间轴；已记过的不会重复追加 |
 | `pnpm hooks:install` | 安装 git 钩子 | 把 `scripts/hooks/*` 装到 `.git/hooks/`（换机器 / 重新 clone 后跑一次） |
 
 **`pnpm task:done` 等价于手工执行**（§3 的 ③④⑤⑥ 步），它是推荐路径。
@@ -369,6 +370,11 @@ git show v0.1.5 --stat                  # 某个版本改了什么
 
 > ⚠️ `.git/hooks/` 不受版本控制，clone 不到新机器 —— 所以钩子源文件放在 `scripts/hooks/` 并提交，
 > 换环境后跑一次 `pnpm hooks:install` 即可恢复自动化。
+>
+> ⚠️ **钩子可能在受限环境里跑不起来**：Git 执行 hook 时会用 `sh.exe`，而禁止创建命名管道的
+> 沙箱会让它直接 `fatal error - couldn't create signal pipe`（实测）。此时记录**不会**丢失——
+> 用 `pnpm git:sync` 补记即可，它是幂等的，重复执行不会产生重复条目。建议把它当作
+> 每阶段收尾的固定收尾动作：`pnpm git:sync && pnpm ship`。
 
 ### 12.4 命令执行状态是怎么判定的
 

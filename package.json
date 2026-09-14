@@ -40,6 +40,7 @@
     "task:done": "node scripts/release.mjs done",
     "git:status": "node scripts/release.mjs status",
     "git:history": "node scripts/release.mjs history",
+    "git:sync": "node scripts/release.mjs sync",
     "ship": "node scripts/release.mjs ship",
     "hooks:install": "node scripts/install-hooks.mjs"
   },
