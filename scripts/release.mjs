@@ -819,6 +819,12 @@ function printPending(st) {
   for (const c of cmds) say(`  ${c}`);
 }
 
+/** `0.3.0` → `0.3.1`（补丁位 +1）—— 用于「已发布阶段的收尾任务需要单独发版」时给出正确版本号 */
+function bumpPatch(ver) {
+  const mm = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(ver));
+  return mm ? `${mm[1]}.${mm[2]}.${Number(mm[3]) + 1}` : ver;
+}
+
 function cmdShip(args) {
   const target = args.find((a) => !a.startsWith('-')) ?? 'push';
   const st = collect(false);
@@ -826,6 +832,25 @@ function cmdShip(args) {
   if (target === MAIN_BRANCH) {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
     const ver = String(pkg.version).replace(/-dev\.\d+$/, '');
+
+    // ★ L16 修正：该正式版**已存在**时，不再生成「重复发布」的计划。
+    //   背景：`ver` 由 package.json 的 version 去掉 `-dev.N` 推出，隐含假设
+    //   「dev 上的 version 指向**下一个**待发布版本」。但 §1.1 允许在**已发布阶段**上
+    //   继续挂收尾任务（如 J3.7–J3.11），此时 dev 的 version 仍是旧 base（`0.3.0-dev.N`），
+    //   于是会生成一份「发布已存在的 v0.3.0」的计划 —— 照做会直接撞上已存在的 tag。
+    if (st.localTags.includes(`v${ver}`)) {
+      warn(`正式版 v${ver} **已经发布过** —— 不会生成重复发布的计划`);
+      info(`当前 dev 的 version 是 ${pkg.version}（去掉 -dev 后缀 = ${ver}），但 tag v${ver} 已存在。`);
+      info(`⇒ 说明 dev 上这些提交是【已发布阶段】的后续收尾任务（收尾 / 规范 / 工具 / 文档）。`);
+      say('');
+      info('两种正确做法：');
+      info('  ① 无需发布（推荐）：直接 `ship` 推送 dev 与开发版 tag —— 这些收尾改动会随下一阶段一起发布。');
+      info(`  ② 需要单独发布：它们属【补丁位】（修复 / 护栏 / 纯文档 / 纯重构，见 §2）。`);
+      info(`     做法是在 dev 上另起一条 \`${bumpPatch(ver)}-dev.N\` 序列（package.json 的 base 改成 ${bumpPatch(ver)}），`);
+      info(`     再走本节流程发布 \`v${bumpPatch(ver)}\`。`);
+      return;
+    }
+
     step(`生成正式版发布计划（target=${MAIN_BRANCH}，version=${ver}）`);
     const cmds = [
       `git switch ${DEV_BRANCH}`,
