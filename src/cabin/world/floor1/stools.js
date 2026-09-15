@@ -34,6 +34,9 @@
  * 会改动 `scene.children` ⇒ 像素回归）。故 `build` 返回 `root: stools[0]`（登记用，
  * 只进 `registry` 的元数据、不进渲染），两只凳子本体都在 `parts` 里。
  *
+ * ⚠️ `root` 在 `J3.1` 之前还兼着"准星入口"的活（只有它进 `magicMeshes`）⇒ 只有第一只凳子点得动。
+ * 现在两条 `interactables` 各自声明 `hits`（= `parts.stoolA` / `stoolB`），`root` 纯粹是登记元数据。
+ *
  * 只用 `MTX` / `MTZ`（本就在 `world/layout.js`），故 spec 的 `layout` 留空 ——
  * 避免应用器写出重复常量。局部偏移 `0.85` 与三脚几何尺寸留在原地。
  */
@@ -69,6 +72,7 @@ export default defineProp({
 
   // 每只凳子一条（原来就是"点哪只动哪只"）：mode 必须 both，否则固定视角下点不开（风险 `R1`）
   // 锚点与几何同源 —— 都是 `makeStool(MTX, MTZ ∓ 0.85, ∓1)` 的落点（不变量 N9）
+  // `hits` = **这一条自己的**命中体（`J3.1`）：两只凳子各点各的，否则只有第一只点得动。
   interactables: (s, { L, parts }) => [
     {
       id: 'stools/pull-north',
@@ -76,6 +80,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.MTX, z: L.MTZ - 0.85 },
       radius: 1.3,
+      hits: parts.stoolA,
       onActivate: () => { parts.stoolA.userData.open = !parts.stoolA.userData.open; },
     },
     {
@@ -84,6 +89,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.MTX, z: L.MTZ + 0.85 },
       radius: 1.3,
+      hits: parts.stoolB,
       onActivate: () => { parts.stoolB.userData.open = !parts.stoolB.userData.open; },
     },
   ],

@@ -145,6 +145,8 @@ export default defineProp({
   },
 
   // 原 `regMagic`（娃娃 / 风铃各一处）—— 一处一条，`label` 语义化
+  // `hits` = **这一条自己的**命中体（`J3.1`）：娃娃与风铃各点各的。
+  // 不给 `hits` 时两者都会被并到物件根上，点风铃会触发**娃娃**的回调（挂杆是共同父节点）。
   interactables: (s, { L, parts }) => [
     {
       id: 'sun-doll/pat',
@@ -153,6 +155,7 @@ export default defineProp({
       // 锚点与几何同源：挂杆在 L.HANGBAR_X / L.HANGBAR_Z，娃娃是它的 -0.27 偏移（不变量 N9）
       anchor: { x: L.HANGBAR_X - 0.27, z: L.HANGBAR_Z },
       radius: 1.8,
+      hits: parts.sunPivot,
       onActivate: () => { parts.sunPivot.userData.energy = 1; },
     },
     {
@@ -161,6 +164,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.HANGBAR_X + 0.27, z: L.HANGBAR_Z },
       radius: 1.8,
+      hits: parts.chimePivot,
       onActivate: () => { parts.chimePivot.userData.energy = 1; },
     },
   ],

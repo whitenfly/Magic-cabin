@@ -321,6 +321,56 @@ try {
   vs = await viewState()
   check('点回「固定视角」生效', vs.fixed === true, JSON.stringify(vs))
 
+  // ══ S5.5 · 第一人称交互通路（`J3.1` 的回归：点击与按 E 都必须真的激活）══════
+  //
+  // 为什么单列一段：`J2.6` 把交互收敛成一个契约时漏改了 `pointerup` 里的调用名
+  // （老 `aimRay()` 返回 `{ act }`，新契约返回 `{ activate }`），于是**第一人称下所有左键
+  // 点击都抛 `TypeError`、什么都不发生** —— 而当时全部门禁是绿的：像素回归看不见交互，
+  // S4 / S6 的点击又都发生在**固定视角**（走另一条 `interaction.activate()` 分支）。
+  step_('S5.5 第一人称 —— 点击与按 E 都要真的激活准星目标')
+  await clickEl(page, '#viewFpBtn')
+  await step(page, 5)
+  check('已切到第一人称', (await viewState()).fp === true)
+
+  // 第一人称的准星通路只在"指针已锁定"时生效（`isLocked()`）—— 真实玩法里玩家点一下画面
+  // 就会锁定。无头环境里 `requestPointerLock()` 不一定成功，所以这里直接声明"当前已锁定"，
+  // 让被测代码走它**真实**的那条分支（也正是用户实测时所处的状态）。
+  await page.eval(`(() => {
+    const c = document.querySelector('canvas')
+    Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => c })
+    return true
+  })()`)
+
+  // 机位对准壁炉炉膛（与 S4 同一处：`fireMeshes` 是 aim 源之一，且射线只与命中集合求交不看遮挡）
+  await page.eval('window.__cabinSetTestCamera([-1.2, 0.9, 1.5, -3.35, 0.55, 1.5])')
+  await step(page, 6)
+
+  // ① 左键点击 —— 修复前这里必然抛 `TypeError: aimHit.act is not a function`
+  const fpBefore = await shot(page, 'fp-click-before')
+  await clickCanvas(page, OPTS.viewport.width / 2, OPTS.viewport.height / 2)
+  await step(page, 50)
+  const fpAfter = await shot(page, 'fp-click-after')
+  const dFp = diffRatio(fpBefore, fpAfter)
+  check('第一人称左键点击有视觉响应（准星目标被激活）', dFp.ratio > 0.002, `${(dFp.ratio * 100).toFixed(3)}% 像素变化`)
+
+  // ② 按 E —— 走的是同一条准星通路（`doInteract()` 的 fp 分支）。
+  //    先把壁炉拨回原状（它是开关），这样第二次激活同样有可见变化。
+  await clickCanvas(page, OPTS.viewport.width / 2, OPTS.viewport.height / 2)
+  await step(page, 50)
+  const eBefore = await shot(page, 'fp-keyE-before')
+  await press(page, 'KeyE', 2)
+  await step(page, 50)
+  const eAfter = await shot(page, 'fp-keyE-after')
+  const dE = diffRatio(eBefore, eAfter)
+  check('第一人称按 E 有视觉响应（准星目标被激活）', dE.ratio > 0.002, `${(dE.ratio * 100).toFixed(3)}% 像素变化`)
+
+  // ★ 收尾必须还原两件事，否则后面 S6 / S7 会在"第一人称 + 已锁定"下跑，语义全变
+  await page.eval(`(() => { delete document.pointerLockElement; return true })()`)
+  await page.eval('window.__cabinSetTestCamera(null)')
+  await clickEl(page, '#viewFixedBtn')
+  await step(page, 5)
+  check('（S5.5 收尾）已回到固定视角', (await viewState()).fixed === true)
+
   // ══ S6 · 书籍类物件点击（"抽出一本书"在本阶段的映射）═══════════════════
   step_('S6 点击书堆 —— 书籍类交互响应')
   // 用测试机位把相机对准书堆（bookPileG 在 x=-3.62, z=-1.4，堆高约 0.7m）

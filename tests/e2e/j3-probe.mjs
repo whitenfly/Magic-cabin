@@ -24,6 +24,13 @@
  * 已搬迁物件"。这个清单由 `installProp()` 在补 aim 通路时打标（`userData.cabinProp`），
  * 它直接回答"这件东西在准星/点击通路上还在不在"。
  *
+ * **★ `J3.1` 追加的逐条判据（更强的一条）**：`registry.stats().aimMissing` 必须为空 ——
+ * 它把粒度从"每件物件"下沉到**每条 `Interactable`**。旧粒度会放过实测确认过的三个形态：
+ *   · 餐桌三只餐盘只有第一只点得动（另两只的 Mesh 是兄弟节点，不在命中集合里）；
+ *   · 衣柜挂衣的 `regWobble()` 注册被 root 桥改写 ⇒ 点挂衣变成拉抽屉；
+ *   · `mode: 'aim'` 的条目既不被近距认领、也不是"第一条" ⇒ 永远拿不到入口。
+ * 三条都属于"画面零变化"，所以这条判据才是它们唯一的守门人。
+ *
  * **参考信息（不计入判定）**：对每件物件设置测试机位、点一下、比较像素。
  * 它要求相机朝向、物件几何中心、命中体粗细三者同时对上 —— 细长物件（扫帚柄 0.044m 宽、
  * 还有 0.33rad 倾角）很容易点空，所以只作为人工排查的线索，不作为门禁。
@@ -157,7 +164,13 @@ try {
     // 这一条比"点一下看画面有没有变"可靠得多 —— 像素点击要求相机、物件几何中心、
     // 命中体粗细三者同时对上（扫帚柄只有 0.044m 粗，还有 0.33rad 的倾角），
     // 而它要回答的问题其实只是"aim 桥有没有接上"。
-    const AIM_PROPS = (val('expect', 'floor1/broom,floor1/chest,floor1/hourglass,floor1/hang-bar,floor2/junk-boxes'))
+    // `J3.1`：把本次修复涉及的**多部件物件**也纳入"必须有准星入口"的清单 ——
+    // 它们正是"每件物件有入口"这条旧判据放过的那批（入口只落在第一个部件上）。
+    const AIM_PROPS = (val('expect', [
+      'floor1/broom', 'floor1/chest', 'floor1/hourglass', 'floor1/hang-bar', 'floor2/junk-boxes',
+      'floor1/long-table', 'floor1/tableware', 'floor1/stools', 'floor1/potion-bottle',
+      'floor2/wardrobe', 'floor2/tissue-box',
+    ].join(',')))
       .split(',').map((s) => s.trim()).filter(Boolean)
     const withAim = app.registry.magicPropIds || []
     const missing = AIM_PROPS.filter((id) => !withAim.includes(id))
@@ -165,6 +178,20 @@ try {
       '★ 搬迁物件的准星入口齐全（aim 桥生效）',
       missing.length === 0,
       missing.length ? `缺少：${missing.join(' / ')}` : `${withAim.length} 件有准星入口：${withAim.join(', ')}`,
+    )
+
+    // ③ ★★ `J3.1`：同一判据下沉到**每条 `Interactable`**。
+    //    上面那条问的是"这件物件还有没有入口"，只要一件物件有**一个**入口就算通过 ——
+    //    于是"餐桌三只餐盘只有第一只点得动"这类缺口全绿。这条问的是"**每一条**声明了
+    //    aim 的交互是否都有自己的命中体"，由 `installProp` 在装配期逐条打标后汇总。
+    const aimMissing = app.registry.aimMissing || []
+    const aimBound = app.registry.aimBound || []
+    check(
+      '★★ 每条声明了 aim 的交互都有自己的命中体（逐条判据）',
+      aimMissing.length === 0,
+      aimMissing.length
+        ? `没有入口的条目：${aimMissing.join(' / ')}`
+        : `${aimBound.length} 条交互各有 aim 入口`,
     )
   }
 

@@ -49,7 +49,7 @@
  * 合法 `Interactable`（`label` 语义化、`mode` 含 proximity 时必须有 `anchor`/`radius`）。
  * 这条校验正是 `J3` 的 DoD「`label` 有语义」能机器守住的原因，因此这里显式依赖契约而非实现。
  */
-import { defineInteractable } from '../systems/interaction/types.js'
+import { defineInteractable, wantsAim } from '../systems/interaction/types.js'
 
 /**
  * 造一个物件装配器。
@@ -138,7 +138,7 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       }
     }
 
-    // ⑤.2 ★ aim（准星 / 点击）通路 —— `J3` 过渡期的桥。
+    // ⑤.2 ★ aim（准星 / 点击）通路 —— `J3` 过渡期的桥（`J3.1` 扩成"逐条命中体 + 根兜底"）。
     //
     // **不加这一段，被搬走的物件就"点不动了"。** `J3` 期间 aim 仍由 monolith 的老机制驱动：
     //   `magicMeshes`（命中集合）+ `userData.onClick`（激活）+ `userData.aimLabel`（提示文案），
@@ -152,7 +152,44 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
     // 同时写 `userData.aimLabel`：准星提示原本兼容 `o.userData.aimLabel || '交互'`，
     // 给它语义化文案正是 DoD「`label` 有语义」在地面上的落法。
     // `J4` 把 aim 也收进统一契约后，这一段连同 `magicMeshes` 一并删除。
-    const aimEntry = interactions.find((it) => it.mode !== 'proximity')
+    //
+    // ## ★ `J3.1`：一座桥不够 —— 一件物件里的**每个部件**都可能有自己的交互
+    //
+    // `J3` 的原始形态只认**一个** `root`（`interactions.find(it => it.mode !== 'proximity')` 取第一条，
+    // 再把 `root.traverse()` 的所有 Mesh 指到它）。后果是"一件物件 = 一个入口"：
+    //   · 餐桌三只餐盘只有第一只点得动（另两只的 Mesh 是兄弟节点，根本不在命中集合里）；
+    //   · 衣柜挂衣的 `regWobble()` 注册被 `root.traverse()` **覆盖**，点挂衣变成拉抽屉；
+    //   · `mode: 'aim'` 的第二条永远拿不到入口（既不被近距认领，也不是"第一条"）。
+    // 这些错**全都不改变画面**，于是像素回归、冒烟、"每件物件有入口"的探针三条一起漏。
+    //
+    // 现在：条目用 `hits` 声明自己的命中体（通常直接给 `parts.xxx`），每条各建一个**代理根**；
+    // 没声明 `hits` 的物件仍走下面的根兜底桥 ⇒ 已搬的 35 件行为一字不变。
+    const claimed = new Set() // 已被逐条 `hits` 收编的 Mesh（根兜底桥不再碰它们）
+    for (const it of interactions) {
+      if (!it.hits || it.mode === 'proximity') continue
+      const meshes = []
+      for (const h of it.hits) {
+        h.traverse((m) => {
+          if (m.isMesh && !m.userData.noHit && !claimed.has(m)) { meshes.push(m); claimed.add(m) }
+        })
+      }
+      if (meshes.length === 0) continue // 命中体全是 noHit / 空组：不注册，留给 `aimMissing` 诊断
+      // `registry.registerMagic()` 只把第一个参数写进 `mesh.userData.magicRoot`（不要求是 Object3D），
+      // 所以"一条交互一个代理根"用普通对象就够 —— 造 Group 会改 `scene.children`（像素回归的雷区）。
+      const proxy = {
+        userData: {
+          onClick: () => { if (typeof it.onActivate === 'function') it.onActivate() },
+          aimLabel: it.label,
+          sfx: 'toggle',
+          cabinProp: prop.id,
+          cabinInteraction: it.id,
+        },
+      }
+      registry.registerMagic(proxy, meshes)
+      // 装配期标注（不是契约字段）：`registry.stats().aimMissing` 靠它做**逐条**覆盖判据
+      it.aimBound = true
+    }
+    const aimEntry = interactions.find((it) => it.mode !== 'proximity' && !it.hits)
     if (aimEntry && root && root.isObject3D && typeof root.traverse === 'function') {
       const ud = (root.userData ||= {})
       ud.onClick = () => { if (typeof aimEntry.onActivate === 'function') aimEntry.onActivate() }
@@ -162,9 +199,18 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       // 这条通路任何测试都守不住（画面不变、冒烟不覆盖），所以留一个可诊断的痕迹。
       ud.cabinProp = prop.id
       const meshes = []
-      root.traverse((m) => { if (m.isMesh && !m.userData.noHit) meshes.push(m) })
+      // ★ 两个 `!` 都不可省：
+      //   · `claimed` —— 已被逐条 `hits` 拿走的 Mesh 不重复注册（同一 Mesh 注册两次会出现两个
+      //     `magicRoot` 互相覆盖，谁最后写谁生效）；
+      //   · `magicRoot` —— **已有 `magicRoot` 的 Mesh 一律不覆盖**。`regWobble()` 这类
+      //     "在 `build` 里就自己注册过"的对象（衣柜挂衣）靠它保住自己的回调，
+      //     否则点挂衣会落到物件根的回调上（点挂衣 = 拉抽屉）。
+      root.traverse((m) => { if (m.isMesh && !m.userData.noHit && !m.userData.magicRoot && !claimed.has(m)) meshes.push(m) })
       // 顺序 = 装配顺序 = 原 `regMagic` 的调用位置 ⇒ `magicMeshes` 的命中优先级不变
-      registry.registerMagic(root, meshes)
+      if (meshes.length) {
+        registry.registerMagic(root, meshes)
+        aimEntry.aimBound = true
+      }
     }
 
     // ⑥ 光源（取代末尾硬编码的 `PP[i]`；声明顺序 = 槽位顺序）
@@ -202,6 +248,12 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       withMount: recs.filter((r) => !!r.prop.mount).length,
       interactables: recs.reduce((n, r) => n + r.interactions.length, 0),
       updates: recs.filter((r) => r.task).length,
+      /** `J3.1`：真的有准星/点击入口的条目数（逐条，而不是"每件物件"） */
+      aimBound: recs.reduce((n, r) => n + r.interactions.filter((it) => it.aimBound).length, 0),
+      /** `J3.1`：声明了 aim 却**没有**命中体的条目 id —— 门禁判据，正常应当为空 */
+      aimMissing: recs.flatMap((r) =>
+        r.interactions.filter((it) => wantsAim(it) && !it.aimBound).map((it) => it.id),
+      ),
       ids: recs.map((r) => r.prop.id),
     }
   }

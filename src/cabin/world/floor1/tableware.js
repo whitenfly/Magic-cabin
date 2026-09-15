@@ -121,6 +121,7 @@ export default defineProp({
 
   // 原五处 `regMagic(g, () => { g.userData.run = 1.4; })` —— 一件一条，`label` 语义化。
   // 锚点与几何同源：全是 `makeSpoon / makeChopsticks / makeBowlStack` 的落点（不变量 `N9`）
+  // `hits` = **这一条自己的**命中体（`J3.1`）：五件各点各的，否则只有第一件（左汤匙）点得动。
   interactables: (s, { L, parts }) => [
     {
       id: 'tableware/spoon-left',
@@ -128,6 +129,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X - 0.50, z: L.DT_Z + 0.06 },
       radius: 1.0,
+      hits: parts.spoonA,
       onActivate: () => { parts.spoonA.userData.run = 1.4; },
     },
     {
@@ -136,6 +138,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X + 0.58, z: L.DT_Z + 0.14 },
       radius: 1.0,
+      hits: parts.spoonB,
       onActivate: () => { parts.spoonB.userData.run = 1.4; },
     },
     {
@@ -144,6 +147,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X - 1.02, z: L.DT_Z + 0.06 },
       radius: 1.0,
+      hits: parts.chopstickA,
       onActivate: () => { parts.chopstickA.userData.run = 1.4; },
     },
     {
@@ -152,6 +156,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X + 1.02, z: L.DT_Z + 0.04 },
       radius: 1.0,
+      hits: parts.chopstickB,
       onActivate: () => { parts.chopstickB.userData.run = 1.4; },
     },
     {
@@ -160,6 +165,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X - 0.32, z: L.DT_Z - 0.28 },
       radius: 1.0,
+      hits: parts.bowlStack,
       onActivate: () => { parts.bowlStack.userData.run = 1.4; },
     },
   ],

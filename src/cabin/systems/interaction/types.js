@@ -30,8 +30,51 @@
  */
 import * as THREE from 'three'
 
-/** 交互的两种探测方式 */
+/**
+ * 交互的两种探测方式
+ */
 export const INTERACT_MODES = ['aim', 'proximity', 'both']
+
+/**
+ * 这条交互是否需要 aim（准星 / 点击）入口 —— `mode` 含 aim 的都要。
+ *
+ * 来源：新增（`J3.1`）。`Registry.stats()` / `installProp.stats()` 用它做**逐条**覆盖判据：
+ * "声明了 aim 却没有命中体"是不允许的状态（`J3` 的 `mode: 'aim'` 死条目、多部件物件的
+ * 第 2..n 条都属此类），门禁直接断言这个清单为空。
+ *
+ * @param {{mode?: string}} it
+ */
+export const wantsAim = (it) => it.mode === 'aim' || it.mode === 'both'
+
+/**
+ * 规范化 `hits`（这一条交互**自己的**命中体）。
+ *
+ * 来源：新增（`J3.1`）。`J3` 的 aim 桥只认**一个** `root`，于是"一件物件里多个部件
+ * 各有各的交互"这种情形（餐桌的三只餐盘、桌上的汤匙/筷子/碗叠、衣柜里的挂衣）
+ * 只有**第一个部件**保留准星入口 —— 其余部件点不动，而画面毫无变化、门禁全绿。
+ *
+ * 让每条 `Interactable` 能声明"我对应哪些对象"（通常直接给 `parts.xxx`）之后，
+ * 装配器就能为**每一条**各建一个命中体分组，语义回到搬迁前"谁被点，谁的回调跑"。
+ *
+ * 传 `null` / 省略 = 沿用"物件根"（`J3` 的过渡形态，向后兼容）。
+ *
+ * @param {any|any[]|null} [hits] 单个 `Object3D` 或它们的数组
+ * @param {string} id 条目 id（报错用）
+ * @returns {any[]|null} 规范化后的数组；未声明返回 `null`
+ */
+export function normalizeHits(hits, id) {
+  if (hits === null || hits === undefined) return null
+  const list = Array.isArray(hits) ? hits : [hits]
+  if (list.length === 0) throw new TypeError(`${id} 的 hits 不能是空数组（要么不写，要么给对象）`)
+  for (const h of list) {
+    // 鸭子类型而非 `instanceof THREE.Object3D`：契约层不引入 three 的构造依赖，
+    // 只要求"能 traverse 出 Mesh"——`Group` / `Mesh` / `Scene` 都满足。
+    if (!h || typeof h.traverse !== 'function') {
+      throw new TypeError(`${id} 的 hits 必须是 Object3D（或它们的数组），收到：${typeof h}`)
+    }
+  }
+  return list
+}
 
 /**
  * 一条交互（`mode: 'proximity'` / `'both'` 用得到全部字段；`'aim'` 源用 `resolve`）。
@@ -43,6 +86,7 @@ export const INTERACT_MODES = ['aim', 'proximity', 'both']
  * @param {{x: number, z: number}} [spec.anchor] 近距判定的锚点（世界坐标，来自 `world/layout.js`）
  * @param {number} [spec.radius] 近距判定半径
  * @param {boolean} [spec.fullHouseOnly] 只在"完整小屋"形态下可交互（如右侧窗 / 后窗）
+ * @param {any|any[]} [spec.hits] 这条交互**自己的**命中体（准星/点击用；省略 = 沿用物件根）
  * @param {() => void} [spec.onActivate] 激活
  */
 export function defineInteractable(spec) {
@@ -69,6 +113,8 @@ export function defineInteractable(spec) {
     radius: spec.radius ?? 0,
     fullHouseOnly: !!spec.fullHouseOnly,
     onActivate: spec.onActivate || null,
+    /** 这条交互自己的命中体（`null` = 沿用物件根；装配期由 `installProp` 消费） */
+    hits: normalizeHits(spec.hits, spec.id),
   }
 }
 

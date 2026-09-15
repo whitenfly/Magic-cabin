@@ -145,6 +145,152 @@ test('aim 桥：mode 只含 proximity 的物件不进 aim 命中集合', () => {
   assert.equal(env.registry.interactables.length, 1, '但它仍应进 registry 供近距消费')
 })
 
+/* ───────────── aim 逐条命中体（J3.1：一件物件里的每个部件都有自己的交互） ─────────────
+ *
+ * 这一组守的是 `J3` 漏掉、**任何既有门禁都看不见**的一类错：
+ * 旧判据只问"这件物件有没有准星入口"，于是"一件物件里只有第一个部件点得动"全绿。
+ * 实测确认过的三个形态（餐桌三只盘 / 衣柜挂衣 / 抽纸盒的纸巾）都在这里成了回归。
+ */
+
+/** 造一个"部件"：可 traverse 出 1 个 Mesh 的假 Object3D */
+function fakePart(name) {
+  const mesh = { isMesh: true, userData: {}, name: name + ':mesh' }
+  const children = [mesh]
+  return {
+    isObject3D: true, name, userData: {}, children,
+    traverse(fn) { fn(this); for (const c of children) fn(c) },
+    __mesh: mesh,
+  }
+}
+
+/** 造一个含多个部件的假物件根（`traverse` 递归两层，够这里用） */
+function fakeTree(name, parts) {
+  const children = [...parts]
+  return {
+    isObject3D: true, name, userData: {}, children,
+    traverse(fn) {
+      fn(this)
+      for (const c of children) { fn(c); for (const g of (c.children || [])) fn(g) }
+    },
+  }
+}
+
+test('★ aim 桥（J3.1）：每条 hits 各建一个代理根 ⇒ 点哪只盘转哪只（餐桌三只盘）', () => {
+  const env = makeEnv()
+  const fish = fakePart('fish'), egg = fakePart('egg'), pancakes = fakePart('pancakes')
+  const fired = []
+  env.installer.install(defineProp({
+    id: 'floor1/long-table',
+    // `root` 取第一只盘（真实实现如此：三只盘各自挂 `scene`，没有共同父节点）
+    build: () => fish,
+    interactables: () => [
+      { id: 'long-table/spin-fish', label: '转一转餐桌上的鱼盘', mode: 'both', anchor: { x: 0, z: 0 }, radius: 1.2, hits: fish, onActivate: () => fired.push('fish') },
+      { id: 'long-table/spin-egg', label: '转一转餐桌上的煎蛋盘', mode: 'both', anchor: { x: 0, z: 1 }, radius: 1.2, hits: egg, onActivate: () => fired.push('egg') },
+      { id: 'long-table/spin-pancakes', label: '转一转餐桌上的松饼盘', mode: 'both', anchor: { x: 0, z: 2 }, radius: 1.2, hits: pancakes, onActivate: () => fired.push('pancakes') },
+    ],
+  }))
+
+  assert.equal(env.registry.magicMeshes.length, 3, '三只盘各有一个命中体（旧实现只有第一只）')
+  assert.notEqual(fish.__mesh.userData.magicRoot, egg.__mesh.userData.magicRoot, '每条一个代理根')
+  for (const [part, want, label] of [[fish, 'fish', '鱼盘'], [egg, 'egg', '煎蛋盘'], [pancakes, 'pancakes', '松饼盘']]) {
+    const proxy = part.__mesh.userData.magicRoot
+    assert.equal(proxy.userData.cabinProp, 'floor1/long-table', '代理根带来源标记（magicPropIds 靠它）')
+    assert.equal(proxy.userData.cabinInteraction, `long-table/spin-${want}`, '代理根记得自己属于哪条交互')
+    proxy.userData.onClick()
+    assert.equal(fired[fired.length - 1], want, `点${label}应当跑它自己那条回调`)
+  }
+  assert.deepEqual(env.registry.stats().aimMissing, [], '三条都有入口 ⇒ 不该有缺失')
+})
+
+test('★ aim 桥（J3.1）：root 兜底桥**不覆盖** build 里已注册过的 Mesh（衣柜挂衣 = regWobble）', () => {
+  const env = makeEnv()
+  const hanger = fakePart('hanger')
+  let wobbled = 0
+  // 模拟 `regWobble(hg)` 内部那次 `regMagic(hg, cb)`：挂衣先把自己注册好
+  env.registry.registerMagic(hanger, [hanger.__mesh])
+  hanger.userData.onClick = () => { wobbled += 1 }
+
+  const body = fakePart('body')
+  const root = fakeTree('wardrobe', [body, hanger])
+  let drawerFired = 0
+  env.installer.install(defineProp({
+    id: 'floor2/wardrobe-legacy',
+    build: () => root,
+    // 故意**不给 hits** ⇒ 走 root 兜底桥（`J3` 的原始形态），这正是当初出错的路径
+    interactables: () => [{
+      id: 'wardrobe/drawer', label: '开 / 关抽屉', mode: 'both',
+      anchor: { x: 0, z: 0 }, radius: 1.8, onActivate: () => { drawerFired += 1 },
+    }],
+  }))
+
+  assert.equal(hanger.__mesh.userData.magicRoot, hanger, '挂衣的 magicRoot 必须仍是它自己（不被 root 桥改写）')
+  assert.equal(env.registry.magicMeshes.filter((m) => m === hanger.__mesh).length, 1, '也不该被重复注册')
+  hanger.__mesh.userData.magicRoot.userData.onClick()
+  assert.equal(wobbled, 1, '点挂衣应当晃动')
+  assert.equal(drawerFired, 0, '而不是被解析成拉抽屉')
+  // 柜体仍由 root 兜底桥接管 —— 这是 `J3` 的既有语义（真实实现已用 `hits` 收紧到抽屉本体）
+  assert.equal(body.__mesh.userData.magicRoot, root)
+})
+
+test('★ aim 判据（J3.1）：没给 hits 的多条目会被 stats().aimMissing 逐条点出来', () => {
+  const env = makeEnv()
+  env.installer.install(defineProp({
+    id: 'probe/multi',
+    build: () => fakeTree('probe', [fakePart('a'), fakePart('b')]),
+    interactables: () => [
+      { id: 'probe/one', label: '第一条', mode: 'both', anchor: { x: 0, z: 0 }, radius: 1, onActivate: () => {} },
+      { id: 'probe/two', label: '第二条', mode: 'both', anchor: { x: 0, z: 1 }, radius: 1, onActivate: () => {} },
+      { id: 'probe/three', label: '第三条只有 aim', mode: 'aim', onActivate: () => {} },
+    ],
+  }))
+  const s = env.registry.stats()
+  assert.deepEqual(s.aimBound, ['probe/one'], '只有第一条拿得到 root 兜底桥')
+  assert.deepEqual(s.aimMissing, ['probe/two', 'probe/three'],
+    '★ 这两条正是 J3 漏掉的两类：多部件物件的第 2..n 条、以及 mode: "aim" 的条目')
+})
+
+test('aim 桥（J3.1）：mode "aim" 的条目给出 hits 就有入口（抽纸盒的纸巾）', () => {
+  const env = makeEnv()
+  const box = fakePart('box'), paper = fakePart('paper')
+  let pulled = 0, crumpled = 0
+  env.installer.install(defineProp({
+    id: 'floor2/tissue-box',
+    build: () => box,
+    interactables: () => [
+      { id: 'tissue-box/pull', label: '从抽纸盒里抽一张纸', mode: 'both', anchor: { x: 0, z: 0 }, radius: 1.6, onActivate: () => { pulled += 1 } },
+      // 纸巾是**独立挂 `scene`** 的兄弟节点，只能靠 `hits` 自己交出来
+      { id: 'tissue-paper/crumple', label: '把摊在桌上的纸巾揉成团', mode: 'aim', anchor: { x: 1, z: 1 }, radius: 1.6, hits: paper, onActivate: () => { crumpled += 1 } },
+    ],
+  }))
+
+  assert.deepEqual(env.registry.stats().aimMissing, [], '两条都该有入口（旧实现里第二条是死条目）')
+  paper.__mesh.userData.magicRoot.userData.onClick()
+  assert.equal(crumpled, 1, '点纸 ⇒ 揉成团')
+  box.__mesh.userData.magicRoot.userData.onClick()
+  assert.equal(pulled, 1, '盒子仍走 root 兜底桥')
+  assert.equal(env.registry.magicMeshes.length, 2)
+})
+
+test('aim 桥（J3.1）：hits 必须给 Object3D —— 给错类型在装配期就炸', () => {
+  const env = makeEnv()
+  assert.throws(() => env.installer.install(defineProp({
+    id: 'probe/bad-hits',
+    build: () => fakePart('x'),
+    interactables: () => [{
+      id: 'probe/bad', label: '命中体写错了', mode: 'both',
+      anchor: { x: 0, z: 0 }, radius: 1, hits: { 不是: 'Object3D' }, onActivate: () => {},
+    }],
+  })), /hits 必须是 Object3D/)
+  assert.throws(() => env.installer.install(defineProp({
+    id: 'probe/empty-hits',
+    build: () => fakePart('y'),
+    interactables: () => [{
+      id: 'probe/empty', label: '命中体是空数组', mode: 'both',
+      anchor: { x: 0, z: 0 }, radius: 1, hits: [], onActivate: () => {},
+    }],
+  })), /hits 不能是空数组/)
+})
+
 test('★ 近距认领：InteractionSystem 建立时必须收编 registry 里已有的条目', async () => {
   const { createInteractionSystem } = await import('../../src/cabin/systems/interaction/InteractionSystem.js')
   const env = makeEnv()
