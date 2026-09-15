@@ -236,7 +236,28 @@ console.log('\n【⑥ 外部依赖未新增（与源文件对比）】')
 
   // three.min.js：只应出现在注释里，代码中不得再有加载它的痕迹
   check('代码中无 three.min.js / CDN 回退逻辑', !/three\.min\.js|document\.write/.test(codeOnly))
-  check('音效路径保持相对 sounds/', /'sounds\/'\s*\+/.test(codeOnly))
+  // ★ J4.2：音效实现已随段切片搬进 `systems/audio/AudioSystem.js` ——
+  //   判据的**范围**必须跟着实现走：这里就地扫 `src/cabin/**`（不能只看 monolith，
+  //   否则"实现搬家"会让一条本来正确的判据永远失败，然后被人删掉）。
+  //   判据的**语义未变**：音效只允许用相对路径 `sounds/`。
+  const cabinJs = []
+  const collectJs = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) collectJs(p)
+      else if (e.isFile() && p.endsWith('.js')) cabinJs.push(p)
+    }
+  }
+  for (const d of ['legacy', 'core', 'systems', 'world', 'props', 'app']) {
+    const p = path.join(ROOT, 'src/cabin', d)
+    if (fs.existsSync(p)) collectJs(p)
+  }
+  const cabinCode = cabinJs
+    .map((f) => fs.readFileSync(f, 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+  check('音效路径保持相对 sounds/', /'sounds\/'\s*\+/.test(cabinCode))
 
   // 静态资源字面量（排除拼接片段如 '.mp3'）
   const assets = [...new Set([...codeOnly.matchAll(/['"`]([^'"`\s/]*\.(?:png|jpe?g|gif|webp|svg|woff2?|ttf|glb|gltf|fbx))['"`]/gi)].map((m) => m[1]))]
