@@ -312,11 +312,11 @@ Magic-cabin/
 │  │  ├─ boot.js                    #   启动开关（唯一知道 legacy 存在的地方）
 │  │  ├─ dom.js                     #   UI DOM（原样）
 │  │  ├─ legacy/monolith.js         #   ★ 主实现（原样，J3/J4 逐步掏空，J4 末删除）
-│  │  ├─ app/                       #   ⬜ J2：App/Clock/EventBus/Scheduler/Registry/rng/store
-│  │  │                             #        J3：mounts.js（★ 挂载点 ID 表）
-│  │  ├─ core/                      #   ⬜ J2：render(CameraRig)/materials/lighting/geometry
-│  │  ├─ systems/                   #   ⬜ J2/J4：interaction/player/weather/audio/magic/ui
-│  │  ├─ world/                     #   ⬜ J3：layout.js/house/outdoor/floor1/floor2
+│  │  ├─ app/                       #   ✅ J2：App/Clock/EventBus/Scheduler/Registry/rng/store
+│  │  │                             #        ⬜ J3：mounts.js（★ 挂载点 ID 表）
+│  │  ├─ core/                      #   ✅ J2：render(CameraRig)/materials/lighting/geometry/util
+│  │  ├─ systems/                   #   ✅ J2：interaction/weather（environment）  ⬜ J4：player/audio/magic/ui
+│  │  ├─ world/                     #   ✅ J2：layout.js  ⬜ J3：house/outdoor/floor1/floor2
 │  │  └─ props/                     #   ⬜ J3：跨场景复用道具
 │  │
 │  ├─ config/                       # ★★ 用户配置层（一模块一文件 + 模块总开关表）
@@ -334,17 +334,17 @@ Magic-cabin/
 │  │  ├─ README.md  _index.js       #   _index.js 是唯一总装文件
 │  │  └─ <NN>-<id>/                 #   ⬜ 按需创建（不预置空目录）
 │  │
-│  └─ content/                      # ⬜ J1.5/J5：内容源（作者唯一手写的目录）
+│  └─ content/                      # ✅ J1.5：内容源（作者唯一手写的目录）  ⬜ J5：集合 schema 收紧
 │     └─ posts/*.md                 #   一篇文章 = 一本书
 │
 ├─ tests/
 │  ├─ visual/                        # ✅ J0.4：截图基线 + sha256 判据 + 抓图/比对/字符图工具
-│  ├─ e2e/                          # 🟡 cdp.mjs 已就位（J0.5 冒烟、J6 层次/闪烁待补）
-│  └─ unit/                         # ⬜ J2 起
+│  ├─ e2e/                          # ✅ cdp.mjs + page.mjs + 冒烟 28 项 + 性能基线与比对
+│  └─ unit/                         # ✅ J2：105 项（几何/材质/坐标/内核/存储/光照/交互/相机/环境/版本工具）
 └─ docs/
    ├─ BuildPlaning/                 # ★ 建设规划（路线 J0–J8 + 模块映射 mapping.yaml）
+   ├─ 实施结果/                      # 每个阶段的实施结果（F0.2–F0.6 / J1.5 / J2 …）
    ├─ MIGRATION.md                  # 本文件
-   ├─ F0.2-实施结果.md  F0.3-实施结果.md  F0.4-实施结果.md
    └─ _partition-map.md             # 分区索引源
 ```
 
@@ -362,12 +362,12 @@ Magic-cabin/
 
 | 阶段 | 内容 | 对应文档 |
 |---|---|---|
-| **J0** | ✅ **基线与护栏（已完成）**：**F0.2 注入种子随机**（[`F0.2-实施结果.md`](./F0.2-实施结果.md)）、**F0.3 注入可步进时钟**（[`F0.3-实施结果.md`](./F0.3-实施结果.md)）、**F0.4 最小截图回归**（[`F0.4-实施结果.md`](./F0.4-实施结果.md)）、**F0.5 交互冒烟**（[`F0.5-实施结果.md`](./F0.5-实施结果.md)）、**F0.6 性能基线**（[`F0.6-实施结果.md`](./F0.6-实施结果.md)）—— 布局固定 + 画面定格 + 3 机位 × 3 轮 sha256 逐字节相同 + 28 项冒烟断言全绿 + 3138 calls / 86158 triangles 基线 | `BuildPlaning/01` §3、§9 |
+| **J0** | ✅ **基线与护栏（已完成）**：**F0.2 注入种子随机**（[`F0.2-实施结果.md`](./实施结果/F0.2-实施结果.md)）、**F0.3 注入可步进时钟**（[`F0.3-实施结果.md`](./实施结果/F0.3-实施结果.md)）、**F0.4 最小截图回归**（[`F0.4-实施结果.md`](./实施结果/F0.4-实施结果.md)）、**F0.5 交互冒烟**（[`F0.5-实施结果.md`](./实施结果/F0.5-实施结果.md)）、**F0.6 性能基线**（[`F0.6-实施结果.md`](./实施结果/F0.6-实施结果.md)）—— 布局固定 + 画面定格 + 3 机位 × 3 轮 sha256 逐字节相同 + 28 项冒烟断言全绿 + 3138 calls / 86158 triangles 基线 | `BuildPlaning/01` §3、§9 |
 | **J1** | ✅ **已完成**：工程化骨架、目录边界、原样搬迁 | — |
-| **J1.5** | ⬜ **新增**：构建与内容地基（Astro 落地、`src/content/` 集合骨架、门厅） | `BuildPlaning/03` §5 |
-| **J2** | 核心设施：**`CameraRig`** + 统一 `Interactable` + **持久化**；另含 `LightField`、`Clock`/`EventBus`/`Scheduler` | `BuildPlaning/01` §3 |
-| **J2.5** | ⬜ **新增**：配置编排层（`src/config/` 已就位，需接上 `store` 与 `SettingsForm`） | `BuildPlaning/04` §3 |
-| **J3** | 物件模块化：B1–B6 六批、约 67 件物件 → `defineProp`；**新增 `mounts.js` 挂载点 ID 表** | `BuildPlaning/01` §3 |
+| **J1.5** | ✅ **已完成（2026-09-14）**：构建与内容地基（Astro 落地、`src/content/` 集合骨架、门厅）—— 见 [`实施结果/J1.5-实施结果.md`](./实施结果/J1.5-实施结果.md) | `BuildPlaning/03` §5 |
+| **J2** | ✅ **已完成（2026-09-14）**：核心设施 —— **`CameraRig`** + 统一 `Interactable` + **持久化**；另含 `LightField`、`Clock`/`EventBus`/`Scheduler`，以及几何 DSL / 材质 / 坐标 / 天气解耦。四个 DoD 全部由机器判据证明 —— 见 [`实施结果/J2-实施结果.md`](./实施结果/J2-实施结果.md) | `BuildPlaning/01` §3 |
+| **J2.5** | ✅ **已完成（2026-09-15）**：配置编排层（**插层子阶段**，版本 `0.2.5`）—— `src/config/` 接线 + `SettingsForm` 由 schema 自动生成面板并自动持久化 + `blog/registry.js` 按 `modules.config` 过滤装配 + **`pnpm verify:cf`（31 项，`CF1`–`CF4`）**。见 [`实施结果/J2.5-配置编排层-实施结果.md`](./实施结果/J2.5-配置编排层-实施结果.md) | `BuildPlaning/04` §3 |
+| **J3** | ⬜ **下一个可开工**：物件模块化 —— B1–B6 六批、约 67 件物件 → `defineProp`；**新增 `mounts.js` 挂载点 ID 表** | `BuildPlaning/01` §3 |
 | **J4** | 系统模块化：player / weather / audio / magic / ui；**删除 `legacy/`** | `BuildPlaning/01` §3 |
 | **J5** | 内容管线与静态页（Astro 版）：集合 schema、`posts.json`、`/posts/<slug>/`、RSS/sitemap/JSON-LD/Pagefind | `BuildPlaning/01` §3 |
 | **J6** | ★ **书架即博客 + 方案 B 阅读器**（CSS3DRenderer 真 DOM 书页、平面视角、路由、门厅） | `BuildPlaning/03` §3 |
@@ -440,7 +440,7 @@ Magic-cabin/
 | 代码缩进保持原样 | 原代码在 `<script>` 内缩进 12 空格起，搬迁未重排 | 无（J3 搬迁时自然修正） |
 | `monolith.js` 尾部多 1 个换行 | 模板字符串写入所致 | 无 |
 | Vite 在受限沙箱不可用 | esbuild 需子进程管道 | 用 `pnpm serve` 兜底 |
-| **F0.2 已实施种子随机** | 286 处裸随机调用已替换为注入的随机源；场景布局现在**每次加载一致**（这是一次可见的行为变化，但符合"画面等价"要求） | 见 [`F0.2-实施结果.md`](./F0.2-实施结果.md)；运行期特效（爆炸/涟漪/撒糖）仍保持自然随机 |
-| **F0.3 已注入可步进时钟** | 动画时间改为可外部推进：`?deterministic=1&frames=120` 可**定格到第 120 帧**，三轮截图 sha256 完全相同 | 见 [`F0.3-实施结果.md`](./F0.3-实施结果.md)；realtime 模式行为与改动前完全一致 |
+| **F0.2 已实施种子随机** | 286 处裸随机调用已替换为注入的随机源；场景布局现在**每次加载一致**（这是一次可见的行为变化，但符合"画面等价"要求） | 见 [`F0.2-实施结果.md`](./实施结果/F0.2-实施结果.md)；运行期特效（爆炸/涟漪/撒糖）仍保持自然随机 |
+| **F0.3 已注入可步进时钟** | 动画时间改为可外部推进：`?deterministic=1&frames=120` 可**定格到第 120 帧**，三轮截图 sha256 完全相同 | 见 [`F0.3-实施结果.md`](./实施结果/F0.3-实施结果.md)；realtime 模式行为与改动前完全一致 |
 | 固定系数插值保持不变 | `updateSprings`、火/灯渐亮等 11+ 处按帧计数（与 `dt` 无关），过渡速度随帧率变化 | 原代码既有特性；改成 dt 形式会改变过渡速度，属视觉变化，留待 J8 决策 |
 | 时间驱动动画仍不确定 | `animate(t)` 的 `t` 来自 `performance.now()` | 属 F0.3（可步进时钟）；截图仍有约 0.25% 的帧相位差异 |

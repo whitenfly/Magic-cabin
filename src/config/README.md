@@ -8,20 +8,21 @@
 
 ---
 
-## ⚠️ 当前状态（2026-09-13）
+## ✅ 当前状态（`J2.5` 之后）
 
-**本目录已按目标架构写就，但消费方尚未实现。**
+**消费方已全部就位，改这里的值会真的生效。**
 
-| 消费方 | 职责 | 落在哪个阶段 |
+| 消费方 | 职责 | 落地于 |
 |---|---|---|
-| `cabin/app/store.js` + `settings.js` | 读默认值、双向绑定、写 `localStorage` | **J2** |
-| `cabin/systems/ui/SettingsForm.js` | 由 schema **自动生成**设置面板控件 | **J2.5** |
-| `blog/registry.js` | 按 `modulesConfig` 过滤后装配功能模块 | **J2.5 / J6** |
-| `blog/ShelfLayout.js`、`blog/reader/*` | 读 `shelfConfig` / `readerConfig` | **J6** |
-| 站点页（Astro） | 读 `siteConfig` / `homeConfig` | **J1.5 / J5** |
+| `cabin/app/settings.js` | 从 `settings.config.js` 派生默认值与校验规则 | **`J2.5`** ✅ |
+| `cabin/systems/ui/SettingsForm.js` | 按 schema **自动生成**设置面板控件 + 自动持久化 | **`J2.5`** ✅ |
+| `blog/registry.js` | 按 `modulesConfig` 过滤后装配功能模块 | **`J2.5`** ✅ |
+| `cabin/app/store.js` | 读默认值、写 `localStorage`（`cabin:` 前缀） | `J2.8` ✅ |
+| `cabin/legacy/monolith.js` | `store.subscribe(…)` 把设置值应用回场景 | **`J2.5`** ✅ |
+| 站点页（Astro） | 读 `siteConfig` / `homeConfig` | `J1.5` ✅ |
+| `blog/ShelfLayout.js`、`blog/reader/*` | 读 `shelfConfig` / `readerConfig` | `J6`（待落地） |
 
-**在 `J2` / `J2.5` 落地之前，改这里的值不会有效果** —— 现状代码里仍是 `cabin/legacy/monolith.js` 中的硬编码常量。
-（这是有意的：先把"用户唯一目录"的形状定下来，再让实现逐段接过来，避免 18 个模块各自发明配置方式。）
+**验证**：`pnpm verify:cf`（`CF1`–`CF4` 静态门禁）+ `pnpm test:unit`（schema 与面板契约）+ `pnpm test:smoke`（界面仍可用）。
 
 ---
 
@@ -29,16 +30,23 @@
 
 | 文件 | 管什么 | 对应模块 |
 |---|---|---|
+| `README.md` | **本文件**——用户第一站（每个文件"干什么"、三种日常改法） | — |
 | `index.js` | **统一导出**（组件可一次导入多个配置） | — |
 | `types.js` | 每个配置的**形状声明**（JSDoc typedef，纯类型、无默认值） | — |
 | `resolve.js` | **环境变量覆盖**工具（`resolve*()`）+ 模块开关校验 | — |
 | `site.config.js` | 站点标题 / 副标题 / URL / 作者 / 导航 / 社交链接 / 页脚 / **开站日期** | 全站 + M06 / M07 / M13 |
 | `cabin.config.js` | 3D：默认视角 / 相机距离 / 画质档 / 天气与时间 / **门厅策略** / 持久化前缀 | 全站 3D |
 | `modules.config.js` | ★★ **模块总开关表**（一行关掉一个功能模块） | 全部 18 个模块 |
+| `settings.config.js` | ★ **运行时设置面板的 schema**（类型 / 默认值 / 范围 / 分组 / 控件形态） | 小屋自身的可调项 |
+| `display.config.js` | 设置面板**呈现什么**（总开关 / 分组可见性 / 恢复默认 / 显式隐藏项） | **M17** |
 | `shelf.config.js` | 书架：层板规格 / 容量 / 策展视图 / 排序分组 / 书脊尺寸公式 / 图集 | **M01** |
 | `reader.config.js` | 阅读器：书页规格 / **平面视角** / 长文阈值与兜底 / 移动端 / **CSS3D 层次约定** | **M01** |
 | `home.config.js` | 门厅（首屏 HTML 先行、3D 空闲挂载、文案） | 首页 |
 | `<模块>.config.js` | 每个功能模块自己的可调项 | 每上线一个加一个 |
+
+> **`settings.config.js` 与 `display.config.js` 的分工**（对齐 Firefly 的 `displaySettingsConfig`）：
+> 前者说"**能调什么**"（默认值、范围、控件），后者说"**看得见什么**"（面板开不开、哪个分组显示）。
+> 用户实际拖出来的值存在 `localStorage`（`cabin:` 前缀）里。三者职责不重叠。
 
 ---
 

@@ -191,6 +191,19 @@
             flex-shrink: 0
         }
 
+        /* @j25-add-start —— 本段是 J2.5 新增，`verify-migration.mjs` 会整段剥离后再与上游源文件比对 */
+        /* J2.5：schema 生成的滑块右侧读数（`SettingsForm.js` 用）。
+           面板默认是 `#menuPanel` 里隐藏的一块，因此这条样式不影响任何像素回归机位。 */
+        .sliderRow .sval {
+            width: 42px;
+            font-size: 11px;
+            color: #7c9b5e;
+            text-align: right;
+            flex-shrink: 0;
+            font-variant-numeric: tabular-nums
+        }
+        /* @j25-add-end */
+
         input[type=range] {
             -webkit-appearance: none;
             appearance: none;

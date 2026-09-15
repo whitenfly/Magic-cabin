@@ -27,15 +27,14 @@ const check = (name, ok, detail = '') => {
   ok ? pass++ : fail++
 }
 
-/** 从文件中取“正文”：跳过头部块注释，可再跳过一段前缀标记 */
-function bodyOf(file, afterMarker) {
-  const t = fs.readFileSync(file, 'utf8')
-  let s = t.slice(t.indexOf('*/') + 2)
-  if (afterMarker) {
-    const i = s.indexOf(afterMarker)
-    s = s.slice(i + afterMarker.length)
-  }
-  return s.replace(/^\s*\n/, '')
+/**
+ * 取一个文件的"正文"：跳过头部块注释。
+ * @param {string} file
+ * @param {string} [text] 直接给内容（默认从 file 读）—— `J2.5` 起比对用的是**剥离过新增段**的文本
+ */
+function bodyOf(file, text) {
+  const t = text !== undefined ? text : fs.readFileSync(file, 'utf8')
+  return t.slice(t.indexOf('*/') + 2).replace(/^\s*\n/, '')
 }
 
 console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–9807 行】')
@@ -67,18 +66,56 @@ console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–980
 
 console.log('\n【② 样式 src/styles/cabin.css  ←  源 10–748 行】')
 {
-  const got = N(bodyOf(`${ROOT}/src/styles/cabin.css`))
+  // ★ J2.5：配置编排层往样式表里加了一段 `.sval`（schema 生成的滑块读数）。
+  //   该段用 `@j25-add-start` / `@j25-add-end` 显式圈出，比对前**整段剥离** ——
+  //   "剥掉已知新增后与源文件逐字节一致"仍然能抓住任何**意外**改动
+  //   （改错一个色值、动了一行旧样式都会红），强度不降。
+  //   这与 J2 阶段给 ④ 的计数判据做的是同一件事：门禁随阶段演进而更新，判据不放水。
+  const raw = fs.readFileSync(`${ROOT}/src/styles/cabin.css`, 'utf8')
+  // 连同它后面的空行一起删掉 —— 只删"新增段本身"会留下一个多出来的空行，
+  // 逐字节比对照样会红（差 1 个 `\n`，第一版就是这么差的）。
+  const stripped = raw.replace(/[ \t]*\/\* @j25-add-start[\s\S]*?\/\* @j25-add-end \*\/\n\n/, '')
+  check('J2.5 新增段带显式标记（@j25-add-start/end）', stripped !== raw)
+  const got = N(bodyOf(`${ROOT}/src/styles/cabin.css`, stripped))
   const want = N(slice(10, 748))
-  check('逐字节一致', got === want, got === want ? `${want.length} 字符` : `${got.length} vs ${want.length}`)
+  check('逐字节一致（剥离 J2.5 新增段后）', got === want, got === want ? `${want.length} 字符` : `${got.length} vs ${want.length}`)
 }
 
 console.log('\n【③ UI DOM src/cabin/dom.js  ←  源 753–835 行】')
 {
   const t = fs.readFileSync(`${ROOT}/src/cabin/dom.js`, 'utf8')
   const open = 'export const UI_HTML = `\n'
-  const got = N(t.slice(t.indexOf(open) + open.length, t.lastIndexOf('`\n\n/** 把 UI DOM')))
+  let got = t.slice(t.indexOf(open) + open.length, t.lastIndexOf('`\n\n/** 把 UI DOM'))
+
+  // ★ J2.5：菜单里 6 个手写设置控件（完整房屋 / 随机天气 / 流速 / 音效开关与音量 /
+  //   三个视角按钮）被 schema 生成的**分组锚点**替换 —— 控件改由
+  //   `cabin/systems/ui/SettingsForm.js` 按 `src/config/settings.config.js` 生成。
+  //
+  //   判据沿用本项目一贯的**反向还原**（同 verify-f02 把种子随机源还原成 `Math.random()`）：
+  //   把锚点换回上游原文后应与源文件逐字节一致，证明 J2.5 只做了"控件换锚点"这一件事。
+  //   原文**按行号从上游切片**，不手抄 —— 抄错一个空格就会变成假绿。
+  const UNDO = [
+    ['        <div data-setting-group="house"></div>', 757, 761, 'houseToggle'],
+    ['        <div data-setting-group="weather"></div>', 765, 769, 'wxRandToggle'],
+    ['        <div data-setting-group="time"></div>', 774, 775, 'speedSlider'],
+    ['        <div data-setting-group="audio"></div>', 778, 784, 'sfxToggle+sfxSlider'],
+    ['        <div class="sub">视 角</div>\n        <div data-setting-group="view"></div>', 796, 798, 'viewXxxBtn'],
+  ]
+  const applied = []
+  for (const [anchor, from, to, name] of UNDO) {
+    if (!got.includes(anchor)) continue
+    got = got.replace(anchor, slice(from, to))
+    applied.push(name)
+  }
+  // 自动分组容器（J2.5 新增，`SettingsForm` 把"没有锚点的分组"生成到这里）
+  const autoLine = '        <div id="settingsAuto"></div>\n'
+  const hadAuto = got.includes(autoLine)
+  got = got.replace(autoLine, '')
+
+  check('J2.5 的 5 处锚点替换全部命中（改了 dom.js 必须同步本脚本）', applied.length === UNDO.length, applied.join(' / ') || '一处都没命中')
+  check('J2.5 新增的 #settingsAuto 容器存在', hadAuto)
   const want = N(slice(753, 835))
-  check('逐字节一致', got === want, got === want ? `${want.length} 字符` : `${got.length} vs ${want.length}`)
+  check('逐字节一致（还原锚点后）', N(got) === want, N(got) === want ? `${want.length} 字符` : `${N(got).length} vs ${want.length}`)
 }
 
 console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
@@ -111,6 +148,25 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   // Math.random() 已被 F0.2 替换为种子随机源，比对时先反向还原
   const restored = parts.replace(/\b(outdoorRng|floor1Rng|floor2Rng|skyRng|textureRng|slimeRng|runtimeRng)\(\)/g, 'Math.random()')
   const count = (s, re) => (s.match(re) || []).length
+
+  // ★ J2.5 起：配置编排层把菜单里 6 个手写控件的**事件绑定**从 monolith 搬进了
+  //   `cabin/systems/ui/SettingsForm.js`（改由 schema 生成，场景只订阅 store 的值）。
+  //   于是下面三个计数**合法下降**，差值由「从 monolith 删掉的调用」与
+  //   「SettingsForm 新增的调用」共同决定，是**确定的**：
+  //
+  //     getElementById(   删 8（houseToggle / viewXxxBtn×3 / sfxToggle / sfxSlider /
+  //                             wxRandToggle / speedSlider），SettingsForm 不用它 → −8
+  //     addEventListener( 删 8 处手写绑定，SettingsForm 里新增 7 处 → −1
+  //     SND.play(         删 6 处点击音，改为 `bus.on('ui:click')` + 音效开关各 1 处 → −4
+  //
+  //   把差值写进白名单**逐项对照**：与预期不符即失败，仍能抓住意外的增删；
+  //   而"合法下降"本身不必让门禁变红。
+  //   ⚠️ 后续阶段（J3/J4）再动这些调用点时，一并更新这里的期望值并在结果文档里说明。
+  const J25_DELTA = {
+    'addEventListener(': -1,
+    'getElementById(': -8,
+    'SND.play(': -4,
+  }
   for (const [label, re] of [
     ['Math.random()', /Math\.random\(\)/g],
     ['new THREE.Mesh(', /new THREE\.Mesh\(/g],
@@ -123,7 +179,12 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   ]) {
     const a = count(srcText, re)
     const b = count(restored, re)
-    check(`${label}  ${a} → ${b}`, a === b)
+    const delta = J25_DELTA[label] ?? 0
+    check(
+      `${label}  ${a} → ${b}`,
+      b - a === delta,
+      delta === 0 ? '' : `J2.5 已知差 ${delta > 0 ? '+' : ''}${delta}`,
+    )
   }
   check('已无 three.min.js 的 <script> 引用', !/<script\s+src="three\.min\.js"/.test(parts))
 }

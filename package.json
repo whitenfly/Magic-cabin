@@ -1,10 +1,10 @@
 {
   "name": "magic-cabin",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.5-dev.1",
   "type": "module",
   "license": "MIT",
-  "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J2：小屋核心设施）",
+  "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J2.5：配置编排层）",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -26,8 +26,9 @@
     "verify:f03": "node scripts/verify-f03.mjs",
     "verify:f04": "node scripts/verify-f04.mjs",
     "verify:f06": "node scripts/verify-f06.mjs",
+    "verify:cf": "node scripts/verify-cf.mjs",
     "verify:determinism": "node scripts/verify-determinism.mjs 3",
-    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:unit": "node --test --experimental-test-isolation=none \"tests/unit/*.test.mjs\"",
     "test:visual": "node tests/visual/compare.mjs",
     "test:visual:additive": "node tests/visual/compare.mjs --mode=additive",
     "test:smoke": "node tests/e2e/smoke.mjs",
@@ -43,6 +44,7 @@
     "git:status": "node scripts/release.mjs status",
     "git:history": "node scripts/release.mjs history",
     "git:sync": "node scripts/release.mjs sync",
+    "git:exec": "node scripts/release.mjs exec",
     "ship": "node scripts/release.mjs ship",
     "hooks:install": "node scripts/install-hooks.mjs"
   },
