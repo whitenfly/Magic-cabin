@@ -80,7 +80,13 @@ test('Registry：registerInteractable 需要 id；stats 汇总五类', () => {
   reg.registerFeature({ id: 'f1' })
   const s = reg.stats()
   // `J3` 追加 `magicPropIds`：有准星/点击入口的物件 id（物品侧"交互没丢"的唯一可诊断痕迹）
-  assert.deepEqual(s, { props: 1, magicMeshes: 0, magicPropIds: [], lights: 1, interactables: 1, features: 1 })
+  // `J3.1` 追加 `aimBound` / `aimMissing`：把同一判据从"每件物件"下沉到**每条 `Interactable`**
+  //（`{ id: 'i1' }` 没有 `mode` ⇒ 不要求 aim 入口，故不进 `aimMissing`）
+  assert.deepEqual(s, {
+    props: 1, magicMeshes: 0, magicPropIds: [],
+    aimBound: [], aimMissing: [],
+    lights: 1, interactables: 1, features: 1,
+  })
 })
 
 test('Registry：magicPropIds 列出"有准星入口"的物件（J3 aim 桥的可观测判据）', () => {
