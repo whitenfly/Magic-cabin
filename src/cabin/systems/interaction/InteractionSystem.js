@@ -43,6 +43,22 @@ export function createInteractionSystem({ registry = null, warn = () => {} } = {
   const aimSources = []
   /** @type {ReturnType<typeof defineInteractable>[]} */
   const proximity = []
+
+  // ★ `J3`：认领"装配期就已在 `registry` 里"的近距条目。
+  //
+  // `defineProp` 声明的交互在**物件装配时**（远早于本系统创建）写进 `registry.interactables`，
+  // 而本系统在此之前还没有实例 —— 若不在这里认领，那些条目就**只进统计、没有消费者**：
+  // 物件声明了"近距可交互"，玩家走到跟前却按不动（`nearestTarget()` 看不见它们）。
+  //
+  // `J3` 期间 monolith 的 9 条硬编码条目走 `registerProximity()`，是在本系统**创建之后**才注册的，
+  // 因此不会与这个循环重复；`J4` 把两边统一后，这段可以简化成"只读 registry"。
+  // 用 `Array.isArray` 守住：只提供 `registerInteractable` 的最小 registry 替身（单测里常见）
+  // 也能用 —— 认领是"有则收编"，不是"必须有"。
+  if (registry && Array.isArray(registry.interactables)) {
+    for (const it of registry.interactables) {
+      if (it.mode !== 'aim' && !proximity.includes(it)) proximity.push(it)
+    }
+  }
   /** 最近一次 `aimTarget()` 的结果（诊断 / 测试） */
   let lastAim = null
   /** 激活次数（诊断：e2e 可以断言"确实触发过"） */

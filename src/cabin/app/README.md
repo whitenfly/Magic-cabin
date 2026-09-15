@@ -1,7 +1,7 @@
 # cabin/app
 
-> **占位目录** —— 尚未实现。本文档说明它将来放什么、依赖谁、由哪个阶段填充。
-> 填充阶段：**`J2`（小屋核心设施）**，`mounts.js` 属 **`J3`**。
+> **填充阶段**：`J2`（小屋核心设施）✅ 已完成；**`J3`（物件模块化）** 新增了
+> `mounts.js`、`defineProp.js`、`installProp.js` 三个文件 —— 它们是「一件物件 = 一个文件」的落点。
 > 见 [`docs/BuildPlaning/01-完善路线图.md`](../../../docs/BuildPlaning/01-完善路线图.md) §3。
 
 小屋应用内核
@@ -17,7 +17,9 @@
 | `rng.js` | 种子随机（构建期永久确定 / 运行期测试时确定） | 286 处 `Math.random()` | ✅ F0.2 |
 | `clock.js` | 可步进时钟（`?deterministic=1&frames=120` 定格到第 N 帧） | — | ✅ F0.3 |
 | `store.js` | 全局状态 + `settingsSchema` + 持久化 | 小屋现状零持久化 | J2 |
-| **`mounts.js`** ★ | **挂载点 ID 表**：`id → { prop, anchor, radius, parts() }` | 散落各处的物件坐标与命中体 | **J3** |
+| **`mounts.js`** ★ | **挂载点 ID 表**：`id → { prop, anchor, radius, parts() }` | 散落各处的物件坐标与命中体 | ✅ **J3** |
+| **`defineProp.js`** ★ | **物件契约**：`id` / `build` / `state` / `update` / `interactables` / `lights` / `mount` / `parts` | 搬迁前"加一件家具要动五个地方" | ✅ **J3** |
+| **`installProp.js`** ★ | **物件装配器**：把一份 `defineProp` 声明翻译成 物件 / 挂载点 / 交互 / 光源 / 更新 五项登记 | 各物件自己往四个数组里塞 | ✅ **J3** |
 
 ## 依赖方向
 
@@ -44,3 +46,31 @@ app/mounts.js  ──── ctx.mounts.get('shelf/main') ────►  featur
 
 违反任一条，模块就无法独立关闭（验收 `BB3` / `CF1` 会失败）。
 详见 [`docs/BuildPlaning/02-架构与目录调整.md`](../../../docs/BuildPlaning/02-架构与目录调整.md) §5。
+
+---
+
+## ★ 一件物件 = 一个文件（`J3`）
+
+`J2` 造好注册机制后，`J3` 用三个文件把它接到物件上：
+
+```
+world/floor1/bookshelf.js
+  export default defineProp({ id, mount, build, state, interactables, lights, update, parts })
+        │   import 的是**契约**（defineProp.js），不是内核
+        ▼
+legacy/monolith.js  installProp(bookshelf)      ← 在**原位置**同步调用
+        │
+        ├─ build(ctx)           建几何（内部自己 scene.add，与原实现逐字节等价）
+        ├─ registry.registerProp(root, { id, kind, mount })
+        ├─ mounts.claim(mount, { prop, anchor, radius, parts })
+        ├─ registry.registerInteractable(...)   ← 取代 64 处 `regMagic`
+        ├─ registry.registerLight(...)          ← 取代末尾硬编码的 `PP[i]`
+        └─ scheduler.add(id, update, { tier })  ← 取代 `animate()` 里的内联分支
+```
+
+**为什么 `installProp` 在 `app/` 而不是让物件自己登记**：`J2` 的 DoD 是「新增一盏灯 / 一个交互的
+**改动文件数 = 1**」。物件只声明"我有什么"，"怎么登记"由内核代劳。
+
+⚠️ **装配顺序是行为的一部分**（三条不可破的规矩，见 `installProp.js` 文件头）：
+`build` 必须在 monolith 的**原位置**调用（`rng` 是种子随机源，调用顺序决定后面所有随机数）、
+装配只写元数据不碰对象父子关系、`lights` 的声明顺序 = 原来 `PP[i]` 的槽位顺序。

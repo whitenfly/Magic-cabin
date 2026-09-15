@@ -1,0 +1,14 @@
+{
+  "id": "floor2/junk-boxes",
+  "name": "junkBoxes",
+  "assign": "junkApi",
+  "file": "src/cabin/world/floor2/junkBoxes.js",
+  "batch": "B3",
+  "startMarker": "            /* 18.16 右前角杂物纸箱（左右两片盖向外翻开） */",
+  "endMarker": "            /* 18.17 新增装饰统一刷新（独立动画循环） */",
+  "layout": [
+    { "name": "JUNK_X", "value": "3.34", "doc": "右前角杂物纸箱（18.16）中心 x" },
+    { "name": "JUNK_Z", "value": "3.34", "doc": "右前角杂物纸箱（18.16）中心 z" }
+  ],
+  "notes": "用到的 ctx 键：scene / L(JUNK_X, JUNK_Z, FY) / put / MAT。私有顶层量 junkG / junkFlaps / junkInside / CB_COL / CB_DARK / junkCv / junkTex / junkLabel 已 grep 核对：只在本段出现，全部收进 build()；顶层 `let junkOpen / junkT` 只在本段 + updateNewDecor 的 6 行里出现 ⇒ 搬进 state: () => ({ open: false, t: 0 })。边界：endMarker 取 18.17 的标题行（`====` 分隔线全文件 54 处重复，不能当标记）。rng：本段不使用 rng。★ 新增代码共有三份『复刻工具』：cbox / colEdge（monolith 的共享工具，分别住在 18.10 / 18.12 分区开头，IIFE 闭包内、不在 ctx 可用键里）复刻进 build()，smooth（`const smooth = k => k * k * (3 - 2 * k)`）复刻进 update()；三者都是纯函数、逐字复刻，用同一个 MAT，输出对象层级/几何/材质参数与搬迁前逐项一致。若评审不接受复刻，请**先删本 spec 再决定**（另一条路是把这批工具提取进 core/geometry 并由 ctx 注入）。★★ 需要人工在 monolith 侧做两件事（与 floor1/broom 同款『原地 tick』）：① 装配行接住句柄 `const junkApi = installProp(junkBoxes);`；② 把 updateNewDecor() 里那 6 行（`junkT += ((junkOpen ? 1 : 0) - junkT) * 0.075;` … `junkInside.position.y = Math.sin(Math.min(1, junkT) * Math.PI) * 0.05;`）替换为 `junkApi.tick(dt, time);` —— **参数顺序是 (dt, time)**，而 updateNewDecor 自己的形参是 (time, dt)，写反会让开合速度变化。调用点仍在 updateNewDecor 内 ⇒ rAF 装饰循环与 manual 步进两条路径的时机与搬迁前一致。未做人工改动 = ReferenceError（立刻可见）。interactables：原 regMagic(junkG) 一条，改为 id 'junk-box/open'、label '翻开杂物纸箱的盖子'、mode both、anchor 取 L.JUNK_X/L.JUNK_Z（与几何同源）、radius 1.8。"
+}

@@ -52,6 +52,8 @@ if (installed === 0) {
 }
 
 console.log('');
-console.log(`  ${C.d}钩子不阻塞 git：内部任何异常都会静默退出，绝不让 commit/merge 失败${C.x}`);
+console.log(`  ${C.d}记录类钩子（post-*）不阻塞 git：内部异常一律静默退出${C.x}`);
+console.log(`  ${C.d}★ pre-commit 是唯一**阻塞型**钩子：在 dev/main 上拒绝开发提交（VERSIONING.md §1 R1）${C.x}`);
+console.log(`  ${C.d}  合法豁免：合并提交、发布元数据提交（只改 package.json）；紧急绕过 git commit --no-verify${C.x}`);
 console.log(`  ${C.d}它们只在 GitPushHistory.md 里追加记录（该文件不进版本库）${C.x}`);
 console.log(`  ${C.g}✓${C.x} 完成：${installed} 个钩子已安装`);

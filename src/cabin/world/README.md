@@ -23,6 +23,44 @@
 
 标准动作见 [`docs/MIGRATION.md`](../../../docs/MIGRATION.md) §7，分区 ↔ 文件的完整映射表见同文 §3。
 
+### ★ 两条 SOP 没写、但一定会遇到的事（`J3` 实操）
+
+**① 有动画的物件：`update` 要用「原地 tick」接回去**
+
+`UpdateScheduler` 在 `J3` 期间**只被登记、不被执行** —— `animate()` 仍然直接调用 `tickOnce()`。
+所以每帧分支搬进 `update()` 之后，必须由 monolith 在**原位置**调用它：
+
+```js
+/* monolith 装配点 */   const broomApi = installProp(broom);
+/* tickOnce() 原位置 */ broomApi.tick(dt, time);
+```
+
+顺序一个字节没变 ⇒ 画面逐字节不变。`J4` 把主循环收成调度骨架时，删掉这一行即可
+（`update` 已经登记进 scheduler，切换零成本）。这就是 [`app/installProp.js`](../app/installProp.js)
+文件头「原地 tick」那一节说的事。
+
+**② 共享工具：用 `ctx` 取，不要复制实现**
+
+装配环境是**惰性**的，提供 30 多个键 —— 除几何 DSL 与材质外，还有
+`cbox` / `crboxCol` / `colEdge` / `crumpleBall` / `arcPos` / `jitterGeo` / `hash01` / `smooth`
+/ `regSlide` / `registerHinge` / `regWobble` / `makeWavyFlame` / `updateWavyFlame`。
+
+```js
+build({ scene, L, put, cbox, regSlide }) { … }   // ✅ 按需解构
+build(ctx) { const { put } = ctx; … }            // ✅ 也行
+build({ ...ctx }) { … }                          // ❌ 展开会一次性触发所有 getter
+```
+
+「惰性」是为了让**装配点早于工具定义**的物件也能用上它们（`smooth` 住在 18.8 段、
+`cbox`/`crboxCol` 在 18.10 段、`colEdge` 在 18.12 段）。把工具函数复制一份进 `build()`
+是最后手段 —— 那等于让代码库分叉。
+
+**③ 搬走一件 `regMagic` 之前，先想清楚「准星入口」还在不在**
+
+`J3` 期间 aim（准星 / 点击）仍由 `magicMeshes` + `userData.onClick` 驱动。
+`installProp()` 会把这三件事等价补上（见其 ⑤.2 节），但这条通路**像素回归测不出来**、
+冒烟也不覆盖 —— 所以门禁是 `registry.stats().magicPropIds`（`tests/e2e/j3-probe.mjs` 断言它）。
+
 ## ★ 本目录最重要的一条规矩：物品不认识模块
 
 物件**不得** import `blog/**` 或 `features/**`（不变量 `N2`）。它只做两件事：

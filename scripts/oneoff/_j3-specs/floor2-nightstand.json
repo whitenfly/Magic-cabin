@@ -1,0 +1,15 @@
+{
+  "id": "floor2/nightstand",
+  "name": "nightstand",
+  "file": "src/cabin/world/floor2/nightstand.js",
+  "batch": "B2",
+  "startMarker": "            /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */",
+  "endMarker": "            /* ---- 18.3 蜡烛 ---- */",
+  "layout": [],
+  "notes": "★ 本文件后缀是 .pending（应用器只读 *.json）—— 前置条件做完再改名成 floor2-nightstand.json。本件没有 update（抽屉由 updateSprings() 的滑轨驱动，tickOnce 开头已调用），几何与交互都已备好并用 _j3-verify-b2.mjs 验过（put 9 次 / 抽屉位置 (NSX, FY+0.40, NSZ+0.20) / regSlide('z', 0.26) 且 base 取登记时刻位置）。layout 留空：NSX/NSZ/FY 本就在 layout.js，写出重复常量反而是错。",
+  "prereq": [
+    "① 推荐：在 monolith 的 createPropInstaller ctx 里补一行 `regSlide,`（它来自文件上方 `createSpringSystem()` 的解构）—— 一行解开 B2 床头柜抽屉、B4 衣柜抽屉/小凳、B5 门窗 registerHinge 这一整类。做完即可改名应用，无需其它手工改动。",
+    "①′ 备选：保持 ctx 不变 —— 改成手工一行：spec 里加 \"assign\": \"nightstandApi\"，装配行写 `const nightstandApi = installProp(nightstand);`，紧跟一行 `regSlide(nightstandApi.parts.drawer, 'z', 0.26);`；同时删掉 prop 的 build 里 `regSlide(drawerG, 'z', 0.26);` 那一行（其余一字不改）。",
+    "② 两种走法都不要动 `regMagic(drawerG, …)` 之外的任何一行：抽屉进度仍住在 userData.slide（J2.4 固定的契约字段）。"
+  ]
+}

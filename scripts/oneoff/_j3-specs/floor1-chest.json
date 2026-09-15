@@ -1,0 +1,19 @@
+{
+  "id": "floor1/chest",
+  "name": "chest",
+  "assign": "chestApi",
+  "file": "src/cabin/world/floor1/chest.js",
+  "batch": "B2",
+  "startMarker": "            /* ---- 12.9c 宝箱 ---- */",
+  "endMarker": "            /* ---- 12.9d 旋转星铃 ---- */",
+  "layout": [
+    { "name": "CHEST_POS", "value": "{ x: -3.72, y: 0.805, z: -2.66 }", "doc": "小宝箱（12.9c）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）" }
+  ],
+  "notes": "有动画的物件（B2）。几何段整体搬走；顶层 let chestOpen/chestP/chestV 收进 state（变量名一个没改），chest/chestLid/chestGem 经 build 的 { root, parts } 交出，regMagic 换成 interactables(mode:'both', label '打开 / 合上小宝箱')。★ 必须人工完成 tickOnce 侧的一处替换（应用器只管几何段）：把原来 animate() 里宝箱那个自足块 —— 原文以 `{` 起、`const target = chestOpen ? 1 : 0;` 为第一行、`}` 止（搬迁时 L8522–8533，块内共 12 行，夹在沙漏块与 `/* ---- 楼梯下储物箱 ---- */` 块之间）—— 整块删除，并在同一位置写一行 `chestApi.tick(dt, time);`，装配行写成 `const chestApi = installProp(chest);`（`installProp(chest);` 子串仍在 ⇒ 应用器的『已应用』判定不会误判）。原地 tick 的理由见 src/cabin/app/installProp.js 文件头。本件与 floor1-hourglass 相邻：两个 spec 的边界行互为对方的 endMarker/startMarker，先应用哪个都合法（应用器只删 [start,end) 之间的内容，边界行本身保留）。几何段与每帧分支已用脚本逐行比对：几何 13/13 行、分支 12/12 行逐行等价（去掉已知改写后）。另注意：搬到 interactables 后该物件不再进 magicMeshes ⇒ J3 期间失去准星/点击入口、改为近距入口（与 broom 同一处理）。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：沙漏块之后、`/* ---- 楼梯下储物箱：开盖 + 矿石旋转起伏 ---- */` 块之前（搬迁时 L8522–8533）",
+    "note": "应用器只管几何段，这一段由人工替换（风格照 12.10 魔法扫帚那处）",
+    "old": "                {\n                    const target = chestOpen ? 1 : 0;\n                    chestV += (target - chestP) * 0.02;\n                    chestV *= 0.9;\n                    chestP += chestV;\n                    chestLid.rotation.x = -1.25 * chestP;\n                    chestGem.visible = chestP > 0.3;\n                    if (chestGem.visible) {\n                        chestGem.position.y = 0.11 + Math.sin(time * 2.5) * 0.008 + chestP * 0.015;\n                        chestGem.rotation.y = time * 1.2;\n                    }\n                }",
+    "new": "                {\n                    // J3：小宝箱的每帧分支已搬入 cabin/world/floor1/chest.js。\n                    // **原位置调用** —— 顺序与搬迁前一致，画面因此逐字节不变。\n                    chestApi.tick(dt, time);\n                }"
+  }
+}

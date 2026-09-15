@@ -1,0 +1,15 @@
+{
+  "id": "floor1/hang-bar",
+  "name": "doorHangBar",
+  "assign": "doorHangBarApi",
+  "file": "src/cabin/world/floor1/doorHangBar.js",
+  "batch": "B3",
+  "startMarker": "            /* ---- 门口上方挂杆 ---- */",
+  "endMarker": "            /* ============ 楼梯下储物箱（点击开盖，内藏彩色矿石） ============ */",
+  "layout": [
+    { "name": "HANGBAR_X", "value": "0", "doc": "门口上方挂杆（含晴天娃娃 / 玻璃风铃）中心 x" },
+    { "name": "HANGBAR_Y", "value": "2.66", "doc": "门口上方挂杆中心高度 y" },
+    { "name": "HANGBAR_Z", "value": "3.86", "doc": "门口上方挂杆中心 z（门内侧）" }
+  ],
+  "notes": "★ 三段合成一件（任务书对本段明确允许的做法）：「门口上方挂杆」+「晴天娃娃」+「玻璃风铃」共享同一个 hangBar 父节点（sunPivot/chimePivot 都是 hangBar.add 的子节点），且 tickOnce 的每帧分支把两者放在同一个循环里（for (const h of [sunPivot, chimePivot])）。拆开必然产生悬空引用：挂杆搬走后 monolith 里的 hangBar.add(sunPivot) 找不到 hangBar（模块作用域与 IIFE 闭包不通，hangBar 也不在 ctx 里），故整段一起搬。用到的 ctx 键：scene / L(HANGBAR_X, HANGBAR_Y, HANGBAR_Z) / put / box / line / edge / geo / LITMAT / MAT / DARK。状态：本例原本就把状态放在 userData（sunPivot.userData = { energy: 0, ph: 0 }、chimePivot.userData = { energy: 0, ph: 2 }），不是顶层 let，故**逐字保留在 userData**，未引入 state()（N7：不新增全局可变状态）；interactables() 与 update() 都经 ctx.parts 拿到两个摆锤。interactables：原 regMagic(sunPivot) / regMagic(chimePivot) 两条，label 语义化、mode both、锚点由 L.HANGBAR_X/HANGBAR_Z 与几何同源（N9，±0.27 就是两个 pivot 的局部偏移）。★★ 需要人工在 monolith 侧做两件事（应用器只管几何段，与 floor1/broom 同款『原地 tick』）：① 把装配行接住句柄 `const doorHangBarApi = installProp(doorHangBar);`；② 把 tickOnce() 里 `/* ---- 晴天娃娃 + 风铃 ---- */` 那个 { for (const h of [sunPivot, chimePivot]) … } 块替换为 `doorHangBarApi.tick(dt, time);`（原位置调用 ⇒ 每帧顺序一个字节没变）。update() 的函数体逐字搬运，只把 [sunPivot, chimePivot] 换成 [parts.sunPivot, parts.chimePivot]。未做的人工改动 = 每帧分支读不到摆锤 ⇒ ReferenceError（立刻可见，不是隐蔽的像素差异）。另：本段不使用 rng、不含光源、不新增 Group 层级（hangBar 直接 scene.add，两个 pivot 直接 hangBar.add，与原实现相同）。"
+}

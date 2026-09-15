@@ -1,0 +1,17 @@
+{
+  "id": "floor2/crate",
+  "name": "crate",
+  "file": "src/cabin/world/floor2/crate.js",
+  "batch": "B4",
+  "startMarker": "            /* 置物箱（挎包旁边地上）：加宽 + 简化 + 颜色统一 */",
+  "endMarker": "            /* 可推拉小凳子（挎包下方、箱子旁的地上，点击拉出/推回） */",
+  "layout": [
+    { "name": "CRATE_X", "value": "0.95", "doc": "二楼置物箱中心 x（floor2/crate 与 floor2/witch-hat 共用）" },
+    { "name": "CRATE_Z", "value": "3.48", "doc": "二楼置物箱中心 z（floor2/crate 与 floor2/witch-hat 共用）" },
+    { "name": "CR_W", "value": "0.68", "doc": "置物箱箱体宽（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）" },
+    { "name": "CR_D", "value": "0.55", "doc": "置物箱箱体深（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）" },
+    { "name": "CR_H", "value": "0.32", "doc": "置物箱箱体高（CRATE_TOP 由它推出，floor2/witch-hat 共用）" },
+    { "name": "CRATE_TOP", "value": "FY + CR_H + 0.092", "doc": "置物箱盖顶面高度（魔女帽的帽座 HAT_HOME_POS 与糖果落点判定，floor2/witch-hat 共用）" }
+  ],
+  "notes": "纯装饰：本段**原本就没有 regMagic**（L4676–4690 一处也没有）⇒ 无 state / update / interactables / assign。四次 `put(cbox(…))` 都直接挂到 scene（**没有自己的 Group**）⇒ build 不返回 root（与 floor1/rugUnderTable 同款：installProp 允许 build 返回 undefined，此时只登记元数据，不碰父子关系）；**不要**为了给它一个 root 而加一层 Group（会改动 scene.children 与绘制顺序）。区间 = L4675–L4692（吞掉两端 ==== 分隔线，纯注释）。用到的 ctx 键：L / put / cbox。layout：CR_W / CR_D / CR_H / CRATE_TOP **是跨件共享的** —— 魔女帽的帽座 `HAT_HOME_POS = V(crateX, CRATE_TOP, crateZ)` 与撒糖落点判定（`Math.abs(x - crateX) < CR_W / 2 + 0.02`）都要用 ⇒ 按 N9 只能有一处真源，故进 layout（与 floor1/broom 把 BROOM_REST/BROOM_FLY 放进 layout 同理）。声明顺序 CR_W → CR_D → CR_H → CRATE_TOP **不可调换**（CRATE_TOP = FY + CR_H + 0.092 依赖 CR_H；应用器按本数组顺序写进同一区块）。★★ 本件**必须与 floor2/witch-hat 同批应用**：单独 `--only=floor2/witch-hat` 会让 L.CR_W / CRATE_TOP 等为 undefined，帽座与糖果落点全变 NaN。★ 注：紧邻其后的 `/* 可推拉小凳子… */`（L4693–L4729）本批**不搬**（stoolG 被区间外的 movingPlatforms 引用），原样留在 monolith —— 本区间在其**之前**结束，与之无重叠。"
+}

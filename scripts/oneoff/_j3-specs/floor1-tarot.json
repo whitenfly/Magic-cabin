@@ -1,0 +1,23 @@
+{
+  "id": "floor1/tarot",
+  "name": "tarot",
+  "assign": "tarotApi",
+  "file": "src/cabin/world/floor1/tarot.js",
+  "batch": "B3",
+  "startMarker": "            /* ---- 12.12 塔罗牌牌堆 ---- */",
+  "endMarker": "            /* ---- 12.13 暖桌（八角桌板 + 等腰梯形垂帘 + 四角倒三角填补）+ 收音机 + 果盆橘子 + 方坐垫 ---- */",
+  "layout": [
+    {
+      "name": "TAROT_POS",
+      "value": "{ x: -0.75, y: 0, z: -2.8 }",
+      "doc": "塔罗牌牌堆（12.12）的组原点（`tarotG.position`）"
+    }
+  ],
+  "notes": "有动画的物件（B3）：几何 + 状态 + 交互 + 每帧分支全部搬进物件；update 由 tickOnce() 在**原位置**调用（原地 tick）。【边界】区间 = 搬迁时 L1842–1900（几何 1842–1853 + `let tarotState…` 1854 + `const TAROT_N` 1855 + 9 张牌循环 1856–1878 + 函数 tarotPose 1879–1888 + regMagic 1889–1899 + 一个空行）；endMarker 是 12.13 暖桌那行，本身保留。【拆干净的证明】grep 全文件：`tarotG` / `tarotCards` / `tarotState` / `tarotT` / `TAROT_N` / `tarotPose` 的全部命中都落在 L1842–1899 与每帧块 L8050–8092 之内（`tarotPose` 只在每帧块 L8060 / L8072 被调用）⇒ 区间外零引用。【两处搬迁必需的调整】① `tarotPose` 由 IIFE 闭包挪到**本文件模块作用域**（函数体一字未改；它只读自己的 (u,i,t) 三个参数，不碰闭包变量）；② `tarotCards` 经 parts.cards 交出（同一数组实例）、`tarotState`/`tarotT` 收进 state、`regMagic` 回调体进 onActivate；`TAROT_N` 留在 build 内（局部尺寸不进 layout）。【ctx 键】scene / L / put / box / line / edge / logBetween / rng（rng.floor1）；未用 cbox / crboxCol / colEdge / crumpleBall / arcPos / jitterGeo / hash01 / smooth / regSlide / registerHinge / regWobble / makeWavyFlame / updateWavyFlame。【rng】每张牌 2 次 floor1Rng() × 9 张 = 18 次（已在 `_j3-verify-b3-props.mjs` 里跑桩 ctx 实测 18），发生在 build 内、位置即原区间 ⇒ 次数与顺序不变。【交互】id `tarot/flip`（原 regMagic 一条）→ mode:'both'，准星/点击通路由 installProp 自动补齐。【需要人工做的 monolith 侧改动】① 装配行 `const tarotApi = installProp(tarot);`（应用器按 assign 生成）；② 把 tickOnce() 里 `/* ---- 塔罗牌 ---- */` 那个每帧块按 tick.old 原文整块替换成 tick.new。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：`/* ---- 塔罗牌 ---- */` 那个块（搬迁时 L8048–8094，紧跟暖桌坐垫块之后、`for (const f of candleWavy)` 之前）",
+    "note": "应用器只管几何段；这一段由人工替换（风格照 12.10 魔法扫帚那处）",
+    "old": "                /* ---- 塔罗牌 ---- */\n                {\n                    const n = tarotCards.length;\n                    if (tarotState === 'flying') {\n                        tarotT += dt;\n                        let done = true;\n                        for (let i = 0; i < n; i++) {\n                            const c = tarotCards[i], u = c.userData;\n                            const delay = i * 0.08;\n                            const p = Math.min(Math.max((tarotT - delay) / 0.75, 0), 1);\n                            if (p < 1) done = false;\n                            const e = p * p * (3 - 2 * p);\n                            const fp = tarotPose(u, i, time);\n                            c.position.x = u.sx + (fp.x - u.sx) * e;\n                            c.position.y = u.sy + (fp.y - u.sy) * e + Math.sin(p * Math.PI) * 0.18;\n                            c.position.z = u.sz + (fp.z - u.sz) * e;\n                            c.rotation.y = u.sry + (fp.ry - u.sry) * e;\n                            c.rotation.x = fp.rx * e;\n                            c.rotation.z = fp.rz * e;\n                        }\n                        if (done) tarotState = 'floating';\n                    } else if (tarotState === 'floating') {\n                        for (let i = 0; i < n; i++) {\n                            const c = tarotCards[i], u = c.userData;\n                            const fp = tarotPose(u, i, time);\n                            c.position.set(fp.x, fp.y, fp.z);\n                            c.rotation.set(fp.rx, fp.ry, fp.rz);\n                        }\n                    } else if (tarotState === 'returning') {\n                        tarotT += dt;\n                        let done = true;\n                        for (let i = 0; i < n; i++) {\n                            const c = tarotCards[i], u = c.userData;\n                            const delay = (n - 1 - i) * 0.07;\n                            const p = Math.min(Math.max((tarotT - delay) / 0.65, 0), 1);\n                            if (p < 1) done = false;\n                            const e = p * p * (3 - 2 * p);\n                            c.position.x = u.px + (u.sx - u.px) * e;\n                            c.position.y = u.py + (u.sy - u.py) * e + Math.sin(p * Math.PI) * 0.15;\n                            c.position.z = u.pz + (u.sz - u.pz) * e;\n                            c.rotation.y = u.pry + (u.sry - u.pry) * e;\n                            c.rotation.x = u.prx * (1 - e);\n                            c.rotation.z = u.prz * (1 - e);\n                        }\n                        if (done) tarotState = 'stacked';\n                    }\n                }",
+    "new": "                {\n                    // J3（B3）：塔罗牌阵的每帧分支已搬入 world/floor1/tarot.js（原地 tick）\n                    tarotApi.tick(dt, time);\n                }"
+  }
+}

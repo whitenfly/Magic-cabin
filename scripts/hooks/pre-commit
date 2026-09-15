@@ -1,0 +1,56 @@
+#!/bin/sh
+# 魔法小屋 · pre-commit 钩子：★ 本仓库**唯一的阻塞型钩子**
+#
+# 目的：在 `dev` / `main` 上拒绝开发提交（VERSIONING.md §1 R1 / 判例 P1）。
+#       其余钩子（post-commit / post-merge）的原则是"绝不阻塞 git"，
+#       本钩子**故意例外** —— 它存在的意义就是在违规发生的那一刻挡住它。
+#
+# 两类合法豁免（与 scripts/release.mjs 的 guardProtectedBranch() 同一套判据）：
+#   ① 合并提交：MERGE_HEAD 存在（冲突解决后的收尾提交，本质是完成一次 merge）
+#   ② 发布元数据提交：暂存区**只有** package.json（§5.2 的 chore(release)）
+#
+# 紧急绕过：git commit --no-verify
+#   ⚠️ 绕过会在 reflog 里留痕。用了就必须在 GitPushHistory.md 补一条记录说明理由（§13）。
+#
+# 恢复方式（换机器 / 重新 clone 后）：node scripts/install-hooks.mjs
+# ⚠️ 受限沙箱里 Git 可能无法执行 hook（sh.exe 报 couldn't create signal pipe）——
+#    此时由 `release.mjs exec` 那层防护兜底（模型路径 100% 覆盖）。
+
+branch=$(git branch --show-current 2>/dev/null)
+
+# 只在受保护分支上检查；task/* 与 detached HEAD 一律放行
+case "$branch" in
+  dev|main) ;;
+  *) exit 0 ;;
+esac
+
+# 豁免 ①：正处于合并中
+gitdir=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$gitdir" ] && [ -f "$gitdir/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+# 豁免 ②：发布元数据提交（暂存区只有 package.json）
+staged=$(git diff --cached --name-only 2>/dev/null)
+if [ "$staged" = "package.json" ]; then
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+  ✗ 拒绝提交：当前在 '$branch' 上直接提交 —— 违反 VERSIONING.md §1 R1
+
+    为什么：在 $branch 上直接提交会让改动散落在主线历史里，
+    无法用一条 revert 整体撤销（判例 P1：J3 的 6217 行 / 35 个模块只能逐个挑）。
+
+    正确做法：
+      node scripts/release.mjs start <编号> <短名>      # 先开 task/ 分支（当前改动会一起带过去）
+      node scripts/release.mjs exec -- git commit -F .cache/commit-msg.txt
+      node scripts/release.mjs done <编号> --base=<x.y.z>
+
+    合法豁免只有两种：合并提交、发布元数据提交（只改 package.json）。
+    紧急绕过（会在 reflog 留痕，事后须在 GitPushHistory.md 补记录）：git commit --no-verify
+
+EOF
+
+exit 1

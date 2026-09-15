@@ -1,0 +1,28 @@
+{
+  "id": "floor2/snow-globe",
+  "name": "snowGlobe",
+  "assign": "snowGlobeApi",
+  "file": "src/cabin/world/floor2/snowGlobe.js",
+  "batch": "B5",
+  "startMarker": "            /* —— 玻璃雪景球 —— */",
+  "endMarker": "            /* —— 沙漏 —— */",
+  "layout": [
+    {
+      "name": "SNOW_X",
+      "value": "3.50",
+      "doc": "二楼书桌桌面玻璃雪景球（18.4）中心 x"
+    },
+    {
+      "name": "SNOW_Z",
+      "value": "-2.80",
+      "doc": "二楼书桌桌面玻璃雪景球（18.4）中心 z"
+    }
+  ],
+  "tick": {
+    "at": "tickOnce() 里 `updateLayerAnim(dt);` 之后那一行（当前 L6874）",
+    "note": "原样换成一行 `snowGlobeApi.tick(dt, time);`。前一行 `updateLayerAnim(dt);`（本批 rubik 的 tick 会把它和 updateRubik 一起并掉）与后一行 `updateHourglass(time);`（本批新 spec）留在原地。⚠️ 原名是 `updateSnow(time, dt)`，tick 的顺序是 (dt, time)。",
+    "old": "                updateSnow(time, dt);",
+    "new": "                // J3（B5）：玻璃雪景球（雪花翻滚 / 落回 / 复位）的每帧分支已搬入 world/floor2/snowGlobe.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                snowGlobeApi.tick(dt, time);"
+  },
+  "notes": "用到的 ctx 键：scene / L(SNOW_X, SNOW_Z, TBL_TOP) / V / LITMAT / rng.floor2 / rng.runtime（按需解构）。本件**没有 state** —— 原来也没有任何跨帧状态（雪花的运动全在 snowParts 的每个元素上，而它属于几何）⇒ update 里连 s 都不用。私有顶层量 snowG / SNOW_C / SNOW_R / SNOW_FLOOR / snowParts / woodM / base / baseG / trim / glass / whiteM / ground / TX / TZ / trunkM / g1 / trunk / grn1 / grn2 / t1 / m1 / t2 / m2 / t3 / m3 / houseM / hG / house / roofG / roof / flakeM 已逐名 grep 核对：区间外**只**在 tickOnce 那一行被读（updateSnow）；其余同名命中全是别的分区里的**块级同名局部量**（如 snow 段外还有 `base`/`glass`/`m1`/`t2`/`ground`），作用域无关。SNOW_C / SNOW_R / SNOW_FLOOR 是**局部空间的球心/半径/落点高度**（不是摆放坐标），按 mirror.js 对 OUT_W/IN_H 的处置留在 build 里，经 parts 交给 update；只有摆放坐标 3.50 / -2.80 进 layout（不变量 N9）。rng：build 里每片雪花 5 次 floor2Rng()，共 24 片；点击与每帧落底重抛用 runtimeRng，都是同一个随机源实例，次数与顺序未变。interactables：原 `regMagic(snowG, …)` 一条，id `snow-globe/shake`、label `摇晃玻璃雪景球`、mode both、anchor 取 L.SNOW_X / L.SNOW_Z、radius 1.4。（该块内循环变量仍叫 s —— 原实现就是 `for (const s of snowParts)`，遮蔽外层 state 形参但块内不用 state，函数体因此逐字未改。）"
+}

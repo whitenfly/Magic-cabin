@@ -1,0 +1,18 @@
+{
+  "id": "floor2/tissue-box",
+  "name": "tissueBox",
+  "assign": "tissueBoxApi",
+  "file": "src/cabin/world/floor2/tissueBox.js",
+  "batch": "B4",
+  "startMarker": "            /* 抽纸盒 */",
+  "endMarker": "            /* 18.12 烟囱墙：魔法时钟（与现实时间同步） */",
+  "layout": [
+    { "name": "TISSUE_X", "value": "1.42", "doc": "二楼书桌上的抽纸盒中心 x" },
+    { "name": "TISSUE_Z", "value": "-2.15", "doc": "二楼书桌上的抽纸盒中心 z" }
+  ],
+  "tick": {
+    "old": "                updateTissue(time, dt);",
+    "new": "                tissueBoxApi.tick(dt, time);"
+  },
+  "notes": "区间 = L5027–L5177（吞掉两端 ==== 分隔线，纯注释）。两条 regMagic → 两条 interactables：主入口 `tissue-box/pull`（mode **both**，锚点 = L.TISSUE_X / L.TISSUE_Z，与盒体同源）、次入口 `tissue-paper/crumple`（mode **aim** —— 原实现这一条本来就只有 aim 通路、没有近距条目，而且纸巾多数时间 visible=false，给它一条常驻近距会让玩家站书桌旁看到「把摊在桌上的纸巾揉成团」这条根本没东西可揉的提示）。state：tissueState → s.phase / s.t，standbyAnimT → s.standbyT。四个**推导坐标** SLOT_POS / DESK_REST / BIN_MOUTH / BIN_FALL 在 build 里推导一次，经 parts（slot / desk / mouth / fall）交给 interactables 与 update（N9 单一真源；interactables 与 update 里按**原名**解构回来，函数体因此逐字不变）。layout：TISSUE_X / TISSUE_Z；BIN_X / BIN_Z / BIN_H 由 floor2/bin 的 spec 声明 ⇒ **必须与 floor2/bin 同批应用**（否则 L.BIN_X 为 undefined）。用到的 ctx 键：scene / L / V / cbox / crboxCol / iline / crumpleBall / arcPos / smooth。★★ **已知缺口（J3 aim 桥的固有限制，画面完全不受影响）**：原 `regMagic(tissuePaperG, …)` 把「纸」的 Mesh 收进 magicMeshes，而 installProp 的 aim 桥只认**一个** root（本件是 tissueBoxG），tissuePaperG 是 scene 的**兄弟节点**（搬迁前后都如此）⇒ J3 期间「纸摊在桌上时点它揉成团」这一步点不动（纸会一直摊在桌上；像素回归看不见）。给两者套一层共同父 Group、或把纸挂到盒下，都会改动 scene.children 与透明物体的绘制顺序（像素雷区），故不动；这条应由 J4 的统一交互契约收编（installProp 文件头已写明：⑤.2 那一段连同 magicMeshes 在 J4 一并删除）。次入口仍如实声明，届时即可用。★★ **tick 接线（本 spec 的 tick 字段，应用器直接代劳，无需人工）**：tickOnce() 里那一行（当前 L8378，紧跟在 `for (const tg of toppleGroups) updateTopple(tg);` 之后）\n                    updateTissue(time, dt);\n替换为 `                tissueBoxApi.tick(dt, time);` —— ⚠️ 参数顺序是 (dt, time)，而原函数是 (time, dt)；tick.old 已逐字给出该行（含 16 空格缩进与分号）且全文唯一（已用应用器的 countOf 核过）。它后面紧跟的 `                updateWobblers(dt);`（L8379）**必须留在原地**，再往后是 updateHat/updateCandies（本批已搬入 floor2/witch-hat）。updateTissue 的函数体逐字搬运（原函数形参是 (time, dt) 但函数体只用 dt —— 原实现亦然）。"
+}

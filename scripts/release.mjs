@@ -1007,9 +1007,70 @@ function isRecordableOp(op) {
   return argv.length > 0 && isMutatingGit(argv);
 }
 
+/**
+ * ★ 受保护分支的机械防护（VERSIONING.md §1 R1 / 判例 P1）。
+ *
+ * 规则：**禁止在 `dev` / `main` 上产生开发提交**。所有改动必须在 `task/*` 分支上产生，
+ * 并以 `--no-ff` 合并进入 —— 否则任务失去"一条 `revert` 整体撤销"的边界
+ * （判例 P1：`J3` 的 6 个提交直接落在 dev 上，6217 行 / 35 个模块只能逐个挑）。
+ *
+ * 为什么必须有这层防护，而不是只写进文档：
+ *   文档禁令已经存在（旧版 §12.5 红线 1），`J3` 依然违反了 —— **光靠自觉不够**。
+ *
+ * 两类**合法豁免**（白名单，宁窄勿宽）：
+ *   ① 合并提交：`MERGE_HEAD` 存在（冲突解决后的 commit，本质是完成一次 merge）；
+ *   ② 发布元数据提交：**暂存区只有 `package.json` 一个文件**（§5.2 的 `chore(release)`）。
+ *      开发提交不可能只改 `package.json`，所以这条判据不会误伤。
+ *
+ * @returns {string|null} 违规说明；合规时返回 null
+ */
+function guardProtectedBranch(argv) {
+  if (argv[0] !== 'commit') return null;
+  const branch = g(['branch', '--show-current']).trim();
+  if (branch !== DEV_BRANCH && branch !== MAIN_BRANCH) return null;
+
+  // 豁免 ①：处于合并中（git merge 的收尾提交）
+  if (gOK(['rev-parse', '--verify', '-q', 'MERGE_HEAD'])) return null;
+
+  // 豁免 ②：发布元数据提交（只暂存了 package.json）
+  const staged = g(['diff', '--cached', '--name-only'])
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (staged.length === 1 && staged[0] === 'package.json') return null;
+
+  return (
+    `在受保护分支 \`${branch}\` 上直接提交被拒绝（VERSIONING.md §1 R1）。\n` +
+    `    正确做法：\n` +
+    `      node scripts/release.mjs start <编号> <短名>     # 先开 task/ 分支（当前改动会一起带过去）\n` +
+    `      node scripts/release.mjs exec -- git commit -F .cache/commit-msg.txt\n` +
+    `      node scripts/release.mjs done <编号> --base=<x.y.z>   # 以 --no-ff 合回 ${branch}\n` +
+    `    合法豁免只有两种：合并提交、发布元数据提交（只改 package.json）。`
+  );
+}
+
 function cmdExec(args) {
   const argv = parseExecArgs(args);
   if (argv.length === 0) die('用法：node scripts/release.mjs exec -- git <args…>');
+
+  // ★ 分支防护先于执行：违规尝试**必须留痕**，不得静默丢弃（§13 留痕原则）。
+  const violation = guardProtectedBranch(argv);
+  if (violation) {
+    bad(violation);
+    say('');
+    appendRecord(
+      buildEntry({
+        task: `拒绝：git commit（${g(['branch', '--show-current']).trim()} 分支保护）`,
+        kind: 'blocked',
+        st: collectLight(),
+        ops: [`git ${argv.map(fmtArg).join(' ')}`],
+        body: ['- 结果：**已拒绝执行**（未产生提交）', `- 依据：${violation.split('\n')[0]}`],
+        note: '★ 本条由 §1 R1 的机械防护写入：违规尝试留痕，便于事后复盘是哪条流程没走。',
+      }),
+    );
+    process.exit(1);
+  }
+
   // ★ 只记**对仓库有修改**的命令（`add` / `commit` / `merge` / `tag -a` / `branch -d` / `push`…）。
   //   只读查询（`status` / `log` / `diff` / `rev-parse` / `reflog`…）照常执行、照常输出，
   //   但**不进历史** —— 否则每次查看状态都会污染记录（见 docs/VERSIONING.md §13.1）。

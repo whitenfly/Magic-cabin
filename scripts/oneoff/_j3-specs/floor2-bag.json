@@ -1,0 +1,14 @@
+{
+  "id": "floor2/bag",
+  "name": "bag",
+  "file": "src/cabin/world/floor2/bag.js",
+  "batch": "B4",
+  "startMarker": "            /* 18.11 墙钩挎包 / 置物箱与魔女帽 / 可推拉小凳子 */",
+  "endMarker": "            /* 置物箱（挎包旁边地上）：加宽 + 简化 + 颜色统一 */",
+  "layout": [
+    { "name": "BAG_HOOK_X", "value": "0.15", "doc": "门口旁墙钩中心 x（挎包挂在它上面）" },
+    { "name": "BAG_HOOK_Y", "value": "FY + 1.38", "doc": "墙钩中心高度 y" },
+    { "name": "BAG_HOOK_Z", "value": "3.825", "doc": "墙钩中心 z（前墙内侧）" }
+  ],
+  "notes": "墙钩 + 挎包合成**一件**：挎包的挂环 hookLocal 与两条绷紧的背带 tautStrapGeo 都以 `bagHookPt = V(bagHookX, hookBaseY - 0.055, wallHookZ - 0.05)` 为三角顶点，拆开会让公共常量跨模块（同 floor1/doorHangBar 的处置）。区间 = L4593–L4673（吞掉两端 ==== 分隔线，纯注释）。用到的 ctx 键：scene / L(BAG_HOOK_X/Y/Z) / put / edge / iline / cbox / crboxCol / LITMAT / MAT / V。build 用**重命名解构** `const { BAG_HOOK_X: bagHookX, BAG_HOOK_Y: hookBaseY, BAG_HOOK_Z: wallHookZ } = L` 把 layout 常量名映射回原标识符名 ⇒ 墙钩的 J 形曲线与挎包的每一行几何代码逐字不变（连局部变量名都不动）。★ 本段**原本就没有 regMagic**（全文 62 处 regMagic 里 L4594–4671 一处也没有）⇒ 无 interactables / 无 state / 无 update / 无 assign，monolith 侧不需要任何人工改动。★★ **不要**为了让「包」看起来能点而补一条 interactables：本件的锚点 (0.15, 3.825) 与大门近距条目 (0, 4) 只差 0.24 —— 玩家出生点 (0, 0, 5.2) 到大门的距离 1.20 比对挎包的 1.383 只领先 0.18，任何一条新近距条目都会让 tests/e2e/smoke.mjs 的 S1/S2（`/大门/` 断言）变红。"
+}

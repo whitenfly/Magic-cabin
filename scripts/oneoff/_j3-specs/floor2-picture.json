@@ -1,0 +1,23 @@
+{
+  "id": "floor2/picture",
+  "name": "picture",
+  "assign": "pictureApi",
+  "file": "src/cabin/world/floor2/picture.js",
+  "batch": "B5",
+  "startMarker": "            /* 18.13 前墙挂画（镜子旁，点击编辑链接，支持 gif 动图） */",
+  "endMarker": "            /* 18.14 拱形全身镜（点击镜面泛起水波涟漪） */",
+  "layout": [
+    {
+      "name": "PIC_POS",
+      "value": "{ x: 1.45, y: 1.55, z: 3.82 }",
+      "doc": "二楼前墙挂画（18.13）中心（原 `picG.position.set(1.45, FY + 1.55, 3.82)` 拆出，y 是相对二楼楼面的高度）"
+    }
+  ],
+  "tick": {
+    "at": "updateNewDecor() 里 `drawClock();` 之后、镜面涟漪 tick 之前那 4 行（当前 L4221–4224）",
+    "note": "整段 4 行换成一行 `pictureApi.tick(dt, time);`。这是上一轮 floor2-picture.SKIP.md §4 给出的现成配方：规格与 mirror（8 行）/ junkBoxes（6 行）完全同款 —— 前一行 `drawClock();`（18.12，本轮 SKIP）与后一行 `mirrorApi.tick(dt, time);` 留在原地。⚠️ **参数顺序是 (dt, time)**，而本函数 `updateNewDecor(time, dt)` 自己的形参是反的。",
+    "old": "                if (picState.img && time - picState.lastT > 0.1) {\n                    drawPicImage();\n                    picState.lastT = time;\n                }",
+    "new": "                // J3（B5）：挂画 GIF 帧重绘（每 0.1 秒）的每帧分支已搬入 world/floor2/picture.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                pictureApi.tick(dt, time);"
+  },
+  "notes": "★ 上一轮（B4）本件被判 SKIP，理由写在 floor2-picture.SKIP.md：picState / drawPicImage 在区间**外**被 updateNewDecor() 读了 4 行，而当时应用器「只做整段替换、摘不掉区间外这 4 行」，删了几何段就会 ReferenceError ⇒ 装饰循环整条停摆。**本轮唯一的差别是应用器已支持 spec.tick（逐字替换任意一处唯一原文）** —— 正是 mirror / junkBoxes 用过的同一机制，于是那 4 行由 spec 声明、应用器代劳，**GIF 动图完整保住**（SKIP.md 明确拒绝的备选方案是「只搬几何 + 删掉那 4 行」= 静默废掉功能）。用到的 ctx 键：scene / L(PIC_POS, FY) / put / cbox / colEdge / iline / SND（按需解构）。私有顶层量 picG / picCv / pctx / picTex / picPlane / picState（→ state，build 里以原名别住）/ drawPicBlank / drawPicImage / PIC_SOURCES / tryLoadPic / setPicture / openPicEditor / applyPic 已逐名 grep 核对：区间外**只**有那 4 行（本 spec 的 tick 已替换）。drawPicBlank / drawPicImage / tryLoadPic / setPicture / openPicEditor / applyPic 与**两个 DOM 监听**全部留在 build() 里 —— 与搬迁前同一个位置、同一个时机（build 仍在 monolith 的原位置被调用）⇒ 监听注册顺序与 SND.play('chim') 的时机不变。本文件唯一的「新增胶水」是两行：`state.drawPicImage = drawPicImage;` / `state.openPicEditor = openPicEditor;`（与 mirror.js 交出 state.drawMirror / state.spawnRipple 同一手法）。★ 知情：准星文案由默认的 '交互' 变成语义化的 '编辑挂画图片链接'（J3 的 DoD 要的正是它，与其它已搬物件一致），属**可见文案变化**，按「新增式改动」该机位应单独审一眼 —— SKIP.md §4 已预先声明。点击音效不变：原实现没有 userData.sfx，fireMagic 里 `o.userData.sfx || 'toggle'` 落到同一个 'toggle'，installProp 补的也是它。门禁：段内两行 addEventListener( 随几何段移出 monolith ⇒ scripts/verify-migration.mjs ④ 的 addEventListener( 计数再 −2、regMagic( 再 −1，期望值需同步。rng：本段不消耗随机源。"
+}

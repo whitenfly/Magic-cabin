@@ -1,0 +1,19 @@
+{
+  "id": "floor1/hourglass",
+  "name": "hourglass",
+  "assign": "hourglassApi",
+  "file": "src/cabin/world/floor1/hourglass.js",
+  "batch": "B2",
+  "startMarker": "            /* ---- 12.9b 沙漏 ---- */",
+  "endMarker": "            /* ---- 12.9c 宝箱 ---- */",
+  "layout": [
+    { "name": "HG_POS", "value": "{ x: -3.72, y: 0.805, z: -2.44 }", "doc": "沙漏（12.9b）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）" }
+  ],
+  "notes": "有动画的物件（B2）。几何段整体搬走；顶层 let hgFlip/hgRun/hgRot/hgRotV/hgSand 收进 state（变量名一个没改），几何 Group 经 build 的 { root, parts } 交出，regMagic 换成 interactables(mode:'both', label '把沙漏翻过来')。★ 必须人工完成 tickOnce 侧的一处替换（应用器只管几何段）：把原来 animate() 里沙漏那个自足块 —— 原文以 `{` 起、`const target = hgFlip ? Math.PI : 0;` 为第一行、`}` 止（搬迁时 L8494–8520，块内共 26 行，紧跟 `/* ---- 紫色魔法阵 ---- */` 块之后、宝箱块之前）—— 整块删除，并在同一位置写一行 `hourglassApi.tick(dt, time);`，同时把装配行写成 `const hourglassApi = installProp(hourglass);`（`installProp(hourglass);` 子串仍在 ⇒ 应用器的『已应用』判定不会误判）。原地 tick 的理由见 src/cabin/app/installProp.js 文件头：J3 期间 scheduler 不被执行，只有 monolith 原地调用才能保住执行顺序与画面。几何段与每帧分支已用脚本逐行比对：与原区间行数相同、去掉已知改写后逐行等价（几何 34/34 行、分支 27/27 行）。另注意：搬到 interactables 后该物件不再进 magicMeshes ⇒ J3 期间失去准星/点击入口、改为近距入口（与 broom 同一处理）。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：`/* ---- 紫色魔法阵 ---- */` 块之后、宝箱块之前（搬迁时 L8494–8520）",
+    "note": "应用器只管几何段，这一段由人工替换（风格照 12.10 魔法扫帚那处）",
+    "old": "                {\n                    const target = hgFlip ? Math.PI : 0;\n                    hgRotV += (target - hgRot) * 0.012;\n                    hgRotV *= 0.93;\n                    hgRot += hgRotV;\n                    hg.rotation.x = hgRot;\n                    if (hgRun > 0) {\n                        hgRun -= dt;\n                        hgSand = Math.max(0.2, hgRun / 5);\n                    }\n                    const topP = hgFlip ? pileBotG : pileTopG;\n                    const botP = hgFlip ? pileTopG : pileBotG;\n                    topP.scale.setScalar(0.25 + 0.75 * hgSand);\n                    botP.scale.setScalar(0.3 + 0.8 * (1 - hgSand));\n                    const settled = Math.abs(hgRot - target) < 0.3;\n                    const sv = hgRun > 0 && settled;\n                    for (let i = 0; i < hgStreams.length; i++) {\n                        const s = hgStreams[i];\n                        s.visible = sv;\n                        if (sv) {\n                            const prog = (time * 1.5 + i / 3) % 1;\n                            const y0 = 0.185;\n                            const y1 = hgFlip ? 0.235 : 0.14;\n                            s.position.y = y0 + (y1 - y0) * prog;\n                        }\n                    }\n                }",
+    "new": "                {\n                    // J3：沙漏的每帧分支已搬入 cabin/world/floor1/hourglass.js。\n                    // **原位置调用** —— 顺序与搬迁前一致，画面因此逐字节不变。\n                    hourglassApi.tick(dt, time);\n                }"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "floor1/long-table",
+  "name": "longTable",
+  "assign": "longTableApi",
+  "file": "src/cabin/world/floor1/longTable.js",
+  "batch": "B4",
+  "startMarker": "            /* ---- 12.9f 长餐桌 ---- */",
+  "endMarker": "            /* 茶杯（餐桌/暖桌通用） */",
+  "layout": [],
+  "notes": "有动画的物件（B4）：几何 + 交互 + 每帧分支搬进物件；update 由 tickOnce() 在**原位置**调用（原地 tick）。【为什么只搬前半段】`endMarker` 停在 `/* 茶杯（餐桌/暖桌通用） */`（搬迁时 L1379）—— 因为这一段往后的三块**在区间外被引用**，一搬就断：① `makeCup`/`cups` 被 12.13 暖桌复用（L1971–1972）与提梁茶壶读（`const CUP_T = cups[2]`，L1405）；② `chairs` 被移动平台读（`...chairs.map(c => …)`，L5956）。而桌体与下一段之间**没有分区注释**，唯一可用的右端标记就是这行 `/* 茶杯（餐桌/暖桌通用） */`（全文件恰好出现 1 次，已逐字核对）。于是本件按「能安全搬的部分先搬」处理：区间 = 搬迁时 L1334–1378（桌面两片 + 四条桌腿 1334–1338 + `const plates = []` 1340 + `makePlate` 1341–1374 + 三只盘 1375–1377 + 一个空行）。【拆干净的证明】grep 全文件：`plates` / `makePlate` 的全部命中都落在 L1340–1377 与每帧块 L7202–7205 之内 ⇒ 区间外零引用（`chairs` / `cups` / `makeCup` / `CUP_T` 一行没动）。【ctx 键】scene / L / put / box / edge / line / lloop；未用 cbox / crboxCol / colEdge / crumpleBall / arcPos / jitterGeo / hash01 / smooth / regSlide / registerHinge / regWobble / makeWavyFlame / updateWavyFlame / rng（不消耗种子随机源）。【layout 为空】`DT_X/DT_Z/DTOP` 已在 world/layout.js（N9 满足）；桌腿的 `1.15 / 0.32 / 0.35 / 0.68` 是局部偏移，留在原地。【无 state】三只盘的转速本来就住在 `g.userData.spinV` 里（原实现如此），故本件不新增 state。【交互】原三处 `regMagic(g, () => { g.userData.spinV = 9; })` → interactables 三条（每只盘一条，`label` 语义化、mode:'both'、anchor 与 `makePlate(...)` 的落点同源）。【★ root 的取舍】桌体是 6 次 `put(…)`（默认挂 scene）、三只盘各自 `scene.add` —— 搬迁前就没有共同父节点，加一层包装会改 `scene.children` ⇒ 像素回归。故照 stools 的写法 `root = plates[0]`（只进 registry 元数据），三只盘都在 parts 里；代价是**准星入口只落在 root**（原来三只盘各有自己的 regMagic），另两只由近距入口覆盖（radius 1.2）—— 与 stools 的多入口处理同源。【光源】本件无光源、不喂 lightField。【需要人工做的 monolith 侧改动】① 装配行 `const longTableApi = installProp(longTable);`（应用器按 assign 生成）；② 把 tickOnce() 里 `/* ---- 长餐桌 ---- */` 段的**第一个循环**（4 行，`for (const p of plates) {` 起）按 tick.old 原文替换成 tick.new —— 它后面紧跟的是茶杯循环与餐具循环，**不要动**那两段。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：`/* ---- 长餐桌 ---- */` 注释行（搬迁时 L7201）之后的**第一个循环**（L7202–7205，三只餐盘的转动），紧跟其后的是 `for (const c of cups) {`",
+    "note": "应用器只管几何段；这一段由人工替换（风格照 12.10 魔法扫帚那处）。★ 只替换 plates 这一个循环 —— `cups` / `tableItems` 两个循环留在原地逐字不动",
+    "old": "                for (const p of plates) {\n                    p.rotation.y += p.userData.spinV * dt;\n                    p.userData.spinV *= Math.max(0, 1 - 2.0 * dt);\n                }",
+    "new": "                {\n                    // J3（B4）：三只餐盘的转动已搬入 world/floor1/longTable.js（原地 tick）\n                    longTableApi.tick(dt, time);\n                }"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "floor1/orrery",
+  "name": "orrery",
+  "assign": "orreryApi",
+  "file": "src/cabin/world/floor1/orrery.js",
+  "batch": "B4",
+  "startMarker": "            // ---- 12.2 星象仪 ----",
+  "endMarker": "            // ---- 12.3 魔法药剂瓶 ----",
+  "layout": [],
+  "notes": "有动画的物件（B4）：几何 + 状态 + 交互 + 每帧分支全部搬进物件；update 由 tickOnce() 在**原位置**调用（原地 tick，见 installProp.js 文件头）。【边界】区间 = 搬迁时 L712–747（`let orbOn…` 712 + 几何 713–744 + `scene.add` 744 + regMagic 745 + `userData.sfx` 746 + 一个空行）；endMarker 是 12.3 魔法药剂瓶那行，本身保留。【拆干净的证明】grep 全文件：`orbOn` / `orbP` / `orbRings` / `orbStars` / `orbG` / `OX` / `OZ` 的全部命中都落在 L712–746 与每帧块 L6684–6693 之内 ⇒ 区间外零引用。【ctx 键】scene / L / put / line / edge；未用 cbox / crboxCol / colEdge / crumpleBall / arcPos / jitterGeo / hash01 / smooth / regSlide / registerHinge / regWobble / makeWavyFlame / updateWavyFlame / rng（不消耗种子随机源）。【layout 为空】本件坐标就是原表达式 `MTX - 0.38` / `MTZ - 0.14` / `MTTOP`，`MTX/MTZ/MTTOP` 已在 world/layout.js（N9 满足）—— 不把派生值算成字面量写进 layout，是为了避免 `1.8 - 0.38` 与 `1.42` 的浮点末位差异。【光源】本件无光源、不喂 lightField（8 个槽位一个没动）。【交互】regMagic(orbG, …) → interactables 一条（mode:'both'，准星/点击通路由 installProp 自动补齐）；`orbG.userData.sfx = 'magic'` 必须在 build 里写好 —— installProp 只在 `ud.sfx` 非字符串时才填 `'toggle'`，写晚了音效就变了。【需要人工做的 monolith 侧改动】① 装配行 `const orreryApi = installProp(orrery);`（应用器按 assign 生成）；② 把 tickOnce() 里那段**无注释**的每帧块按 tick.old 原文整块替换成 tick.new —— 位置在 `for (const c of chairs)` 块之后、`updateLiquid(time);` 之前，old 原文里没有任何注释可依赖，请用整段文本匹配。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：紧跟 `for (const c of chairs) { … }` 块（L6674–6682）与一个空行之后、`updateLiquid(time);`（L6695）之前的那个**无注释**块（搬迁时 L6684–6693）",
+    "note": "应用器只管几何段；这一段由人工替换（风格照 12.10 魔法扫帚那处）。★ 该块在原文件里没有注释头，务必按 old 原文精确定位",
+    "old": "                orbP += ((orbOn ? 1 : 0) - orbP) * 0.02;\n                for (const r of orbRings) {\n                    r.holder.rotation.y += r.spd * 0.02 * orbP;\n                    const sc = Math.max(orbP, 0.001);\n                    r.holder.scale.set(sc, sc, sc);\n                    r.holder.visible = orbP > 0.02;\n                }\n                orbStars.rotation.y += 0.018 * orbP;\n                orbStars.scale.setScalar(Math.max(orbP, 0.001));\n                orbStars.visible = orbP > 0.03;",
+    "new": "                {\n                    // J3（B4）：星象仪的每帧分支已搬入 world/floor1/orrery.js（原地 tick）\n                    orreryApi.tick(dt, time);\n                }"
+  }
+}

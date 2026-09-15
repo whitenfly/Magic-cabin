@@ -1,0 +1,14 @@
+{
+  "id": "floor1/broom",
+  "name": "broom",
+  "assign": "broomApi",
+  "file": "src/cabin/world/floor1/broom.js",
+  "batch": "B3",
+  "startMarker": "            /* ---- 12.10 魔法扫帚 ---- */",
+  "endMarker": "            /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */",
+  "layout": [
+    { "name": "BROOM_REST", "value": "{ x: -3.3, y: 0.105, z: 3.35, rz: 0.33 }", "doc": "魔法扫帚（12.10）静止位" },
+    { "name": "BROOM_FLY", "value": "{ x: -2.7, y: 0.95, z: 2.65, rz: 0.05 }", "doc": "魔法扫帚（12.10）悬浮位" }
+  ],
+  "notes": "★「有动画的物件」样板：几何 + 状态 + 交互 + update **全部**搬进物件；update 由 tickOnce() 在**原位置**调用（原地 tick，见 installProp.js 文件头）。tickOnce 侧的那一行替换由人工完成（应用器只管几何段）。"
+}

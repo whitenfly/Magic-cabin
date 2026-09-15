@@ -1,0 +1,28 @@
+{
+  "id": "floor2/calendar",
+  "name": "calendar",
+  "assign": "calendarApi",
+  "file": "src/cabin/world/floor2/calendar.js",
+  "batch": "B5",
+  "startMarker": "            /* —— 台历（转轴位于背板面顶端：未翻页贴板前面、翻过页贴板背面， */",
+  "endMarker": "            /* —— 魔法书本 —— */",
+  "layout": [
+    {
+      "name": "CAL_X",
+      "value": "2.62",
+      "doc": "二楼书桌桌面台历（18.4）中心 x"
+    },
+    {
+      "name": "CAL_Z",
+      "value": "-2.34",
+      "doc": "二楼书桌桌面台历（18.4）中心 z"
+    }
+  ],
+  "tick": {
+    "at": "tickOnce() 里 `updateBook(time, dt);` 之后那一行（当前 L6878）",
+    "note": "原样换成一行 `calendarApi.tick(dt, time);`。前一行 `updateBook(time, dt);`（18.4 魔法书本，本轮 SKIP）与后一行 `updateGlyphs(time, dt);`（同上）留在原地。⚠️ 原名是 `updateCal(dt)`（**只有 dt 一个参数**），tick 的顺序是 (dt, time)。",
+    "old": "                updateCal(dt);",
+    "new": "                // J3（B5）：台历翻页（12 页翻完再整体翻回 1 月）的每帧分支已搬入 world/floor2/calendar.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                calendarApi.tick(dt, time);"
+  },
+  "notes": "★ updateCal 的形参知会：原名 `updateCal(dt)` 只有一个参数且就是 dt；搬迁后是 `updateCal(s, dt, env)`，而 defineProp 的 `update(dt, time, s, ctx)` 第一个参数才是 dt ⇒ update 体里写 `updateCal(s, dt, env)`，dt 从第二位进，与 tickOnce 里 `updateCal(dt);` 语义完全一致（**这里没有把 dt/time 写反**）。用到的 ctx 键：scene / L(CAL_X, CAL_Z, TBL_TOP) / MAT / smooth（**只在 update 里解构** —— smooth 在原 monolith 里住在 18.8 段，build 期间还在 TDZ）。私有顶层量 calG / calState / calPages / calBox / CAL_DAYS / CAL_FIRST / drawCalPage / calZFor / updateCal 已逐名 grep 核对：区间外**只**在 tickOnce 那一行被读。calState 收进 state（字段名不变）；calPages 经 parts.pages 交出（**同一个数组实例**）；calZFor 搬到模块作用域（多一个显式参数 smooth，函数体逐字未改）；updateCal 里 `const calState = s;` 以原名别住形参 ⇒ 函数体逐字未改。rng：本件**完全不消耗随机源**（月历页的画布是纯函数式绘制）。边界：startMarker 取「台历」小节注释的首行（该注释是 3 行，只有首行可作唯一标记），endMarker 取「魔法书本」行。interactables：原 `regMagic(calG, …)` 一条，id `calendar/flip-page`、label `翻一页桌上的台历`、mode both、anchor 取 L.CAL_X / L.CAL_Z、radius 1.5。"
+}

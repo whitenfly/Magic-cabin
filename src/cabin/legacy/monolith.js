@@ -39,6 +39,44 @@ import { createInteractionSystem, makeTarget } from '../systems/interaction/Inte
 import { createHintUI } from '../systems/interaction/HintUI.js'
 import { createCameraRig } from '../core/render/CameraRig.js'
 import { createEnvironment } from '../systems/weather/environment.js'
+// J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
+// 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
+import { createPropInstaller } from '../app/installProp.js'
+import calendar from '../world/floor2/calendar.js'
+import cardDeck from '../world/floor2/cardDeck.js'
+import coinTowers from '../world/floor2/coinTowers.js'
+import deskHourglass from '../world/floor2/deskHourglass.js'
+import desk from '../world/floor2/desk.js'
+import picture from '../world/floor2/picture.js'
+import rubik from '../world/floor2/rubik.js'
+import snowGlobe from '../world/floor2/snowGlobe.js'
+import cauldron from '../world/floor1/cauldron.js'
+import diningBook from '../world/floor1/diningBook.js'
+import longTable from '../world/floor1/longTable.js'
+import orrery from '../world/floor1/orrery.js'
+import potionBottle from '../world/floor1/potionBottle.js'
+import tableware from '../world/floor1/tableware.js'
+import bookPile from '../world/floor1/bookPile.js'
+import starBell from '../world/floor1/starBell.js'
+import tarot from '../world/floor1/tarot.js'
+import bag from '../world/floor2/bag.js'
+import bin from '../world/floor2/bin.js'
+import crate from '../world/floor2/crate.js'
+import mirror from '../world/floor2/mirror.js'
+import tissueBox from '../world/floor2/tissueBox.js'
+import wardrobe from '../world/floor2/wardrobe.js'
+import witchHat from '../world/floor2/witchHat.js'
+import stools from '../world/floor1/stools.js'
+import nightstand from '../world/floor2/nightstand.js'
+import chest from '../world/floor1/chest.js'
+import diningTable from '../world/floor1/diningTable.js'
+import doorHangBar from '../world/floor1/doorHangBar.js'
+import hourglass from '../world/floor1/hourglass.js'
+import junkBoxes from '../world/floor2/junkBoxes.js'
+import rugLarge from '../world/floor2/rugLarge.js'
+import rugUnderTable from '../world/floor1/rugUnderTable.js'
+import stovePlatform from '../world/floor1/stovePlatform.js'
+import broom from '../world/floor1/broom.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -134,12 +172,14 @@ export function installCabin(app) {
 
             // J2.9：建筑外壳尺寸与陈设锚点已集中到 cabin/world/layout.js（不变量 N9）。
             // 数值一个没改 —— 交互判定与几何构建从此共用同一份坐标（J2.6 的 anchor 直接用它们）。
+            // J3：整表保留为 `L`，供搬出的物件按需解构（旧调用点仍在文件内直接解构，一行未改）。
+            const L = createLayout();
             const {
                 HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
                 CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
                 CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
                 FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
-            } = createLayout();
+            } = L;
 
             function logWall(along, fixed, halfLen, openings, cornerExt, parent) {
                 const g = new THREE.Group(); const nLogs = Math.floor((WALL_TOP - WALL_Y0) / LOG_GAP);
@@ -621,219 +661,82 @@ export function installCabin(app) {
             const sm01 = t => t * t * (3 - 2 * t);
 
             /* ========================================================== */
+            /* ============ J3：物件装配器（`defineProp` 的唯一入口） ============ */
+            /* ========================================================== */
+            // 搬出 `world/**` 的物件都在**原位置**调用一次 `installProp(...)`：
+            //   · 同步调用 ⇒ 执行顺序不变（几何创建顺序参与渲染）
+            //   · 原地调用 ⇒ `rng` 调用顺序不变（种子随机源，顺序一变后面全变）
+            //   · 装配只写元数据（registry / mounts / scheduler），不碰对象父子关系
+            // 于是"搬迁"对画面的影响恒等于零 —— 这正是 `pnpm test:visual` 的判据。
+            //
+            // ★ 装配环境是**惰性**的：每个键都是 getter，只在物件真正读取它的那一刻求值。
+            //   必须如此 —— 本装配器在文件早段求值，而部分共享工具定义在很后面
+            //   （`smooth` 在 18.8 段、`cbox`/`crboxCol` 在 18.10 段、`colEdge` 在 18.12 段）。
+            //   写成对象字面量会在这里立刻撞上它们的 TDZ，于是每一件搬到二楼的小物件
+            //   都只能"把工具函数复制一份"—— 那正是模块化的反面。
+            const propCtx = {};
+            const propTool = (name, get) => Object.defineProperty(propCtx, name, { get, enumerable: true, configurable: true });
+            propTool('scene', () => scene);
+            propTool('L', () => L);
+            propTool('rng', () => ({
+                outdoor: outdoorRng, floor1: floor1Rng, floor2: floor2Rng,
+                sky: skyRng, texture: textureRng, slime: slimeRng, runtime: runtimeRng,
+            }));
+            // 几何 DSL（J2.1 / J2.2 提取，标识符名与原实现一致）
+            propTool('V', () => V); propTool('geo', () => geo); propTool('line', () => line);
+            propTool('iline', () => iline); propTool('dline', () => dline); propTool('edge', () => edge);
+            propTool('box', () => box); propTool('log', () => log); propTool('put', () => put);
+            propTool('logBetween', () => logBetween); propTool('lloop', () => lloop);
+            propTool('solid', () => solid); propTool('solidCyl', () => solidCyl);
+            propTool('roundBoxGeo', () => roundBoxGeo); propTool('rbox', () => rbox);
+            // 共享几何工具（原先只在所属分区内部可见 —— 有了它们，搬物件才不必复制实现）
+            propTool('cbox', () => cbox); propTool('crboxCol', () => crboxCol);
+            propTool('colEdge', () => colEdge); propTool('crumpleBall', () => crumpleBall);
+            propTool('arcPos', () => arcPos); propTool('jitterGeo', () => jitterGeo);
+            propTool('hash01', () => hash01); propTool('smooth', () => smooth);
+            // 弹簧 / 铰链 / 摆动（L283 的 createSpringSystem 产物 —— 抽屉、柜门、小凳靠它们登记）
+            propTool('regSlide', () => regSlide); propTool('registerHinge', () => registerHinge);
+            propTool('regWobble', () => regWobble);
+            // 火焰工具（炉火 / 坩埚 / 蜡烛 / 吊灯共用）
+            propTool('makeWavyFlame', () => makeWavyFlame); propTool('updateWavyFlame', () => updateWavyFlame);
+            // 材质（共享 uniform：物件只能"用"，不能改 shader）
+            propTool('MAT', () => MAT); propTool('DASHMAT', () => DASHMAT); propTool('IN_MAT', () => IN_MAT);
+            propTool('FILL', () => FILL); propTool('LITMAT', () => LITMAT); propTool('HITMAT', () => HITMAT);
+            propTool('DARK', () => DARK); propTool('PINK', () => PINK);
+            propTool('CATMAT', () => CATMAT); propTool('CATMAT2', () => CATMAT2);
+            propTool('WIN_GLASS', () => WIN_GLASS); propTool('WIN_GLASS_UP', () => WIN_GLASS_UP);
+            // 音效（交互的 `sfx` 由物件声明）
+            propTool('SND', () => SND);
+
+            const { install: installProp, stats: propStats } = createPropInstaller({
+                registry,
+                scheduler,
+                mounts: app.mounts,
+                ctx: propCtx,
+            });
+
+            /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
             /* ========================================================== */
 
             // ---- 12.1 原木餐桌 ----
-            put(box(1.15, 0.06, 0.8), MTX, 0.75, MTZ);
-            put(box(1.27, 0.04, 0.92), MTX, 0.70, MTZ);
-            for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                put(edge(new THREE.CylinderGeometry(0.035, 0.028, 0.7, 6)),
-                    MTX + sx * 0.47, 0.36, MTZ + sz * 0.28, 0, 0, 0);
-            put(log(0.94, 0.02), MTX, 0.28, MTZ - 0.28, 0, 0, Math.PI / 2);
-            put(log(0.94, 0.02), MTX, 0.28, MTZ + 0.28, 0, 0, Math.PI / 2);
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/diningTable.js，此处只留装配调用。
+            installProp(diningTable);
             // ---- 12.2 星象仪 ----
-            let orbOn = true, orbP = 1;
-            const OX = MTX - 0.38, OZ = MTZ - 0.14;
-            const orbG = new THREE.Group();
-            orbG.position.set(OX, MTTOP, OZ);
-            put(edge(new THREE.CylinderGeometry(0.09, 0.12, 0.06, 10)), 0, 0.03, 0, 0, 0, 0, orbG);
-            put(edge(new THREE.CylinderGeometry(0.035, 0.05, 0.05, 8)), 0, 0.08, 0, 0, 0, 0, orbG);
-            put(edge(new THREE.SphereGeometry(0.15, 14, 10)), 0, 0.21, 0, 0, 0, 0, orbG);
-            put(line([[0, 0.14, 0.13], [0, 0.24, 0.145], [0, 0.29, 0.08]]), 0, 0, 0, orbG);
-            put(line([[0, 0.14, -0.13], [0, 0.24, -0.145], [0, 0.29, -0.08]]), 0, 0, 0, orbG);
-
-            const orbRings = [];
-            for (const [tilt, spd] of [[0.5, 1.0], [-0.42, -0.75], [Math.PI / 2, 0.55]]) {
-                const holder = new THREE.Group();
-                holder.position.y = 0.21;
-                const t = edge(new THREE.TorusGeometry(0.21, 0.006, 6, 44));
-                t.rotation.x = tilt;
-                holder.add(t);
-                const pl = edge(new THREE.SphereGeometry(0.018, 8, 6));
-                pl.position.set(0.21, 0, 0);
-                holder.add(pl);
-                orbG.add(holder);
-                orbRings.push({ holder, spd });
-            }
-            const orbStars = new THREE.Group();
-            orbStars.position.y = 0.21;
-            for (let i = 0; i < 4; i++) {
-                const a = i * Math.PI / 2;
-                const st = edge(new THREE.OctahedronGeometry(0.022));
-                st.position.set(Math.cos(a) * 0.27, Math.sin(a * 2) * 0.07, Math.sin(a) * 0.27);
-                orbStars.add(st);
-            }
-            orbG.add(orbStars);
-            scene.add(orbG);
-            regMagic(orbG, () => { orbOn = !orbOn; });
-            orbG.userData.sfx = 'magic';
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
+            const orreryApi = installProp(orrery);
             // ---- 12.3 魔法药剂瓶 ----
-            let corkOut = false, corkT = 0;
-            const PX = MTX + 0.05, PZ = MTZ + 0.24;
-            const potG = new THREE.Group();
-            potG.position.set(PX, MTTOP, PZ);
-            const PROF = [[0.018, 0.038], [0.035, 0.062], [0.05, 0.076], [0.065, 0.085], [0.08, 0.089],
-            [0.10, 0.090], [0.12, 0.086], [0.14, 0.075], [0.16, 0.056], [0.178, 0.034], [0.19, 0.026]];
-            for (const [yy, rr] of PROF) {
-                const pts = [];
-                for (let i = 0; i <= 20; i++) { const a = i / 20 * Math.PI * 2; pts.push([Math.cos(a) * rr, yy, Math.sin(a) * rr]); }
-                lloop(pts, potG);
-            }
-            for (const ang of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
-                const c = Math.cos(ang), s = Math.sin(ang);
-                const pts = PROF.map(([yy, rr]) => [c * rr, yy, s * rr]);
-                put(line(pts), 0, 0, 0, 0, 0, 0, potG);
-            }
-            put(edge(new THREE.CylinderGeometry(0.024, 0.024, 0.055, 8)), 0, 0.228, 0, 0, 0, 0, potG);
-            put(edge(new THREE.TorusGeometry(0.027, 0.006, 6, 14)), 0, 0.258, 0, Math.PI / 2, 0, 0, potG);
-
-            const LIQ_Y = 0.078;
-            const waterMat = new THREE.MeshBasicMaterial({
-                color: 0x5aa8dd, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide
-            });
-            const waterBody = new THREE.Mesh(new THREE.SphereGeometry(0.082, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), waterMat);
-            put(waterBody, 0, 0.006, 0, 0, 0, 0, potG);
-            const waterDisc = new THREE.Mesh(new THREE.CircleGeometry(0.077, 20), waterMat);
-            put(waterDisc, 0, LIQ_Y - 0.004, 0, -Math.PI / 2, 0, 0, potG);
-            const liquidMat = new THREE.LineBasicMaterial({ color: 0x2e6fa3 });
-            const liquidMat2 = new THREE.LineBasicMaterial({ color: 0x7db8dd });
-            const liquidGeom = new THREE.BufferGeometry();
-            liquidGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24 * 3), 3));
-            const liquidLoop = new THREE.LineLoop(liquidGeom, liquidMat);
-            liquidLoop.frustumCulled = false;
-            potG.add(liquidLoop);
-            const liquidGeom2 = new THREE.BufferGeometry();
-            liquidGeom2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24 * 3), 3));
-            const liquidLoop2 = new THREE.LineLoop(liquidGeom2, liquidMat2);
-            liquidLoop2.frustumCulled = false;
-            potG.add(liquidLoop2);
-            scene.add(potG);
-
-            function updateLiquid(time) {
-                const arr = liquidGeom.attributes.position.array;
-                const amp = corkOut ? 0.007 : 0.0025;
-                const spd = corkOut ? 3.2 : 1.1;
-                for (let i = 0; i < 24; i++) {
-                    const a = i / 24 * Math.PI * 2;
-                    const rr = 0.080 + Math.sin(a * 3 + time * spd) * amp;
-                    arr[i * 3] = Math.cos(a) * rr;
-                    arr[i * 3 + 1] = LIQ_Y + Math.sin(a * 3 - time * spd * 1.3) * amp * 0.6;
-                    arr[i * 3 + 2] = Math.sin(a) * rr;
-                }
-                liquidGeom.attributes.position.needsUpdate = true;
-                const arr2 = liquidGeom2.attributes.position.array;
-                for (let i = 0; i < 24; i++) {
-                    const a = i / 24 * Math.PI * 2;
-                    const rr = 0.072 + Math.sin(a * 3 + time * spd + 1.2) * amp * 0.7;
-                    arr2[i * 3] = Math.cos(a) * rr;
-                    arr2[i * 3 + 1] = LIQ_Y - 0.003 + Math.sin(a * 3 - time * spd * 1.3 + 0.8) * amp * 0.4;
-                    arr2[i * 3 + 2] = Math.sin(a) * rr;
-                }
-                liquidGeom2.attributes.position.needsUpdate = true;
-                waterMat.opacity = corkOut ? 0.38 : 0.32;
-            }
-
-            const CORK_M = [PX, MTTOP + 0.29, PZ];
-            const CORK_L = [PX + 0.17, MTTOP + 0.018, PZ - 0.07];
-            const corkG = new THREE.Group();
-            put(edge(new THREE.CylinderGeometry(0.021, 0.024, 0.038, 8)), 0, 0, 0, 0, 0, 0, corkG);
-            put(line([[0, 0.014, 0.022], [0, -0.008, 0.023]]), 0, 0, 0, corkG);
-            corkG.position.set(CORK_M[0], CORK_M[1], CORK_M[2]);
-            scene.add(corkG);
-
-            const bubbleMat = new THREE.LineBasicMaterial({ color: 0x2e6fa3 });
-            const potBubbles = [];
-            for (let i = 0; i < 4; i++) {
-                const b = edge(new THREE.SphereGeometry(0.009, 6, 5), 1, bubbleMat);
-                b.userData.phase = i / 4;
-                b.userData.wob = floor1Rng() * 6.28;
-                b.visible = false;
-                scene.add(b);
-                potBubbles.push(b);
-            }
-            regMagic(potG, () => { corkOut = !corkOut; });
-            regMagic(corkG, () => { corkOut = !corkOut; });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/potionBottle.js，此处只留装配调用。
+            const potionBottleApi = installProp(potionBottle);
             // ---- 12.4 魔法书 ----
-            let bookOn = true, bookP = 1;
-            let flipCur = 0, flipping = false;
-            const BX = MTX + 0.30, BZ = MTZ - 0.12;
-            const dineBookG = new THREE.Group();
-            dineBookG.position.set(BX, MTTOP, BZ);
-            dineBookG.rotation.y = 0.4;
-            put(box(0.30, 0.018, 0.38), -0.15, 0.012, 0, 0, 0, -0.14, dineBookG);
-            put(box(0.30, 0.018, 0.38), 0.15, 0.012, 0, 0, 0, 0.14, dineBookG);
-            put(box(0.26, 0.014, 0.34), -0.14, 0.032, 0, 0, 0, -0.12, dineBookG);
-            put(box(0.26, 0.014, 0.34), 0.14, 0.032, 0, 0, 0, 0.12, dineBookG);
-            put(line([[0, 0.055, -0.19], [0, 0.055, 0.19]]), 0, 0, 0, dineBookG);
-            for (const [px, pz] of [[-0.16, -0.08], [-0.10, 0.06], [-0.19, 0.10], [0.08, -0.10], [0.15, 0.05], [0.19, -0.04]])
-                put(line([[px - 0.025, 0.045, pz - 0.025], [px + 0.025, 0.045, pz + 0.025]]), 0, 0, 0, dineBookG);
-            const pagePivot = new THREE.Group();
-            put(box(0.24, 0.007, 0.31), 0.12, 0.0395, 0, 0, 0, 0, pagePivot);
-            pagePivot.rotation.z = 0.12;
-            pagePivot.visible = false;
-            dineBookG.add(pagePivot);
-            scene.add(dineBookG);
-
-            const glyphs = [];
-            for (let i = 0; i < 7; i++) {
-                const g = new THREE.Group();
-                for (let s = 0; s < 3; s++) {
-                    const a = floor1Rng() * 1.2 - 0.6;
-                    const l = 0.02 + floor1Rng() * 0.02;
-                    put(line([[0, s * 0.028, 0], [Math.sin(a) * l, s * 0.028 + 0.026, 0]]), 0, 0, 0, g);
-                }
-                g.userData = {
-                    age: floor1Rng() * 2.5, life: 2.5 + floor1Rng() * 1.2,
-                    ox: (floor1Rng() - 0.5) * 0.22, oz: (floor1Rng() - 0.5) * 0.18,
-                    sway: floor1Rng() * 6.28
-                };
-                g.visible = false;
-                scene.add(g);
-                glyphs.push(g);
-            }
-            regMagic(dineBookG, () => {
-                bookOn = !bookOn;
-                if (!flipping) { flipping = true; flipCur = 0; }
-            });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/diningBook.js，此处只留装配调用。
+            const diningBookApi = installProp(diningBook);
             // ---- 12.5 三脚圆凳 ----
-            const stools = [];
-            function makeStool(x, z, dz) {
-                const g = new THREE.Group();
-                put(edge(new THREE.CylinderGeometry(0.21, 0.18, 0.05, 12)), 0, 0.45, 0, 0, 0, 0, g);
-                for (let i = 0; i < 3; i++) {
-                    const a = i * (Math.PI * 2 / 3) + 0.55;
-                    logBetween([Math.cos(a) * 0.12, 0.43, Math.sin(a) * 0.12],
-                        [Math.cos(a) * 0.19, 0.03, Math.sin(a) * 0.19], 0.024, g);
-                }
-                g.position.set(x, 0, z);
-                g.userData = { bx: x, bz: z, dz, cur: 0, vel: 0, open: false };
-                scene.add(g);
-                stools.push(g);
-                regMagic(g, () => { g.userData.open = !g.userData.open; });
-            }
-            makeStool(MTX, MTZ - 0.85, -1);
-            makeStool(MTX, MTZ + 0.85, 1);
-
+            // J3（B2）：几何已搬入 src/cabin/world/floor1/stools.js，此处只留装配调用。
+            const stoolsApi = installProp(stools);
             // ---- 12.6 桌下椭圆地毯 ----
-            {
-                const r1 = [], r2 = [];
-                for (let i = 0; i <= 44; i++) {
-                    const a = i / 44 * Math.PI * 2;
-                    r1.push([MTX + Math.cos(a) * 1.05, 0.008, MTZ + Math.sin(a) * 0.75]);
-                    r2.push([MTX + Math.cos(a) * 0.82, 0.008, MTZ + Math.sin(a) * 0.57]);
-                }
-                lloop(r1); lloop(r2);
-                for (let i = 0; i < 8; i++) {
-                    const a = i / 8 * Math.PI * 2;
-                    put(line([[MTX + Math.cos(a) * 0.82, 0.008, MTZ + Math.sin(a) * 0.57],
-                    [MTX + Math.cos(a) * 1.05, 0.008, MTZ + Math.sin(a) * 0.75]]), 0, 0, 0);
-                }
-            }
+            // J3（B1）：几何已搬入 cabin/world/floor1/rugUnderTable.js，此处只留装配调用。
+            installProp(rugUnderTable);
 
             // ---- 12.7 吊挂木灯 ----
             let lanternLit = true;
@@ -1022,236 +925,23 @@ export function installCabin(app) {
             }
 
             /* ---- 12.9a 左窗下魔法书堆 ---- */
-            const bookPileG = new THREE.Group();
-            bookPileG.position.set(-3.62, 0, -1.4);
-            scene.add(bookPileG);
-            const pileBooks = [];
-            let pileState = 'stacked', pileT = 0;
-            {
-                const DIMS = [
-                    [0.24, 0.058, 0.17], [0.21, 0.052, 0.155], [0.25, 0.062, 0.16],
-                    [0.24, 0.024, 0.17],
-                    [0.235, 0.055, 0.165], [0.22, 0.050, 0.15], [0.245, 0.060, 0.17],
-                    [0.22, 0.024, 0.155],
-                    [0.23, 0.056, 0.16], [0.20, 0.046, 0.15],
-                    [0.24, 0.024, 0.165],
-                    [0.235, 0.058, 0.16], [0.22, 0.055, 0.155]
-                ];
-                let cy = 0;
-                DIMS.forEach((dm, i) => {
-                    const [w, h, d] = dm;
-                    const b = new THREE.Group();
-                    const isOpen = (h < 0.03);
-                    if (isOpen) {
-                        const lp = box(w / 2 - 0.012, 0.010, d - 0.02); lp.rotation.z = 0.10;
-                        put(lp, -(w / 4 - 0.004), 0.006, 0, 0, 0, 0, b);
-                        const rp = box(w / 2 - 0.012, 0.010, d - 0.02); rp.rotation.z = -0.10;
-                        put(rp, (w / 4 - 0.004), 0.006, 0, 0, 0, 0, b);
-                        put(line([[-(w / 4) + 0.01, 0.013, -d * 0.36], [-(w / 4) + 0.03, 0.013, d * 0.34]]), 0, 0, 0, 0, 0, 0, b);
-                        put(line([[(w / 4) - 0.03, 0.013, -d * 0.34], [(w / 4) - 0.01, 0.013, d * 0.36]]), 0, 0, 0, 0, 0, 0, b);
-                    } else {
-                        put(box(w, h, d), 0, h / 2, 0, 0, 0, 0, b);
-                        put(line([[w / 2, h * 0.35, -d * 0.42], [w / 2, h * 0.35, d * 0.42]]), 0, 0, 0, 0, 0, 0, b);
-                        put(line([[w / 2, h * 0.65, -d * 0.42], [w / 2, h * 0.65, d * 0.42]]), 0, 0, 0, 0, 0, 0, b);
-                    }
-                    const fy = isOpen ? 0.014 : h / 2 + 0.004;
-                    b.userData = {
-                        sx: (floor1Rng() - 0.5) * 0.04, sy: cy, sz: (floor1Rng() - 0.5) * 0.04,
-                        sry: (floor1Rng() - 0.5) * 0.35,
-                        fx: 0.16 + i * 0.048 + (floor1Rng() - 0.5) * 0.04,
-                        fz: -(0.22 + i * 0.052 + (floor1Rng() - 0.5) * 0.06),
-                        fy, fry: floor1Rng() * Math.PI * 2
-                    };
-                    b.position.set(b.userData.sx, cy, b.userData.sz);
-                    b.rotation.y = b.userData.sry;
-                    cy += h + 0.003;
-                    bookPileG.add(b);
-                    pileBooks.push(b);
-                });
-            }
-            regMagic(bookPileG, () => {
-                if (pileState === 'stacked') { pileState = 'falling'; pileT = 0; }
-                else if (pileState === 'fallen') { pileState = 'rising'; pileT = 0; }
-            });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/bookPile.js，此处只留装配调用。
+            const bookPileApi = installProp(bookPile);
             /* ---- 12.9b 沙漏 ---- */
-            let hgFlip = false, hgRun = 0, hgRot = 0, hgRotV = 0, hgSand = 1;
-            const sandMat = new THREE.LineBasicMaterial({ color: 0xb08948 });
-            const sloop = (pts, parent) => { const l = new THREE.LineLoop(geo(pts), sandMat); (parent || scene).add(l); return l; };
-            const HG_H = 0.36, HG_MID = HG_H / 2;
-            const hg = new THREE.Group();
-            hg.position.set(SFX, 0.805 + HG_MID, -2.44);
-            scene.add(hg);
-            const hgInner = new THREE.Group();
-            hgInner.position.y = -HG_MID;
-            hg.add(hgInner);
-            {
-                put(box(0.17, 0.016, 0.17), 0, 0.008, 0, 0, 0, 0, hgInner);
-                put(box(0.17, 0.016, 0.17), 0, HG_H - 0.008, 0, 0, 0, 0, hgInner);
-                for (const [px, pz] of [[-0.066, -0.066], [0.066, -0.066], [-0.066, 0.066], [0.066, 0.066]])
-                    put(edge(new THREE.CylinderGeometry(0.008, 0.008, HG_H - 0.032, 6)),
-                        px, HG_MID, pz, 0, 0, 0, hgInner);
-                lloop([[-0.056, HG_H - 0.022], [-0.052, HG_H - 0.055], [-0.04, HG_H - 0.10], [-0.02, HG_H - 0.145],
-                [-0.009, HG_H - 0.17], [0.009, HG_H - 0.17], [0.02, HG_H - 0.145], [0.04, HG_H - 0.10],
-                [0.052, HG_H - 0.055], [0.056, HG_H - 0.022]], hgInner);
-                lloop([[-0.009, 0.17], [-0.02, 0.145], [-0.04, 0.10], [-0.052, 0.055], [-0.056, 0.022],
-                [0.056, 0.022], [0.052, 0.055], [0.04, 0.10], [0.02, 0.145], [0.009, 0.17]], hgInner);
-            }
-            const pileTopG = new THREE.Group(); pileTopG.position.set(0, 0.315, 0); hgInner.add(pileTopG);
-            sloop([[-0.045, 0.02], [0.045, 0.02], [0, -0.08]], pileTopG);
-            sloop([[-0.030, 0.02], [0.030, 0.02], [0, -0.05]], pileTopG);
-            const pileBotG = new THREE.Group(); pileBotG.position.set(0, 0.045, 0); hgInner.add(pileBotG);
-            sloop([[-0.045, -0.02], [0.045, -0.02], [0, 0.09]], pileBotG);
-            sloop([[-0.030, -0.02], [0.030, -0.02], [0, 0.055]], pileBotG);
-            const hgStreams = [];
-            for (let i = 0; i < 3; i++) {
-                const s = new THREE.Line(geo([[0, 0, 0], [0, -0.02, 0]]), sandMat);
-                hgInner.add(s);
-                s.visible = false;
-                hgStreams.push(s);
-            }
-            regMagic(hg, () => { hgFlip = !hgFlip; hgSand = 1; hgRun = 5; });
-
+            // J3（B2）：几何已搬入 src/cabin/world/floor1/hourglass.js，此处只留装配调用。
+            const hourglassApi = installProp(hourglass);
             /* ---- 12.9c 宝箱 ---- */
-            let chestOpen = false, chestP = 0, chestV = 0;
-            const chest = new THREE.Group();
-            chest.position.set(SFX, 0.805, -2.66);
-            scene.add(chest);
-            put(box(0.16, 0.1, 0.12), 0, 0.05, 0, 0, 0, 0, chest);
-            const chestLid = new THREE.Group();
-            chestLid.position.set(0, 0.1, -0.06);
-            put(box(0.16, 0.035, 0.12), 0, 0.0175, 0.06, 0, 0, 0, chestLid);
-            chest.add(chestLid);
-            put(line([[-0.05, 0.101, 0.06], [-0.05, 0.101, -0.06]]), 0, 0, 0, 0, 0, 0, chest);
-            put(line([[0.05, 0.101, 0.06], [0.05, 0.101, -0.06]]), 0, 0, 0, 0, 0, 0, chest);
-            const chestGem = edge(new THREE.OctahedronGeometry(0.02), 1, new THREE.LineBasicMaterial({ color: 0x2e8b57 }));
-            put(chestGem, 0, 0.115, 0, 0, 0, 0, chest);
-            chestGem.visible = false;
-            regMagic(chest, () => { chestOpen = !chestOpen; });
-
+            // J3（B2）：几何已搬入 src/cabin/world/floor1/chest.js，此处只留装配调用。
+            const chestApi = installProp(chest);
             /* ---- 12.9d 旋转星铃 ---- */
-            let carOn = false, carP = 0;
-            const car = new THREE.Group();
-            car.position.set(SFX, 1.975, -3.05);
-            scene.add(car);
-            put(edge(new THREE.CylinderGeometry(0.075, 0.09, 0.05, 10)), 0, 0.025, 0, 0, 0, 0, car);
-            put(edge(new THREE.CylinderGeometry(0.012, 0.012, 0.32, 6)), 0, 0.21, 0, 0, 0, 0, car);
-            const carCanopy = new THREE.Group();
-            carCanopy.position.y = 0.38;
-            car.add(carCanopy);
-            put(edge(new THREE.ConeGeometry(0.11, 0.07, 10)), 0, 0.035, 0, 0, 0, 0, carCanopy);
-            const carStars = [];
-            for (let i = 0; i < 4; i++) {
-                const a = i * Math.PI / 2;
-                const sx = Math.cos(a) * 0.09, sz = Math.sin(a) * 0.09;
-                put(line([[sx, 0, sz], [sx, -0.06, sz]]), 0, 0, 0, 0, 0, 0, carCanopy);
-                const st = edge(new THREE.OctahedronGeometry(0.015));
-                put(st, sx, -0.072, sz, 0, 0, 0, carCanopy);
-                carStars.push(st);
-            }
-            regMagic(car, () => { carOn = !carOn; });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/starBell.js，此处只留装配调用。
+            const starBellApi = installProp(starBell);
             /* ---- 12.9e 大魔女坩埚 ---- */
-            const STOVE_TOP = 0.58;
-            const CAL_UP = 0.34;
-            const cauldronG = new THREE.Group();
-            cauldronG.position.set(CCX, 0, CCZ);
-            scene.add(cauldronG);
-            {
-                const BN = 15, BR = 0.62;
-                for (let course = 0; course < 4; course++) {
-                    const y = 0.075 + course * 0.145;
-                    const off = course % 2 ? Math.PI / BN : 0;
-                    for (let i = 0; i < BN; i++) {
-                        const a = i / BN * Math.PI * 2 + off;
-                        let da = Math.abs(a - (-Math.PI / 2));
-                        da = Math.min(da, Math.PI * 2 - da);
-                        if (da < 0.30) continue;
-                        const b = box(0.28, 0.13, 0.17);
-                        b.position.set(Math.cos(a) * BR, y, Math.sin(a) * BR);
-                        b.rotation.y = -a + Math.PI / 2;
-                        cauldronG.add(b);
-                    }
-                }
-                logBetween([-0.30, 0.12, -0.10], [0.30, 0.12, -0.14], 0.05, cauldronG);
-                logBetween([-0.26, 0.12, 0.12], [0.28, 0.12, 0.08], 0.05, cauldronG);
-                logBetween([-0.28, 0.18, -0.02], [0.30, 0.18, -0.06], 0.045, cauldronG);
-                logBetween([0.10, 0.11, -0.30], [0.12, 0.09, -0.78], 0.045, cauldronG);
-                const CPROF = [[0.08, 0.40], [0.20, 0.50], [0.34, 0.545], [0.48, 0.555], [0.62, 0.55], [0.74, 0.515], [0.86, 0.455], [0.94, 0.42]];
-                const lathePts = [new THREE.Vector2(0.05, 0.08 + CAL_UP)];
-                for (const [yy, rr] of CPROF) lathePts.push(new THREE.Vector2(rr, yy + CAL_UP));
-                lathePts.push(new THREE.Vector2(0.38, 0.94 + CAL_UP));
-                cauldronG.add(new THREE.Mesh(new THREE.LatheGeometry(lathePts, 28), FILL));
-                for (const [yy, rr] of CPROF) {
-                    const pts = [];
-                    for (let i = 0; i <= 28; i++) { const a = i / 28 * Math.PI * 2; pts.push([Math.cos(a) * rr, yy + CAL_UP, Math.sin(a) * rr]); }
-                    lloop(pts, cauldronG);
-                }
-                for (const ang of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75]) {
-                    const c = Math.cos(ang), s = Math.sin(ang);
-                    put(line(CPROF.map(([yy, rr]) => [c * rr, yy + CAL_UP, s * rr])), 0, 0, 0, 0, 0, 0, cauldronG);
-                }
-                const rim = edge(new THREE.TorusGeometry(0.42, 0.04, 6, 32));
-                rim.rotation.x = Math.PI / 2;
-                put(rim, 0, 0.94 + CAL_UP, 0, 0, 0, 0, cauldronG);
-                const calLiqMat = new THREE.MeshBasicMaterial({
-                    color: 0x4a7d4e, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide
-                });
-                const calLiq = new THREE.Mesh(new THREE.CircleGeometry(0.37, 28), calLiqMat);
-                calLiq.userData.noHit = true;
-                put(calLiq, 0, 0.72 + CAL_UP, 0, -Math.PI / 2, 0, 0, cauldronG);
-            }
-            const calSurfMat = new THREE.LineBasicMaterial({ color: 0x2e5d38 });
-            const calSurfGeom = new THREE.BufferGeometry();
-            calSurfGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(28 * 3), 3));
-            const calSurf = new THREE.LineLoop(calSurfGeom, calSurfMat);
-            calSurf.frustumCulled = false;
-            cauldronG.add(calSurf);
-            const stirG = new THREE.Group();
-            cauldronG.add(stirG);
-            const stickAsm = new THREE.Group();
-            stickAsm.position.set(0, 0, 0);
-            stirG.add(stickAsm);
-            logBetween([0.16, 0.96, 0], [0.30, 1.40, 0], 0.026, stickAsm);
-            put(edge(new THREE.SphereGeometry(0.032, 8, 6)), 0.31, 1.44, 0, 0, 0, 0, stickAsm);
-            const calFireOutMat = new THREE.LineBasicMaterial({ color: 0x3b6fd6 });
-            const calFireMidMat = new THREE.LineBasicMaterial({ color: 0x6fa8ff });
-            const calFireInMat = new THREE.LineBasicMaterial({ color: 0xcfe8ff });
-            const calWavy = [];
-            makeWavyFlame(CCX, CCZ, 0.13, 0.54, 0.21, calFireOutMat, 0.0, 2.6, calWavy);
-            makeWavyFlame(CCX + 0.02, CCZ - 0.02, 0.13, 0.38, 0.13, calFireMidMat, 2.3, 3.1, calWavy);
-            makeWavyFlame(CCX - 0.02, CCZ + 0.02, 0.13, 0.22, 0.06, calFireInMat, 4.1, 3.6, calWavy);
-            makeWavyFlame(CCX - 0.22, CCZ + 0.14, 0.13, 0.34, 0.09, calFireOutMat, 1.2, 3.0, calWavy);
-            makeWavyFlame(CCX + 0.23, CCZ - 0.15, 0.13, 0.30, 0.08, calFireOutMat, 3.4, 2.9, calWavy);
-            makeWavyFlame(CCX - 0.10, CCZ - 0.40, 0.13, 0.44, 0.11, calFireOutMat, 5.0, 2.8, calWavy);
-            makeWavyFlame(CCX + 0.12, CCZ - 0.41, 0.13, 0.40, 0.09, calFireMidMat, 0.8, 3.2, calWavy);
-            const calGlowMat = new THREE.MeshBasicMaterial({
-                color: 0x6fa8ff, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide
-            });
-            const calGlow = new THREE.Mesh(new THREE.CircleGeometry(0.80, 28), calGlowMat);
-            calGlow.userData.noHit = true;
-            put(calGlow, 0, 0.014, 0, -Math.PI / 2, 0, 0, cauldronG);
-            const calBubbles = [];
-            for (let i = 0; i < 8; i++) {
-                const b = edge(new THREE.SphereGeometry(0.026, 6, 5), 1, calSurfMat);
-                b.userData.phase = i / 8;
-                b.userData.br = 0.05 + floor1Rng() * 0.26;
-                b.userData.ba = floor1Rng() * 6.28;
-                scene.add(b);
-                calBubbles.push(b);
-            }
-            let stirRun = 0, stirAng = 0, bubbleI = 0.3;
-            regMagic(cauldronG, () => { stirRun = 4.5; });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/cauldron.js，此处只留装配调用。
+            const cauldronApi = installProp(cauldron);
             /* ---- 灶台旁：固定木台 ---- */
-            const platformG = new THREE.Group();
-            platformG.position.set(-1.35, 0, -1.5);
-            platformG.rotation.y = 0.4;
-            scene.add(platformG);
-            put(box(0.72, 0.30, 0.62), 0, 0.15, 0, 0, 0, 0, platformG);
-            put(box(0.78, 0.045, 0.68), 0, 0.322, 0, 0, 0, 0, platformG);
-            for (const px of [-0.19, 0, 0.19])
-                put(line([[px - 0.09, 0.346, -0.335], [px - 0.09, 0.346, 0.335]]), 0, 0, 0, 0, 0, 0, platformG);
+            // J3（B1）：几何已搬入 cabin/world/floor1/stovePlatform.js，此处只留装配调用。
+            installProp(stovePlatform);
 
             /* ---- 左墙试剂药水架 ---- */
             const reagents = [];
@@ -1408,51 +1098,8 @@ export function installCabin(app) {
             mcG.userData.sfx = 'magic';
 
             /* ---- 12.9f 长餐桌 ---- */
-            put(box(2.6, 0.06, 0.8), DT_X, 0.74, DT_Z);
-            put(box(2.72, 0.04, 0.92), DT_X, 0.69, DT_Z);
-            for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                put(edge(new THREE.CylinderGeometry(0.032, 0.026, 0.68, 6)),
-                    DT_X + sx * 1.15, 0.35, DT_Z + sz * 0.32, 0, 0, 0);
-
-            const plates = [];
-            function makePlate(x, z, food) {
-                const g = new THREE.Group();
-                put(edge(new THREE.CylinderGeometry(0.14, 0.115, 0.022, 18)), 0, 0.011, 0, 0, 0, 0, g);
-                put(edge(new THREE.TorusGeometry(0.10, 0.005, 6, 26)), 0, 0.022, 0, Math.PI / 2, 0, 0, g);
-                if (food === 'fish') {
-                    lloop([[0.085, 0.034, 0], [0.07, 0.034, 0.026], [0.03, 0.034, 0.04], [-0.02, 0.034, 0.036],
-                    [-0.055, 0.034, 0.012], [-0.055, 0.034, -0.012], [-0.02, 0.034, -0.036],
-                    [0.03, 0.034, -0.04], [0.07, 0.034, -0.026]], g);
-                    lloop([[-0.05, 0.034, 0], [-0.09, 0.034, 0.032], [-0.078, 0.034, 0], [-0.09, 0.034, -0.032]], g);
-                    lloop([[0.012, 0.034, 0.016], [-0.012, 0.034, 0.036], [-0.038, 0.034, 0.010]], g);
-                    put(edge(new THREE.CircleGeometry(0.006, 6)), 0.058, 0.037, 0.006, -Math.PI / 2, 0, 0, g);
-                    put(line([[0.012, 0.036, -0.028], [0.04, 0.036, -0.004]]), 0, 0, 0, 0, 0, 0, g);
-                    put(line([[-0.012, 0.036, -0.026], [0.016, 0.036, -0.002]]), 0, 0, 0, 0, 0, 0, g);
-                }
-                if (food === 'egg') {
-                    const RS = [0.075, 0.088, 0.078, 0.092, 0.070, 0.082, 0.090, 0.076];
-                    const w = [];
-                    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; w.push([Math.cos(a) * RS[i], 0.030, Math.sin(a) * RS[i]]); }
-                    lloop(w, g);
-                    put(edge(new THREE.CircleGeometry(0.032, 14)), 0.012, 0.034, 0.006, -Math.PI / 2, 0, 0, g);
-                    put(edge(new THREE.CircleGeometry(0.013, 10)), 0.012, 0.036, 0.006, -Math.PI / 2, 0, 0, g);
-                }
-                if (food === 'pancakes') {
-                    for (let i = 0; i < 3; i++)
-                        put(edge(new THREE.CylinderGeometry(0.095 - i * 0.008, 0.085 - i * 0.008, 0.02, 16)),
-                            0.008 * i, 0.032 + 0.021 * i, 0, 0, 0, 0, g);
-                    put(box(0.034, 0.016, 0.026), 0.012, 0.096, 0, 0, 0, 0, g);
-                }
-                g.position.set(x, DTOP, z);
-                scene.add(g);
-                g.userData.spinV = 0;
-                plates.push(g);
-                regMagic(g, () => { g.userData.spinV = 9; });
-            }
-            makePlate(DT_X - 0.85, DT_Z - 0.12, 'fish');
-            makePlate(DT_X + 0.85, DT_Z - 0.12, 'egg');
-            makePlate(DT_X + 0.30, DT_Z - 0.32, 'pancakes');
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/longTable.js，此处只留装配调用。
+            const longTableApi = installProp(longTable);
             /* 茶杯（餐桌/暖桌通用） */
             const cups = [];
             function makeCup(x, z, baseY, parent) {
@@ -1529,77 +1176,8 @@ export function installCabin(app) {
             regMagic(teapotPos, () => { potRun = POT_T; });
 
             /* ---- 桌面散放餐具 ---- */
-            const tableItems = [];
-            function regItem(g) {
-                g.userData.run = 0;
-                tableItems.push(g);
-                regMagic(g, () => { g.userData.run = 1.4; });
-            }
-            function baseAt(g, x, z, ry) {
-                g.position.set(x, DTOP, z);
-                g.rotation.y = ry;
-                g.userData.baseY = DTOP;
-                g.userData.ry = ry;
-            }
-            function makeSpoon(x, z, ry) {
-                const g = new THREE.Group();
-                const handle = edge(new THREE.CylinderGeometry(0.006, 0.0095, 0.22, 6));
-                handle.rotation.x = Math.PI / 2;
-                put(handle, 0, 0.011, -0.018, 0, 0, 0, g);
-                const bowlMesh = new THREE.Mesh(new THREE.SphereGeometry(0.033, 12, 8), FILL);
-                bowlMesh.scale.set(0.7, 0.42, 1.2);
-                put(bowlMesh, 0, 0.017, 0.082, 0, 0, 0, g);
-                const eo = [], ei = [];
-                for (let i = 0; i <= 16; i++) {
-                    const a = i / 16 * Math.PI * 2;
-                    eo.push([Math.cos(a) * 0.023, 0.027, 0.082 + Math.sin(a) * 0.040]);
-                    ei.push([Math.cos(a) * 0.014, 0.029, 0.082 + Math.sin(a) * 0.026]);
-                }
-                lloop(eo, g);
-                lloop(ei, g);
-                baseAt(g, x, z, ry);
-                scene.add(g);
-                regItem(g);
-            }
-            makeSpoon(DT_X - 0.50, DT_Z + 0.06, 0.9);
-            makeSpoon(DT_X + 0.58, DT_Z + 0.14, -0.8);
-            function makeChopsticks(x, z, ry) {
-                const g = new THREE.Group();
-                logBetween([-0.008, 0.008, -0.115], [-0.008, 0.014, 0.115], 0.006, g);
-                logBetween([0.008, 0.008, -0.115], [0.010, 0.014, 0.115], 0.006, g);
-                baseAt(g, x, z, ry);
-                scene.add(g);
-                regItem(g);
-            }
-            makeChopsticks(DT_X - 1.02, DT_Z + 0.06, 2.0);
-            makeChopsticks(DT_X + 1.02, DT_Z + 0.04, 1.1);
-            function makeBowlStack(x, z) {
-                const g = new THREE.Group();
-                const BP = [[0.045, 0], [0.055, 0.018], [0.062, 0.03], [0.085, 0.042],
-                [0.108, 0.068], [0.122, 0.096], [0.128, 0.112], [0.112, 0.112]];
-                const lathePts = BP.map(p => new THREE.Vector2(p[0], p[1]));
-                for (let i = 0; i < 3; i++) {
-                    const b = new THREE.Group();
-                    b.position.y = i * 0.062;
-                    b.rotation.y = i * 0.4;
-                    put(new THREE.Mesh(new THREE.LatheGeometry(lathePts, 18), FILL), 0, 0, 0, 0, 0, 0, b);
-                    for (const [ry, rr] of [[0, 0.045], [0.068, 0.108], [0.112, 0.128], [0.112, 0.112]]) {
-                        const pts = [];
-                        for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2; pts.push([Math.cos(a) * rr, ry, Math.sin(a) * rr]); }
-                        lloop(pts, b);
-                    }
-                    for (const ang of [0, 2.1, 4.2]) {
-                        const c = Math.cos(ang), s = Math.sin(ang);
-                        put(line(BP.map(([px, py]) => [c * px, py, s * px])), 0, 0, 0, 0, 0, 0, b);
-                    }
-                    g.add(b);
-                }
-                baseAt(g, x, z, 0.1);
-                scene.add(g);
-                regItem(g);
-            }
-            makeBowlStack(DT_X - 0.32, DT_Z - 0.28);
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/tableware.js，此处只留装配调用。
+            const tablewareApi = installProp(tableware);
             const chairs = [];
             function makeChair(x, z, ry, ax, az) {
                 const g = new THREE.Group();
@@ -1623,58 +1201,9 @@ export function installCabin(app) {
             makeChair(DT_X + 1.42, DT_Z, -Math.PI / 2, 1, 0);
 
             /* ---- 12.10 魔法扫帚 ---- */
-            let broomHover = false, broomP = 0;
-            const BROOM_REST = { x: -3.3, y: 0.105, z: 3.35, rz: 0.33 };
-            const BROOM_FLY = { x: -2.7, y: 0.95, z: 2.65, rz: 0.05 };
-            const broomG = new THREE.Group();
-            broomG.position.set(BROOM_REST.x, BROOM_REST.y, BROOM_REST.z);
-            broomG.rotation.z = BROOM_REST.rz;
-            scene.add(broomG);
-            {
-                put(edge(new THREE.CylinderGeometry(0.022, 0.026, 1.45, 8)), 0, 0.865, 0, 0, 0, 0, broomG);
-                put(edge(new THREE.SphereGeometry(0.026, 8, 6)), 0, 1.59, 0, 0, 0, 0, broomG);
-                put(line([[-0.026, 1.25, 0], [0.026, 1.25, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[-0.026, 0.95, 0], [0.026, 0.95, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-
-                const SEGS = [
-                    [0.140, 0.026],
-                    [0.090, 0.048],
-                    [0.045, 0.072],
-                    [0.000, 0.092],
-                    [-0.055, 0.104],
-                    [-0.100, 0.112]
-                ];
-                const ringAt = (y, r, seg) => {
-                    const pts = [];
-                    for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; pts.push([Math.cos(a) * r, y, Math.sin(a) * r]); }
-                    put(line(pts), 0, 0, 0, 0, 0, 0, broomG);
-                };
-                for (const [yy, rr] of SEGS) ringAt(yy, rr, yy === 0.140 ? 10 : 14);
-                for (let i = 0; i < 16; i++) {
-                    const a = i / 16 * Math.PI * 2;
-                    const pts = SEGS.map(([yy, rr]) => [Math.cos(a) * rr, yy, Math.sin(a) * rr]);
-                    put(line(pts), 0, 0, 0, 0, 0, 0, broomG);
-                }
-                put(line([[-0.038, 0.09, 0], [0.050, 0.045, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0.038, 0.09, 0], [-0.050, 0.045, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0, 0.09, -0.038], [0, 0.045, 0.050]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0, 0.09, 0.038], [0, 0.045, -0.050]]), 0, 0, 0, 0, 0, 0, broomG);
-            }
-            const broomGlow = new THREE.Group();
-            broomGlow.visible = false;
-            {
-                const gp = [], gp2 = [];
-                for (let i = 0; i <= 30; i++) {
-                    const a = i / 30 * Math.PI * 2;
-                    gp.push([Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]);
-                    const r2 = 0.24 + Math.sin(a * 4) * 0.02;
-                    gp2.push([Math.cos(a) * r2, 0.012, Math.sin(a) * r2]);
-                }
-                put(line(gp), 0, 0, 0, 0, 0, 0, broomGlow);
-                put(line(gp2), 0, 0, 0, 0, 0, 0, broomGlow);
-            }
-            broomG.add(broomGlow);
-            regMagic(broomG, () => { broomHover = !broomHover; });
+            // J3（B3）：几何 + 状态 + 交互 + 每帧分支全部搬入 cabin/world/floor1/broom.js。
+            // 返回的记录带 `tick` 句柄 —— 每帧逻辑仍由 tickOnce() 在**原位置**调用（顺序不变）。
+            const broomApi = installProp(broom);
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
             const orbStandG = new THREE.Group();
@@ -1906,65 +1435,8 @@ export function installCabin(app) {
             regMagic(paperG, () => { if (paperRun <= 0) paperRun = PAPER_T; });
 
             /* ---- 12.12 塔罗牌牌堆 ---- */
-            const tarotG = new THREE.Group();
-            tarotG.position.set(-0.75, 0, -2.8);
-            scene.add(tarotG);
-            {
-                for (let i = 0; i < 3; i++) {
-                    const a = i * Math.PI * 2 / 3 + 0.9;
-                    logBetween([Math.cos(a) * 0.10, 0.44, Math.sin(a) * 0.10],
-                        [Math.cos(a) * 0.17, 0.02, Math.sin(a) * 0.17], 0.024, tarotG);
-                }
-                put(edge(new THREE.CylinderGeometry(0.24, 0.20, 0.035, 14)), 0, 0.46, 0, 0, 0, 0, tarotG);
-            }
-            const tarotCards = [];
-            let tarotState = 'stacked', tarotT = 0;
-            const TAROT_N = 9;
-            for (let i = 0; i < TAROT_N; i++) {
-                const c = new THREE.Group();
-                put(box(0.15, 0.005, 0.23), 0, 0, 0, 0, 0, 0, c);
-                put(edge(new THREE.TorusGeometry(0.034, 0.004, 4, 18)), 0, 0.004, 0, Math.PI / 2, 0, 0, c);
-                put(edge(new THREE.OctahedronGeometry(0.011)), 0, 0.0055, 0, 0, 0, 0, c);
-                for (const s of [-1, 1])
-                    put(line([[s * 0.052, 0.004, -0.075], [s * 0.052, 0.004, 0.075]]), 0, 0, 0, 0, 0, 0, c);
-                put(line([[-0.055, 0.004, -0.095], [0.055, 0.004, -0.095]]), 0, 0, 0, 0, 0, 0, c);
-                put(line([[-0.055, 0.004, 0.095], [0.055, 0.004, 0.095]]), 0, 0, 0, 0, 0, 0, c);
-                const sy = 0.482 + i * 0.0065;
-                const sry = (i % 2 ? 1 : -1) * (0.08 + i * 0.045);
-                c.userData = {
-                    sx: (floor1Rng() - 0.5) * 0.01, sy, sz: (floor1Rng() - 0.5) * 0.01, sry,
-                    fa: i * (Math.PI * 2 * 1.05 / TAROT_N),
-                    fr: 0.15 + i * 0.022,
-                    fy: 1.05 + i * 0.14,
-                    px: 0, py: 0, pz: 0, prx: 0, pry: 0, prz: 0
-                };
-                c.position.set(c.userData.sx, sy, c.userData.sz);
-                c.rotation.y = sry;
-                tarotG.add(c);
-                tarotCards.push(c);
-            }
-            function tarotPose(u, i, t) {
-                return {
-                    x: Math.cos(u.fa) * u.fr,
-                    y: u.fy + Math.sin(t * 1.6 + i * 0.9) * 0.03,
-                    z: Math.sin(u.fa) * u.fr,
-                    ry: u.fa + Math.PI / 2 + Math.sin(t * 0.8 + i * 0.7) * 0.25,
-                    rx: -0.30 + Math.sin(t * 0.6 + i) * 0.08,
-                    rz: Math.sin(t * 0.7 + i * 1.3) * 0.10
-                };
-            }
-            regMagic(tarotG, () => {
-                if (tarotState === 'stacked') { tarotState = 'flying'; tarotT = 0; }
-                else if (tarotState === 'floating') {
-                    for (const c of tarotCards) {
-                        const u = c.userData;
-                        u.px = c.position.x; u.py = c.position.y; u.pz = c.position.z;
-                        u.prx = c.rotation.x; u.pry = c.rotation.y; u.prz = c.rotation.z;
-                    }
-                    tarotState = 'returning'; tarotT = 0;
-                }
-            });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/tarot.js，此处只留装配调用。
+            const tarotApi = installProp(tarot);
             /* ---- 12.13 暖桌（八角桌板 + 等腰梯形垂帘 + 四角倒三角填补）+ 收音机 + 果盆橘子 + 方坐垫 ---- */
             let kotatsuOn = true;
             let kotGlowMat = null;
@@ -2217,101 +1689,8 @@ export function installCabin(app) {
             doorbellG.userData.sfx = 'doorbell';
 
             /* ---- 门口上方挂杆 ---- */
-            const hangBar = new THREE.Group();
-            hangBar.position.set(0, 2.66, 3.86);
-            scene.add(hangBar);
-            put(box(0.95, 0.035, 0.05), 0, 0, 0, 0, 0, 0, hangBar);
-            for (const ex of [-0.45, 0.45])
-                put(line([[ex, 0, 0.05], [ex * 1.08, 0.10, 0.10]]), 0, 0, 0, 0, 0, 0, hangBar);
-
-            /* —— 晴天娃娃【无眉毛：眼睛 + 大微笑 + 腮红，五官贴球面外】—— */
-            const CLOTH = LITMAT(0xfdfcf8, { side: THREE.DoubleSide });
-            const sunPivot = new THREE.Group();
-            sunPivot.position.set(-0.27, -0.017, 0);
-            sunPivot.rotation.y = Math.PI;   /* 转向室内（-z），默认相机可见正脸 */
-            hangBar.add(sunPivot);
-            {
-                /* 头球参数：中心 (0,-0.098,0)，半径 0.058 */
-                const HC_Y = -0.098, HC_R = 0.058;
-                const fz = (x, y) => Math.sqrt(Math.max(HC_R * HC_R - x * x - (y - HC_Y) * (y - HC_Y), 1e-4)) + 0.004;
-
-                put(line([[0, 0, 0], [0, -0.045, 0]]), 0, 0, 0, 0, 0, 0, sunPivot);
-                put(new THREE.Mesh(new THREE.SphereGeometry(HC_R, 14, 10), CLOTH), 0, HC_Y, 0, 0, 0, 0, sunPivot);
-                put(new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.088, 0.24, 12), CLOTH), 0, -0.243, 0, 0, 0, 0, sunPivot);
-                const zb = [];
-                for (let i = 0; i <= 18; i++) {
-                    const a = i / 18 * Math.PI * 2;
-                    zb.push([Math.cos(a) * 0.088, -0.363 + Math.sin(a * 3) * 0.014, Math.sin(a) * 0.088]);
-                }
-                put(new THREE.LineLoop(geo(zb), MAT), 0, 0, 0, 0, 0, 0, sunPivot);
-                put(line([[-0.028, -0.135, -0.045], [-0.048, -0.33, -0.062]]), 0, 0, 0, 0, 0, 0, sunPivot);
-                put(line([[0.028, -0.135, -0.045], [0.048, -0.33, -0.062]]), 0, 0, 0, 0, 0, 0, sunPivot);
-                /* 眼睛（球面外凸，无眉毛） */
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.0065, 6, 5), DARK), -0.020, -0.094, fz(-0.020, -0.094), 0, 0, 0, sunPivot);
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.0065, 6, 5), DARK), 0.020, -0.094, fz(0.020, -0.094), 0, 0, 0, sunPivot);
-                /* 大微笑（五点弧线，贴球面） */
-                put(line([
-                    [-0.024, -0.112, fz(-0.024, -0.112)],
-                    [-0.012, -0.120, fz(-0.012, -0.120)],
-                    [0.000, -0.124, fz(0.000, -0.124)],
-                    [0.012, -0.120, fz(0.012, -0.120)],
-                    [0.024, -0.112, fz(0.024, -0.112)]
-                ]), 0, 0, 0, 0, 0, 0, sunPivot);
-                /* 腮红（球面外） */
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.010, 6, 5),
-                    new THREE.MeshBasicMaterial({ color: 0xf2b0b6, transparent: true, opacity: 0.55 })),
-                    -0.034, -0.108, fz(-0.034, -0.108), 0, 0, 0, sunPivot);
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.010, 6, 5),
-                    new THREE.MeshBasicMaterial({ color: 0xf2b0b6, transparent: true, opacity: 0.55 })),
-                    0.034, -0.108, fz(0.034, -0.108), 0, 0, 0, sunPivot);
-            }
-            sunPivot.userData = { energy: 0, ph: 0 };
-
-            /* —— 玻璃风铃 —— */
-            const glassMat = new THREE.MeshBasicMaterial({
-                color: 0x9fdce8, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide
-            });
-            const glassLineMat = new THREE.LineBasicMaterial({ color: 0x4f9bb0 });
-            const glass = g => {
-                const grp = new THREE.Group();
-                grp.add(new THREE.Mesh(g, glassMat));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 1), glassLineMat));
-                return grp;
-            };
-            const chimePivot = new THREE.Group();
-            chimePivot.position.set(0.27, -0.017, 0);
-            hangBar.add(chimePivot);
-            {
-                put(line([[0, 0, 0], [0, -0.05, 0]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(edge(new THREE.TorusGeometry(0.026, 0.005, 6, 14)), 0, -0.056, 0, 0, 0, 0, chimePivot);
-                const prof = [];
-                for (let i = 0; i <= 6; i++) {
-                    const a = i / 6 * Math.PI / 2;
-                    prof.push(new THREE.Vector2(Math.sin(a) * 0.055, -0.062 - Math.cos(a) * 0.055));
-                }
-                prof.push(new THREE.Vector2(0.075, -0.140));
-                prof.push(new THREE.Vector2(0.078, -0.148));
-                const dome = new THREE.Mesh(new THREE.LatheGeometry(prof, 14), glassMat);
-                put(dome, 0, 0, 0, 0, 0, 0, chimePivot);
-                const rimPts = [];
-                for (let i = 0; i <= 18; i++) { const a = i / 18 * Math.PI * 2; rimPts.push([Math.cos(a) * 0.078, -0.148, Math.sin(a) * 0.078]); }
-                put(new THREE.LineLoop(geo(rimPts), glassLineMat), 0, 0, 0, 0, 0, 0, chimePivot);
-                const midPts = [];
-                for (let i = 0; i <= 18; i++) { const a = i / 18 * Math.PI * 2; midPts.push([Math.cos(a) * 0.055, -0.062, Math.sin(a) * 0.055]); }
-                put(new THREE.LineLoop(geo(midPts), glassLineMat), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(line([[0, -0.062, 0], [0, -0.165, 0]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), DARK), 0, -0.170, 0, 0, 0, 0, chimePivot);
-                put(line([[0, -0.178, 0], [0, -0.19, 0.002]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(edge(new THREE.BoxGeometry(0.038, 0.26, 0.005)), 0, -0.32, 0, 0, 0.12, 0, chimePivot);
-                put(line([[-0.018, -0.275, 0.004], [0.018, -0.30, 0.004]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(line([[-0.018, -0.335, 0.004], [0.018, -0.36, 0.004]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(line([[0, -0.45, 0], [0.022, -0.50, 0.01]]), 0, 0, 0, 0, 0, 0, chimePivot);
-                put(line([[0, -0.45, 0], [-0.022, -0.50, 0.01]]), 0, 0, 0, 0, 0, 0, chimePivot);
-            }
-            chimePivot.userData = { energy: 0, ph: 2 };
-            regMagic(sunPivot, () => { sunPivot.userData.energy = 1; });
-            regMagic(chimePivot, () => { chimePivot.userData.energy = 1; });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/doorHangBar.js，此处只留装配调用。
+            const doorHangBarApi = installProp(doorHangBar);
             /* ============ 楼梯下储物箱（点击开盖，内藏彩色矿石） ============ */
             let storageOpen = false, storageP = 0, storageV = 0;
             const storageChest = new THREE.Group();
@@ -2385,20 +1764,8 @@ export function installCabin(app) {
             }
 
             /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */
-            for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                put(edge(new THREE.CylinderGeometry(0.022, 0.018, 0.16, 6)), NSX + sxsz[0] * 0.19, FY + 0.08, NSZ + sxsz[1] * 0.16, 0, 0, 0);
-            }
-            put(box(0.50, 0.40, 0.42), NSX, FY + 0.36, NSZ);
-            put(box(0.56, 0.04, 0.48), NSX, FY + 0.58, NSZ);
-            const drawerG = new THREE.Group();
-            drawerG.position.set(NSX, FY + 0.40, NSZ + 0.20);
-            scene.add(drawerG);
-            put(box(0.42, 0.14, 0.05), 0, 0, 0, 0, 0, 0, drawerG);
-            put(edge(new THREE.CylinderGeometry(0.017, 0.017, 0.028, 8)), 0, 0, 0.042, Math.PI / 2, 0, 0, drawerG);
-            put(box(0.36, 0.11, 0.26), 0, 0, -0.16, 0, 0, 0, drawerG);
-            regSlide(drawerG, 'z', 0.26);
-            regMagic(drawerG, () => { drawerG.userData.slide.open = !drawerG.userData.slide.open; });
-
+            // J3（B2）：几何已搬入 src/cabin/world/floor2/nightstand.js，此处只留装配调用。
+            installProp(nightstand);
             /* ---- 18.3 蜡烛 ---- */
             let candleLit = true, candleP = 1;
             const candleG = new THREE.Group();
@@ -2429,13 +1796,8 @@ export function installCabin(app) {
             makeCandleGlow(0.18, 0.12, 0xff9a3c);
 
             /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */
-            for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                put(edge(new THREE.CylinderGeometry(0.035, 0.028, 0.72, 8)), TBLX + sxsz[0] * 1.00, FY + 0.36, TBLZ + sxsz[1] * 0.45, 0, 0, 0);
-            }
-            put(box(2.4, 0.08, 1.1), TBLX, FY + 0.76, TBLZ);
-            put(box(2.0, 0.05, 0.05), TBLX, FY + 0.28, TBLZ + 0.45);
-            put(box(2.0, 0.05, 0.05), TBLX, FY + 0.28, TBLZ - 0.45);
-
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/desk.js，此处只留装配调用。
+            installProp(desk);
             /* —— 椅子 —— */
             const CHAIR_IN = -3.20;
             const CHAIR_OUT = -3.60;
@@ -2451,785 +1813,23 @@ export function installCabin(app) {
             regMagic(chairG, () => { chairOpen = !chairOpen; });
 
             /* —— 魔方 —— */
-            const rubikG = new THREE.Group();
-            const RUBIK_HOME = V(3.15, TBL_TOP + 0.085, -2.68);
-            rubikG.position.copy(RUBIK_HOME);
-            scene.add(rubikG);
-            const rubikPivot = new THREE.Group();
-            rubikG.add(rubikPivot);
-            const faceCol = { px: 0xd94a3d, nx: 0xf0a03c, py: 0xf3d04a, ny: 0x53c26a, pz: 0x4a86c8, nz: 0x9a5bb5 };
-            const cmMat = {};
-            for (const k in faceCol) cmMat[k] = new THREE.MeshBasicMaterial({ color: faceCol[k] });
-            const cmDark = LITMAT(0x242424);
-            const cubieEdgeMat = new THREE.LineBasicMaterial({ color: 0x0d0d0d });
-            const cubies = [];
-            for (let cx = -1; cx <= 1; cx++) {
-                for (let cy = -1; cy <= 1; cy++) {
-                    for (let cz = -1; cz <= 1; cz++) {
-                        if (cx === 0 && cy === 0 && cz === 0) continue;
-                        const g = new THREE.BoxGeometry(0.046, 0.046, 0.046);
-                        const m = new THREE.Mesh(g, [
-                            cx === 1 ? cmMat.px : cmDark,
-                            cx === -1 ? cmMat.nx : cmDark,
-                            cy === 1 ? cmMat.py : cmDark,
-                            cy === -1 ? cmMat.ny : cmDark,
-                            cz === 1 ? cmMat.pz : cmDark,
-                            cz === -1 ? cmMat.nz : cmDark
-                        ]);
-                        m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), cubieEdgeMat));
-                        m.position.set(cx * 0.05, cy * 0.05, cz * 0.05);
-                        rubikG.add(m);
-                        cubies.push({ mesh: m, pos: V(cx, cy, cz) });
-                    }
-                }
-            }
-            const rubikState = { phase: 'idle', t0: 0, moves: [], mi: 0, scrambled: false, history: [] };
-            let layerAnim = null;
-            const AXV = { x: V(1, 0, 0), y: V(0, 1, 0), z: V(0, 0, 1) };
-
-            function beginLayer(axis, layer, dir, dur, onDone) {
-                rubikPivot.rotation.set(0, 0, 0);
-                rubikPivot.updateMatrixWorld(true);
-                for (const c of cubies) {
-                    if (Math.round(c.pos[axis]) === layer) rubikPivot.attach(c.mesh);
-                }
-                layerAnim = { axis: axis, layer: layer, dir: dir, t: 0, dur: dur, onDone: onDone };
-            }
-
-            function updateLayerAnim(dt) {
-                if (!layerAnim) return;
-                const la = layerAnim;
-                la.t += dt;
-                const k = la.t >= la.dur ? 1 : (la.t / la.dur) * (la.t / la.dur) * (3 - 2 * la.t / la.dur);
-                rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2 * k;
-                if (la.t >= la.dur) {
-                    rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2;
-                    rubikPivot.updateMatrixWorld(true);
-                    for (let i = cubies.length - 1; i >= 0; i--) {
-                        const c = cubies[i];
-                        if (c.mesh.parent === rubikPivot) {
-                            rubikG.attach(c.mesh);
-                            c.pos.applyAxisAngle(AXV[la.axis], la.dir * Math.PI / 2);
-                            c.pos.set(Math.round(c.pos.x), Math.round(c.pos.y), Math.round(c.pos.z));
-                            c.mesh.position.set(
-                                Math.round(c.mesh.position.x / 0.05) * 0.05,
-                                Math.round(c.mesh.position.y / 0.05) * 0.05,
-                                Math.round(c.mesh.position.z / 0.05) * 0.05
-                            );
-                        }
-                    }
-                    rubikPivot.rotation.set(0, 0, 0);
-                    const cb = la.onDone;
-                    layerAnim = null;
-                    if (cb) cb();
-                }
-            }
-
-            function startNextTurn() {
-                const s = rubikState;
-                const mv = s.moves[s.mi];
-                beginLayer(mv.a, mv.l, mv.d, 0.30, () => {
-                    s.mi++;
-                    if (s.mi < s.moves.length) {
-                        startNextTurn();
-                    } else {
-                        s.phase = 'down';
-                        s.t0 = clock.now;
-                    }
-                });
-            }
-
-            regMagic(rubikG, () => {
-                const s = rubikState;
-                if (s.phase !== 'idle') return;
-                if (!s.scrambled) {
-                    const AX = ['x', 'y', 'z'], LS = [-1, 0, 1];
-                    s.moves = [];
-                    let lastAxis = '';
-                    for (let i = 0; i < 6; i++) {
-                        let ax;
-                        do {
-                            ax = AX[Math.floor(runtimeRng() * 3)];
-                        } while (ax === lastAxis);
-                        lastAxis = ax;
-                        s.moves.push({ a: ax, l: LS[Math.floor(runtimeRng() * 3)], d: runtimeRng() < 0.5 ? 1 : -1 });
-                    }
-                    s.history = s.moves.slice();
-                } else {
-                    s.moves = s.history.slice().reverse().map(m => ({ a: m.a, l: m.l, d: -m.d }));
-                }
-                s.mi = 0;
-                s.phase = 'up';
-                s.t0 = clock.now;
-            });
-
-            function updateRubik(time) {
-                const s = rubikState;
-                if (s.phase === 'idle') return;
-                const e = time - s.t0;
-                if (s.phase === 'up') {
-                    const k = Math.min(e / 0.4, 1);
-                    rubikG.position.y = RUBIK_HOME.y + (k * k * (3 - 2 * k)) * 0.25;
-                    if (e >= 0.4) {
-                        s.phase = 'turn';
-                        startNextTurn();
-                    }
-                } else if (s.phase === 'turn') {
-                    rubikG.position.y = RUBIK_HOME.y + 0.25 + Math.sin(time * 3) * 0.006;
-                } else if (s.phase === 'down') {
-                    const k = Math.min(e / 0.4, 1);
-                    rubikG.position.y = RUBIK_HOME.y + (1 - k * k * (3 - 2 * k)) * 0.25;
-                    if (e >= 0.4) {
-                        rubikG.position.copy(RUBIK_HOME);
-                        s.scrambled = !s.scrambled;
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/rubik.js，此处只留装配调用。
+            const rubikApi = installProp(rubik);
             /* —— 通用倒塌/恢复 —— */
-            const toppleGroups = [];
-
-            function regTopple(group, items) {
-                let maxD = 0;
-                for (const it of items) if ((it.delay || 0) > maxD) maxD = it.delay || 0;
-                group.userData.tp = { t: 0, open: false, items: items, maxD: maxD };
-                toppleGroups.push(group);
-                regMagic(group, () => { group.userData.tp.open = !group.userData.tp.open; });
-            }
-
-            function updateTopple(group) {
-                const s = group.userData.tp;
-                s.t += ((s.open ? 1 : 0) - s.t) * 0.055;
-                for (const it of s.items) {
-                    let e = s.t * (1 + s.maxD) - (it.delay || 0);
-                    e = Math.max(0, Math.min(1, e));
-                    e = e * e * (3 - 2 * e);
-                    it.o.position.lerpVectors(it.hp, it.fp, e);
-                    it.o.rotation.set(
-                        it.hr[0] + (it.fr[0] - it.hr[0]) * e,
-                        it.hr[1] + (it.fr[1] - it.hr[1]) * e,
-                        it.hr[2] + (it.fr[2] - it.hr[2]) * e
-                    );
-                }
-            }
-
-            /* —— 金币柱 ×3 —— */
-            const coinG = new THREE.Group();
-            scene.add(coinG);
-            {
-                const goldMat = LITMAT(0xd9b23a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const goldEdge = new THREE.LineBasicMaterial({ color: 0x8a6a1e });
-                const coinItems = [];
-                const cols = [
-                    { x: 3.275, z: -2.282, n: 8, dOff: 0.00 },
-                    { x: 3.340, z: -2.276, n: 10, dOff: 0.03 },
-                    { x: 3.405, z: -2.284, n: 7, dOff: 0.06 }
-                ];
-                const BASE = { x: 3.34, z: -2.28 };
-                const dl = Math.hypot(0.25, 1.0);
-                const DIR = { x: 0.25 / dl, z: -1.0 / dl };
-                const PER = { x: -DIR.z, z: DIR.x };
-                const colOrder = [2, 0, 3, 1];
-                const slots = [];
-                for (let k = 0; k < 24; k++) {
-                    const r = Math.floor(k / 4);
-                    const cRaw = colOrder[k % 4];
-                    const c = (r % 2 === 1) ? (cRaw + 2) % 4 : cRaw;
-                    const d = 0.055 + r * 0.063;
-                    const s = (c - 1.5) * 0.064 + (r % 2 === 1 ? 0.032 : 0);
-                    slots.push({ x: BASE.x + DIR.x * d + PER.x * s, z: BASE.z + DIR.z * d + PER.z * s });
-                }
-                const all = [];
-                for (const col of cols) {
-                    for (let h = 0; h < col.n; h++) all.push({ col: col, h: h });
-                }
-                all.sort((a, b) => (a.h - b.h) || (a.col.x - b.col.x));
-                all.forEach((it, k) => {
-                    const c = new THREE.Group();
-                    const cg = new THREE.CylinderGeometry(0.030, 0.030, 0.007, 14);
-                    c.add(new THREE.Mesh(cg, goldMat));
-                    c.add(new THREE.LineSegments(new THREE.EdgesGeometry(cg, 20), goldEdge));
-                    const hp = V(it.col.x, TBL_TOP + 0.0035 + it.h * 0.0072, it.col.z);
-                    let fp;
-                    if (k < 24) {
-                        const sl = slots[k];
-                        fp = V(sl.x, TBL_TOP + 0.0035, sl.z);
-                    } else {
-                        const sl = slots[1];
-                        fp = V(sl.x, TBL_TOP + 0.0035 + 0.0072, sl.z);
-                    }
-                    c.position.copy(hp);
-                    coinG.add(c);
-                    coinItems.push({ o: c, hp: hp, fp: fp, hr: [0, 0, 0], fr: [0, floor2Rng() * 6.28, 0], delay: it.col.dOff + it.h * 0.055 + floor2Rng() * 0.02 });
-                });
-                regTopple(coinG, coinItems);
-            }
-
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/coinTowers.js，此处只留装配调用。
+            const coinTowersApi = installProp(coinTowers);
             /* —— 扑克牌堆 —— */
-            const deckG = new THREE.Group();
-            const DECK_HOME = V(3.35, TBL_TOP + 0.002, -2.15);
-            deckG.position.copy(DECK_HOME);
-            scene.add(deckG);
-            const DECK_N = 11;
-            const deckCards = [];
-            let revealCard = null, revealFaceMat = null;
-            const SUITS = [
-                { ch: '♥', col: '#d0342c' },
-                { ch: '♦', col: '#d0342c' },
-                { ch: '♣', col: '#222222' },
-                { ch: '♠', col: '#222222' }
-            ];
-            {
-                const backCv = document.createElement('canvas');
-                backCv.width = 128;
-                backCv.height = 180;
-                const bc = backCv.getContext('2d');
-                bc.fillStyle = '#b04a4a';
-                bc.fillRect(0, 0, 128, 180);
-                bc.strokeStyle = 'rgba(255,255,255,0.75)';
-                bc.lineWidth = 2;
-                for (let k = -180; k < 180; k += 14) {
-                    bc.beginPath();
-                    bc.moveTo(k, 0);
-                    bc.lineTo(k + 180, 180);
-                    bc.stroke();
-                    bc.beginPath();
-                    bc.moveTo(k + 180, 0);
-                    bc.lineTo(k, 180);
-                    bc.stroke();
-                }
-                bc.strokeStyle = '#7a2a2a';
-                bc.lineWidth = 8;
-                bc.strokeRect(4, 4, 120, 172);
-                const backTex = new THREE.CanvasTexture(backCv);
-                const backMat = new THREE.MeshBasicMaterial({ map: backTex });
-                const whiteMat = LITMAT(0xfdfdf6);
-                const sideMat = LITMAT(0xe8e2d0);
-                const cardGeo = new THREE.BoxGeometry(0.055, 0.0016, 0.078);
-                const cardEdgeMat = new THREE.LineBasicMaterial({ color: 0x8a3a3a });
-                for (let i = 0; i < DECK_N; i++) {
-                    const c = new THREE.Group();
-                    const m = new THREE.Mesh(cardGeo, [sideMat, sideMat, backMat, whiteMat, sideMat, sideMat]);
-                    c.add(m);
-                    c.add(new THREE.LineSegments(new THREE.EdgesGeometry(cardGeo), cardEdgeMat));
-                    const by = i * 0.0017;
-                    c.position.set(0, by, 0);
-                    c.userData = { i: i, base: V(0, by, 0) };
-                    deckG.add(c);
-                    deckCards.push(c);
-                }
-                const faceCv = document.createElement('canvas');
-                faceCv.width = 128;
-                faceCv.height = 180;
-                const faceTex = new THREE.CanvasTexture(faceCv);
-                revealFaceMat = new THREE.MeshBasicMaterial({ map: faceTex });
-                revealCard = { canvas: faceCv, tex: faceTex };
-
-                function drawFace(si) {
-                    const fc = faceCv.getContext('2d');
-                    const su = SUITS[si];
-                    fc.fillStyle = '#fdfdf6';
-                    fc.fillRect(0, 0, 128, 180);
-                    fc.strokeStyle = '#cccccc';
-                    fc.lineWidth = 4;
-                    fc.strokeRect(4, 4, 120, 172);
-                    fc.fillStyle = su.col;
-                    fc.textAlign = 'center';
-                    fc.textBaseline = 'middle';
-                    fc.font = '88px serif';
-                    fc.fillText(su.ch, 64, 96);
-                    fc.font = '26px serif';
-                    fc.fillText(su.ch, 20, 24);
-                    fc.fillText(su.ch, 108, 156);
-                    faceTex.needsUpdate = true;
-                }
-                drawFace(0);
-                const rc = new THREE.Group();
-                const rGeo = new THREE.BoxGeometry(0.055, 0.0016, 0.078);
-                const rm = new THREE.Mesh(rGeo, [sideMat, sideMat, backMat, revealFaceMat, sideMat, sideMat]);
-                rc.add(rm);
-                rc.add(new THREE.LineSegments(new THREE.EdgesGeometry(rGeo), cardEdgeMat));
-                rc.position.set(0, DECK_N * 0.0017, 0);
-                deckG.add(rc);
-                revealCard.grp = rc;
-                revealCard.draw = drawFace;
-                revealCard.homeY = rc.position.y;
-            }
-            const deckState = { phase: 'idle', t0: 0 };
-            regMagic(deckG, () => {
-                if (deckState.phase !== 'idle') return;
-                revealCard.draw(Math.floor(runtimeRng() * 4));
-                deckState.phase = 'rise';
-                deckState.t0 = clock.now;
-            });
-
-            function updateDeck(time) {
-                const s = deckState;
-                if (s.phase === 'idle') return;
-                const e = time - s.t0;
-                const rc = revealCard.grp;
-                const go = ph => { s.phase = ph; s.t0 = time; };
-                if (s.phase === 'rise') {
-                    const k = smooth(Math.min(e / 0.35, 1));
-                    deckG.position.y = DECK_HOME.y + 0.22 * k;
-                    if (e >= 0.35) go('split');
-                } else if (s.phase === 'split') {
-                    deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
-                    const k = smooth(Math.min(e / 0.28, 1));
-                    for (const c of deckCards) {
-                        const side = (c.userData.i < 6) ? -1 : 1;
-                        c.position.x = side * 0.052 * k;
-                        c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * k;
-                        c.rotation.y = side * 0.12 * k;
-                    }
-                    rc.position.x = 0.026 * k;
-                    if (e >= 0.36) go('riffle');
-                } else if (s.phase === 'riffle') {
-                    deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
-                    for (const c of deckCards) {
-                        const side = (c.userData.i < 6) ? -1 : 1;
-                        const tk = smooth(Math.max(0, Math.min(1, (e - (side > 0 ? 0.14 : 0)) / 0.30)));
-                        c.position.x = side * 0.052 * (1 - tk);
-                        c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * (1 - tk) + Math.sin(tk * Math.PI) * 0.006;
-                        c.rotation.y = side * 0.12 * (1 - tk);
-                    }
-                    const rtk = smooth(Math.max(0, Math.min(1, (e - 0.14) / 0.30)));
-                    rc.position.x = 0.026 * (1 - rtk);
-                    if (e >= 0.52) go('settle');
-                } else if (s.phase === 'settle') {
-                    for (const c of deckCards) {
-                        c.position.copy(c.userData.base);
-                        c.rotation.y = 0;
-                    }
-                    rc.position.set(0, revealCard.homeY, 0);
-                    if (e >= 0.15) go('rup');
-                } else if (s.phase === 'rup') {
-                    const k = smooth(Math.min(e / 0.30, 1));
-                    rc.position.y = revealCard.homeY + 0.11 * k;
-                    if (e >= 0.30) go('rflip');
-                } else if (s.phase === 'rflip') {
-                    const k = smooth(Math.min(e / 0.45, 1));
-                    rc.rotation.x = Math.PI * k;
-                    rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin(k * Math.PI);
-                    if (e >= 0.45) go('rhold');
-                } else if (s.phase === 'rhold') {
-                    rc.position.y = revealCard.homeY + 0.11 + Math.sin(time * 2.5) * 0.004;
-                    if (e >= 1.5) go('rback');
-                } else if (s.phase === 'rback') {
-                    const k = smooth(Math.min(e / 0.45, 1));
-                    rc.rotation.x = Math.PI * (1 - k);
-                    rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin((1 - k) * Math.PI);
-                    if (e >= 0.45) go('rdown');
-                } else if (s.phase === 'rdown') {
-                    const k = smooth(Math.min(e / 0.30, 1));
-                    rc.position.y = revealCard.homeY + 0.11 * (1 - k);
-                    if (e >= 0.30) go('down');
-                } else if (s.phase === 'down') {
-                    rc.rotation.x = 0;
-                    const k = smooth(Math.min(e / 0.40, 1));
-                    deckG.position.y = DECK_HOME.y + 0.22 * (1 - k);
-                    if (e >= 0.40) {
-                        deckG.position.copy(DECK_HOME);
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/cardDeck.js，此处只留装配调用。
+            const cardDeckApi = installProp(cardDeck);
             /* —— 玻璃雪景球 —— */
-            const snowG = new THREE.Group();
-            snowG.position.set(3.50, TBL_TOP, -2.80);
-            scene.add(snowG);
-            const SNOW_C = V(0, 0.100, 0);
-            const SNOW_R = 0.070;
-            const SNOW_FLOOR = 0.040;
-            const snowParts = [];
-            {
-                const woodM = LITMAT(0x8a6238, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const baseG = new THREE.CylinderGeometry(0.052, 0.060, 0.026, 14);
-                const base = new THREE.Mesh(baseG, woodM);
-                base.position.y = 0.013;
-                snowG.add(base);
-                snowG.add(new THREE.LineSegments(new THREE.EdgesGeometry(baseG), MAT).translateY(0.013));
-                const trim = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.006, 6, 18), LITMAT(0xcaa273));
-                trim.rotation.x = Math.PI / 2;
-                trim.position.y = 0.027;
-                snowG.add(trim);
-                const glass = new THREE.Mesh(new THREE.SphereGeometry(SNOW_R, 16, 12), new THREE.MeshBasicMaterial({ color: 0xdff2f8, transparent: true, opacity: 0.20, depthWrite: false, side: THREE.DoubleSide }));
-                glass.position.copy(SNOW_C);
-                glass.renderOrder = 6;
-                snowG.add(glass);
-                const whiteM = LITMAT(0xf4f8fc);
-                const ground = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), whiteM);
-                ground.scale.set(1.15, 0.35, 1.15);
-                ground.position.y = 0.034;
-                snowG.add(ground);
-                const TX = 0.018, TZ = 0.006;
-                const trunkM = LITMAT(0x6a4a2a);
-                const g1 = new THREE.CylinderGeometry(0.004, 0.005, 0.014, 6);
-                const trunk = new THREE.Mesh(g1, trunkM);
-                trunk.position.set(TX, 0.044, TZ);
-                snowG.add(trunk);
-                const grn1 = LITMAT(0x2e7a44);
-                const grn2 = LITMAT(0x3a8a52);
-                const t1 = new THREE.ConeGeometry(0.017, 0.020, 8);
-                const m1 = new THREE.Mesh(t1, grn1);
-                m1.position.set(TX, 0.054, TZ);
-                snowG.add(m1);
-                snowG.add(new THREE.LineSegments(new THREE.EdgesGeometry(t1), MAT).translateX(TX).translateY(0.054).translateZ(TZ));
-                const t2 = new THREE.ConeGeometry(0.0135, 0.018, 8);
-                const m2 = new THREE.Mesh(t2, grn2);
-                m2.position.set(TX, 0.064, TZ);
-                snowG.add(m2);
-                snowG.add(new THREE.LineSegments(new THREE.EdgesGeometry(t2), MAT).translateX(TX).translateY(0.064).translateZ(TZ));
-                const t3 = new THREE.ConeGeometry(0.010, 0.016, 8);
-                const m3 = new THREE.Mesh(t3, grn1);
-                m3.position.set(TX, 0.073, TZ);
-                snowG.add(m3);
-                snowG.add(new THREE.LineSegments(new THREE.EdgesGeometry(t3), MAT).translateX(TX).translateY(0.073).translateZ(TZ));
-                const houseM = LITMAT(0xc9803c);
-                const hG = new THREE.BoxGeometry(0.022, 0.016, 0.018);
-                const house = new THREE.Mesh(hG, houseM);
-                house.position.set(-0.014, 0.048, -0.006);
-                snowG.add(house);
-                snowG.add(new THREE.LineSegments(new THREE.EdgesGeometry(hG), MAT).translateX(-0.014).translateY(0.048).translateZ(-0.006));
-                const roofG = new THREE.ConeGeometry(0.017, 0.012, 4);
-                const roof = new THREE.Mesh(roofG, LITMAT(0xa04638));
-                roof.position.set(-0.014, 0.062, -0.006);
-                roof.rotation.y = Math.PI / 4;
-                snowG.add(roof);
-                const flakeM = LITMAT(0xffffff);
-                for (let i = 0; i < 24; i++) {
-                    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.0032), flakeM);
-                    const a = floor2Rng() * 6.28, ph = Math.acos(2 * floor2Rng() - 1);
-                    const r = 0.015 + floor2Rng() * 0.042;
-                    const p = V(
-                        SNOW_C.x + Math.sin(ph) * Math.cos(a) * r,
-                        Math.max(SNOW_FLOOR + 0.004, SNOW_C.y + Math.cos(ph) * r),
-                        SNOW_C.z + Math.sin(ph) * Math.sin(a) * r
-                    );
-                    m.position.copy(p);
-                    snowG.add(m);
-                    snowParts.push({ mesh: m, p: p, v: V(0, -0.008, 0), ph: floor2Rng() * 6.28, sf: 0.6 + floor2Rng() });
-                }
-            }
-            regMagic(snowG, () => {
-                for (const s of snowParts) {
-                    const a = runtimeRng() * 6.28, ph = Math.acos(2 * runtimeRng() - 1);
-                    s.v.x += Math.sin(ph) * Math.cos(a) * (0.15 + runtimeRng() * 0.20);
-                    s.v.z += Math.sin(ph) * Math.sin(a) * (0.15 + runtimeRng() * 0.20);
-                    s.v.y += 0.10 + runtimeRng() * 0.14;
-                }
-            });
-
-            function updateSnow(time, dt) {
-                for (const s of snowParts) {
-                    s.v.y -= 0.05 * dt;
-                    s.v.multiplyScalar(Math.max(0, 1 - 1.4 * dt));
-                    s.p.addScaledVector(s.v, dt);
-                    s.p.x += Math.sin(time * s.sf + s.ph) * 0.00018;
-                    const dx = s.p.x - SNOW_C.x, dy = s.p.y - SNOW_C.y, dz = s.p.z - SNOW_C.z;
-                    const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    const R = SNOW_R - 0.004;
-                    if (L > R) {
-                        const k = R / L;
-                        s.p.set(SNOW_C.x + dx * k, SNOW_C.y + dy * k, SNOW_C.z + dz * k);
-                        s.v.multiplyScalar(0.35);
-                    }
-                    if (s.p.y < SNOW_FLOOR) {
-                        s.p.y = SNOW_FLOOR;
-                        s.v.y = Math.max(0, s.v.y);
-                        s.v.x *= 0.5;
-                        s.v.z *= 0.5;
-                        if (s.v.length() < 0.006 && runtimeRng() < 0.004) {
-                            s.p.set(
-                                SNOW_C.x + (runtimeRng() - 0.5) * 0.05,
-                                SNOW_C.y + 0.028 + runtimeRng() * 0.032,
-                                SNOW_C.z + (runtimeRng() - 0.5) * 0.05
-                            );
-                            s.v.set(0, -0.008, 0);
-                        }
-                    }
-                    s.mesh.position.copy(s.p);
-                    s.mesh.rotation.y += 1.8 * dt;
-                }
-            }
-
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/snowGlobe.js，此处只留装配调用。
+            const snowGlobeApi = installProp(snowGlobe);
             /* —— 沙漏 —— */
-            const hourG = new THREE.Group();
-            hourG.position.set(2.15, TBL_TOP + 0.106, -2.50);
-            scene.add(hourG);
-            let sandUp, sandDn, sandStream;
-            const hourSand = { up: 1.0, dn: 0.05 };
-            const hourState = { phase: 'flow', t0: clock.now };
-            {
-                const woodM = LITMAT(0x8a6238, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const dG = new THREE.CylinderGeometry(0.050, 0.050, 0.012, 14);
-                const d1 = new THREE.Mesh(dG, woodM);
-                d1.position.y = 0.098;
-                hourG.add(d1);
-                const d2 = new THREE.Mesh(dG, woodM);
-                d2.position.y = -0.098;
-                hourG.add(d2);
-                hourG.add(new THREE.LineSegments(new THREE.EdgesGeometry(dG), MAT).translateY(0.098));
-                hourG.add(new THREE.LineSegments(new THREE.EdgesGeometry(dG), MAT).translateY(-0.098));
-                for (let i = 0; i < 3; i++) {
-                    const a = i * Math.PI * 2 / 3 + 0.5;
-                    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.20, 6), woodM);
-                    p.position.set(Math.cos(a) * 0.044, 0, Math.sin(a) * 0.044);
-                    hourG.add(p);
-                }
-                const glassM = new THREE.MeshBasicMaterial({ color: 0xdff2f8, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
-                const cupG = new THREE.ConeGeometry(0.038, 0.086, 14);
-                const up = new THREE.Mesh(cupG, glassM);
-                up.rotation.x = Math.PI;
-                up.position.y = 0.047;
-                hourG.add(up);
-                const dn = new THREE.Mesh(cupG, glassM);
-                dn.position.y = -0.047;
-                hourG.add(dn);
-                const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.014, 8), glassM);
-                hourG.add(neck);
-                const sandM = LITMAT(0xe8c26a);
-                const gU = new THREE.ConeGeometry(0.031, 0.082, 12);
-                gU.rotateX(Math.PI);
-                gU.translate(0, 0.041, 0);
-                sandUp = new THREE.Mesh(gU, sandM);
-                sandUp.position.y = 0.004;
-                hourG.add(sandUp);
-                const gD = new THREE.ConeGeometry(0.033, 0.070, 12);
-                gD.translate(0, 0.035, 0);
-                sandDn = new THREE.Mesh(gD, sandM);
-                sandDn.position.y = -0.090;
-                hourG.add(sandDn);
-                sandStream = new THREE.Mesh(new THREE.CylinderGeometry(0.0032, 0.0032, 0.066, 6), LITMAT(0xe8c26a));
-                sandStream.position.y = -0.037;
-                hourG.add(sandStream);
-            }
-            regMagic(hourG, () => {
-                if (hourState.phase !== 'idle') return;
-                hourState.phase = 'flip';
-                hourState.t0 = clock.now;
-            });
-
-            function updateHourglass(time) {
-                const s = hourState;
-                if (s.phase === 'flip') {
-                    const e = time - s.t0;
-                    const kk = smooth(Math.min(e / 0.6, 1));
-                    hourG.rotation.z = kk * Math.PI;
-                    sandStream.visible = false;
-                    if (e >= 0.6) {
-                        hourG.rotation.z = 0;
-                        const t = hourSand.up;
-                        hourSand.up = hourSand.dn;
-                        hourSand.dn = t;
-                        s.phase = 'flow';
-                        s.t0 = time;
-                    }
-                } else if (s.phase === 'flow') {
-                    const e = time - s.t0;
-                    const kk = smooth(Math.min(e / 3.0, 1));
-                    hourSand.up = 1 - 0.95 * kk;
-                    hourSand.dn = 0.05 + 0.95 * kk;
-                    sandStream.visible = e < 2.9;
-                    if (e >= 3.0) {
-                        sandStream.visible = false;
-                        s.phase = 'idle';
-                    }
-                }
-                sandUp.scale.setScalar(Math.max(0.05, hourSand.up));
-                sandDn.scale.setScalar(Math.max(0.05, hourSand.dn));
-            }
-
-            /* ========================================================== */
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/deskHourglass.js，此处只留装配调用。
+            const deskHourglassApi = installProp(deskHourglass);
             /* —— 台历（转轴位于背板面顶端：未翻页贴板前面、翻过页贴板背面， */
-            /*       由背板物理隔开，翻到任何月份都互不交叉）—— */
-            /* ========================================================== */
-            const calG = new THREE.Group();
-            calG.position.set(2.62, TBL_TOP, -2.34);
-            calG.rotation.y = -0.18;
-            scene.add(calG);
-            const calState = { month: 1, phase: 'idle', animT: 0, animDur: 0.75, animPage: null };
-            const calPages = [];
-            {
-                function calBox(w, h, d, col) {
-                    const grp = new THREE.Group();
-                    const g = new THREE.BoxGeometry(w, h, d);
-                    grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-                    grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), MAT));
-                    return grp;
-                }
-
-                // 2026 年各月天数与 1 日星期（0 = 周日）
-                const CAL_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-                const CAL_FIRST = [4, 0, 0, 3, 5, 1, 3, 6, 2, 4, 0, 2];
-
-                function drawCalPage(month, isFront) {
-                    const cv = document.createElement('canvas');
-                    cv.width = 128;
-                    cv.height = 88;
-                    const c = cv.getContext('2d');
-                    if (!isFront) {
-                        c.fillStyle = '#eae6da';
-                        c.fillRect(0, 0, 128, 88);
-                        c.strokeStyle = '#c9c2b0';
-                        c.lineWidth = 2;
-                        c.strokeRect(3, 3, 122, 82);
-                        c.fillStyle = '#b8b0a0';
-                        c.font = '11px serif';
-                        c.textAlign = 'center';
-                        c.textBaseline = 'middle';
-                        c.fillText('✦ Magic ✦', 64, 44);
-                        return new THREE.CanvasTexture(cv);
-                    }
-                    c.fillStyle = '#fdfdf8';
-                    c.fillRect(0, 0, 128, 88);
-                    // 标题栏
-                    c.fillStyle = '#7a3a4a';
-                    c.fillRect(0, 0, 128, 14);
-                    c.fillStyle = '#ffffff';
-                    c.font = 'bold 10px serif';
-                    c.textAlign = 'center';
-                    c.textBaseline = 'middle';
-                    c.fillText(month + ' 月', 64, 8);
-                    // 星期行
-                    const days = ['日', '一', '二', '三', '四', '五', '六'];
-                    c.textBaseline = 'alphabetic';
-                    c.font = '7px serif';
-                    for (let i = 0; i < 7; i++) {
-                        c.fillStyle = i === 0 ? '#c05a5a' : (i === 6 ? '#5a7ac0' : '#8a8a8a');
-                        c.fillText(days[i], 11 + i * 17.7, 24);
-                    }
-                    // 日期网格：按当月真实天数与首日星期排布（支持 6 行）
-                    const nDays = CAL_DAYS[month - 1];
-                    const first = CAL_FIRST[month - 1];
-                    c.font = '7.5px serif';
-                    for (let d = 1; d <= nDays; d++) {
-                        const cell = first + d - 1;
-                        const col = cell % 7;
-                        const row = Math.floor(cell / 7);
-                        c.fillStyle = col === 0 ? '#b04a4a' : (col === 6 ? '#4a6ab0' : '#444444');
-                        c.fillText(d.toString(), 11 + col * 17.7, 33 + row * 8.6);
-                    }
-                    return new THREE.CanvasTexture(cv);
-                }
-
-                // 底座
-                const base = calBox(0.20, 0.024, 0.13, 0x8a6238);
-                base.position.y = 0.012;
-                calG.add(base);
-
-                // 背板组（前倾 0.32 rad；组内背板为竖直板，y 0~0.14，厚 z ±0.006）
-                const backG = new THREE.Group();
-                backG.position.set(0, 0.024, -0.028);
-                backG.rotation.x = 0.32;
-                calG.add(backG);
-
-                // 背板
-                const board = calBox(0.19, 0.14, 0.012, 0xa07850);
-                board.position.set(0, 0.07, 0);
-                backG.add(board);
-
-                // 转轴托块（连接板顶与横杆，位于页面两侧之外）
-                for (const sx of [-1, 1]) {
-                    const lug = calBox(0.024, 0.022, 0.02, 0x8a6238);
-                    lug.position.set(sx * 0.086, 0.146, 0);
-                    backG.add(lug);
-                }
-
-                // 横杆：精确置于背板面顶端延长处（组内 (0, 0.152, 0)）
-                const ROD_Y = 0.152, ROD_Z = 0;
-                const rodGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.19, 6);
-                rodGeo.rotateZ(Math.PI / 2);
-                const rodMesh = new THREE.Mesh(rodGeo, LITMAT(0x5a3c1e, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                rodMesh.position.set(0, ROD_Y, ROD_Z);
-                rodMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(rodGeo, 10), MAT));
-                backG.add(rodMesh);
-
-                // 12 页月历：铰点 = 杆心。未翻时贴背板前面层叠（1 月最外、先翻），
-                // 翻过后绕杆翻转近一整圈贴背板背面层叠（1 月最贴板）。
-                const CAL_W = 0.16, CAL_H = 0.11, CAL_T = 0.0015;
-                const pageSideMat = LITMAT(0xf0ede4);
-                for (let i = 1; i <= 12; i++) {
-                    const pgG = new THREE.Group();
-                    pgG.position.set(0, ROD_Y, ROD_Z);
-                    const frontMat = new THREE.MeshBasicMaterial({ map: drawCalPage(i, true) });
-                    const backMat = new THREE.MeshBasicMaterial({ map: drawCalPage(i, false) });
-                    const pgGeo = new THREE.BoxGeometry(CAL_W, CAL_H, CAL_T);
-                    // 材质数组：index 5 (-z 面，朝书本) 正面月份；index 4 (+z 面) 背面装饰
-                    const pgMesh = new THREE.Mesh(pgGeo, [pageSideMat, pageSideMat, pageSideMat, pageSideMat, backMat, frontMat]);
-                    const zInit = -0.0085 - (12 - i) * 0.0016;  // 板前层叠：12 月贴板，1 月最外
-                    const zFlip = 0.0085 + (i - 1) * 0.0016;    // 板后层叠：1 月贴板背，12 月最外
-                    pgMesh.position.set(0, -CAL_H / 2, zInit);
-                    pgMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(pgGeo), MAT));
-                    pgG.add(pgMesh);
-                    backG.add(pgG);
-                    calPages.push({
-                        grp: pgG,
-                        mesh: pgMesh,
-                        zInit: zInit,
-                        zFlip: zFlip,
-                        initRot: 0,
-                        flippedRot: Math.PI * 2 - 0.03 - (i - 1) * 0.004
-                    });
-                }
-            }
-            regMagic(calG, () => {
-                if (calState.phase !== 'idle') return;
-                if (calState.month <= 12) {
-                    calState.phase = 'flipping';
-                    calState.animPage = calPages[calState.month - 1];
-                    calState.animT = 0;
-                    calState.animDur = 0.75;
-                } else {
-                    calState.phase = 'returning';
-                    calState.animT = 0;
-                    calState.animDur = 0.9;
-                }
-            });
-
-            // 根据当前旋转角计算页面沿杆的 z 偏移：
-            // 前半圈（页在前方）保持板前层叠位置，翻过顶部（rot > π）后平滑滑到板后层叠位置
-            function calZFor(pg, rot) {
-                const kk = smooth(Math.max(0, Math.min(1, (rot - Math.PI) / Math.PI)));
-                return pg.zInit + (pg.zFlip - pg.zInit) * kk;
-            }
-
-            function updateCal(dt) {
-                if (calState.phase === 'idle') return;
-                calState.animT += dt;
-                const e = calState.animT;
-                const k = smooth(Math.min(e / calState.animDur, 1));
-                if (calState.phase === 'flipping') {
-                    const pg = calState.animPage;
-                    const rot = pg.initRot + (pg.flippedRot - pg.initRot) * k;
-                    pg.grp.rotation.x = rot;
-                    pg.mesh.position.z = calZFor(pg, rot);
-                    if (e >= calState.animDur) {
-                        pg.grp.rotation.x = pg.flippedRot;
-                        pg.mesh.position.z = pg.zFlip;
-                        calState.month++;
-                        calState.phase = 'idle';
-                    }
-                } else if (calState.phase === 'returning') {
-                    for (const pg of calPages) {
-                        const rot = pg.flippedRot + (pg.initRot - pg.flippedRot) * k;
-                        pg.grp.rotation.x = rot;
-                        pg.mesh.position.z = calZFor(pg, rot);
-                    }
-                    if (e >= calState.animDur) {
-                        for (const pg of calPages) {
-                            pg.grp.rotation.x = pg.initRot;
-                            pg.mesh.position.z = pg.zInit;
-                        }
-                        calState.month = 1;
-                        calState.phase = 'idle';
-                    }
-                }
-            }
-
-            /* ========================================================== */
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/calendar.js，此处只留装配调用。
+            const calendarApi = installProp(calendar);
             /* —— 魔法书本 —— */
             /* ========================================================== */
             const bookG = new THREE.Group();
@@ -4608,260 +3208,14 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 衣柜 */
-            /* ========================================================== */
-            const WD_W = 1.25;
-            const WD_D = 0.58;
-            const WD_H = 1.95;
-            const WD_COL = 0xc9b391;
-            const WD_DARK = 0x9a7d55;
-            const wardrobeG = new THREE.Group();
-            wardrobeG.position.set(-1.40, FY, 3.55);
-            wardrobeG.rotation.y = Math.PI;
-            scene.add(wardrobeG);
-            {
-                put(cbox(WD_W, WD_H, 0.04, WD_COL), 0, WD_H / 2, -WD_D / 2 + 0.02, 0, 0, 0, wardrobeG);
-                put(cbox(0.04, WD_H, WD_D, WD_COL), -WD_W / 2 + 0.02, WD_H / 2, 0, 0, 0, 0, wardrobeG);
-                put(cbox(0.04, WD_H, WD_D, WD_COL), WD_W / 2 - 0.02, WD_H / 2, 0, 0, 0, 0, wardrobeG);
-                put(cbox(WD_W, 0.04, WD_D, WD_COL), 0, WD_H - 0.02, 0, 0, 0, 0, wardrobeG);
-                put(cbox(WD_W, 0.45, WD_D, WD_COL), 0, 0.225, 0, 0, 0, 0, wardrobeG);
-                const wardrobeDrawerG = new THREE.Group();
-                wardrobeDrawerG.position.set(0, 0.20, WD_D / 2 - 0.10);
-                wardrobeG.add(wardrobeDrawerG);
-                {
-                    const p = crboxCol(WD_W - 0.08, 0.35, 0.05, 0.01, WD_DARK);
-                    p.position.set(0, 0, 0.05);
-                    wardrobeDrawerG.add(p);
-                    const knob = edge(new THREE.CylinderGeometry(0.017, 0.017, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(0, 0, 0.092);
-                    wardrobeDrawerG.add(knob);
-                    const drawerInsideMat = new THREE.MeshBasicMaterial({ color: WD_DARK, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                    const insideGeo = new THREE.BoxGeometry(WD_W - 0.12, 0.25, WD_D - 0.2);
-                    const inside = new THREE.Group();
-                    inside.add(new THREE.Mesh(insideGeo, drawerInsideMat));
-                    inside.add(new THREE.LineSegments(new THREE.EdgesGeometry(insideGeo), MAT));
-                    inside.position.set(0, 0, -0.10);
-                    wardrobeDrawerG.add(inside);
-                }
-                regSlide(wardrobeDrawerG, 'z', 0.25);
-                regMagic(wardrobeDrawerG, () => {
-                    const sl = wardrobeDrawerG.userData.slide;
-                    if (!sl.open && !doorsBothOpen()) { SND.play('ui'); return; }
-                    sl.open = !sl.open;
-                });
-                const ROD_Y = 1.50;
-                const ROD_Z = -0.05;
-                for (const sx of [-1, 1]) {
-                    put(cbox(0.07, 0.07, 0.07, WD_DARK), sx * (WD_W / 2 - 0.06), ROD_Y, ROD_Z, 0, 0, 0, wardrobeG);
-                }
-                const rod = edge(new THREE.CylinderGeometry(0.016, 0.016, WD_W - 0.10, 8));
-                rod.rotation.z = Math.PI / 2;
-                rod.position.set(0, ROD_Y, ROD_Z);
-                wardrobeG.add(rod);
-
-                function makeHanger(hx, clothCol) {
-                    const hg = new THREE.Group();
-                    hg.position.set(hx, ROD_Y, ROD_Z);
-                    hg.rotation.y = Math.PI / 2;
-                    wardrobeG.add(hg);
-                    const hook = edge(new THREE.TorusGeometry(0.026, 0.005, 6, 12));
-                    hg.add(hook);
-                    put(edge(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 6)), 0, -0.04, 0, 0, 0, 0, hg);
-                    logBetween([0, -0.065, 0], [-0.15, -0.17, 0], 0.007, hg);
-                    logBetween([0, -0.065, 0], [0.15, -0.17, 0], 0.007, hg);
-                    logBetween([-0.15, -0.17, 0], [0.15, -0.17, 0], 0.007, hg);
-                    if (clothCol !== null && clothCol !== undefined) {
-                        const cl = crboxCol(0.27, 0.30, 0.03, 0.035, clothCol);
-                        cl.position.set(0, -0.34, 0);
-                        hg.add(cl);
-                        hg.add(iline([[-0.05, -0.20, 0.018], [0, -0.23, 0.018], [0.05, -0.20, 0.018]]));
-                    }
-                    regWobble(hg);
-                }
-                makeHanger(-0.40, 0xe3b3b8);
-                makeHanger(-0.12, null);
-                makeHanger(0.34, 0xa9c6e2);
-                const stackCols = [0xd9a5a0, 0xbcd4b0, 0xe6d9b8, 0xb9aede];
-                let syL = 0.45;
-                for (let i = 0; i < 4; i++) {
-                    const w = 0.35 - (i % 2) * 0.03;
-                    const d = 0.32 - (i % 2) * 0.02;
-                    const c = crboxCol(w, 0.07, d, 0.032, stackCols[i % stackCols.length]);
-                    c.position.set(-0.28, syL + 0.035, (i % 2 ? -0.012 : 0.010));
-                    c.rotation.y = (i % 2 ? 0.05 : -0.06);
-                    wardrobeG.add(c);
-                    syL += 0.07;
-                }
-                let syR = 0.45;
-                for (let i = 0; i < 4; i++) {
-                    const w = 0.35 - (i % 2) * 0.03;
-                    const d = 0.32 - (i % 2) * 0.02;
-                    const c = crboxCol(w, 0.07, d, 0.032, stackCols[(i + 2) % stackCols.length]);
-                    c.position.set(0.28, syR + 0.035, (i % 2 ? -0.012 : 0.010));
-                    c.rotation.y = (i % 2 ? 0.05 : -0.06);
-                    wardrobeG.add(c);
-                    syR += 0.07;
-                }
-                const doorW = WD_W / 2 - 0.02;
-                const doorH = WD_H - 0.10;
-                const dl = new THREE.Group();
-                dl.userData = { base: 0, delta: -1.8 };
-                dl.position.set(-WD_W / 2 + 0.02, WD_H / 2, WD_D / 2 + 0.025);
-                wardrobeG.add(dl);
-                {
-                    const p = crboxCol(doorW - 0.03, doorH, 0.035, 0.012, WD_COL);
-                    p.position.set(doorW / 2, 0, 0);
-                    dl.add(p);
-                    const hw = doorW / 2 - 0.10, hh = doorH / 2 - 0.14;
-                    dl.add(iline([
-                        [doorW / 2 - hw, -hh, 0.022], [doorW / 2 + hw, -hh, 0.022],
-                        [doorW / 2 + hw, hh, 0.022], [doorW / 2 - hw, hh, 0.022],
-                        [doorW / 2 - hw, -hh, 0.022]
-                    ]));
-                    const knob = edge(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(doorW - 0.10, 0, 0.038);
-                    dl.add(knob);
-                }
-                registerHinge(dl);
-                const dr = new THREE.Group();
-                dr.userData = { base: 0, delta: 1.8 };
-                dr.position.set(WD_W / 2 - 0.02, WD_H / 2, WD_D / 2 + 0.025);
-                wardrobeG.add(dr);
-                {
-                    const p = crboxCol(doorW - 0.03, doorH, 0.035, 0.012, WD_COL);
-                    p.position.set(-doorW / 2, 0, 0);
-                    dr.add(p);
-                    const hw = doorW / 2 - 0.10, hh = doorH / 2 - 0.14;
-                    dr.add(iline([
-                        [-doorW / 2 - hw, -hh, 0.022], [-doorW / 2 + hw, -hh, 0.022],
-                        [-doorW / 2 + hw, hh, 0.022], [-doorW / 2 - hw, hh, 0.022],
-                        [-doorW / 2 - hw, -hh, 0.022]
-                    ]));
-                    const knob = edge(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(-(doorW - 0.10), 0, 0.038);
-                    dr.add(knob);
-                }
-                registerHinge(dr);
-                /* 关衣柜门时若底部抽屉还开着，先收抽屉再关门，避免穿模；抽屉必须两扇门都开才能拉出 */
-                const doorsBothOpen = () => dl.userData.spring.open && dr.userData.spring.open && !dl.userData.closing && !dr.userData.closing;
-                const closeWardrobeDoor = door => {
-                    const s = door.userData.spring;
-                    if (!s.open || !wardrobeDrawerG.userData.slide.open) { s.open = !s.open; SND.play('toggle'); return; }
-                    wardrobeDrawerG.userData.slide.open = false; SND.play('toggle');
-                    door.userData.closing = true;
-                    setTimeout(() => { door.userData.closing = false; s.open = false; SND.play('toggle'); }, 420);
-                };
-                dl.userData.onToggle = () => closeWardrobeDoor(dl);
-                dr.userData.onToggle = () => closeWardrobeDoor(dr);
-                dl.userData.aimLabel = dr.userData.aimLabel = '开 / 关衣柜门';
-                dl.userData.bounce = dr.userData.bounce = true; /* 关门回弹打到关闭位反弹，不向内穿进柜体 */
-                wardrobeDrawerG.userData.aimLabel = '开 / 关抽屉';
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/wardrobe.js，此处只留装配调用。
+            installProp(wardrobe);
             /* 18.11 墙钩挎包 / 置物箱与魔女帽 / 可推拉小凳子 */
-            /* ========================================================== */
-            const wallHookZ = 3.825;
-            const hookBaseY = FY + 1.38;
-            const bagHookX = 0.15;
-
-            // J 形墙钩：钩身向下再向上勾起，开口朝上
-            function makeWallHook(x, y, z) {
-                const g = new THREE.Group();
-                put(cbox(0.06, 0.09, 0.028, 0x9a7d55), 0, 0.03, 0.014, 0, 0, 0, g);
-                const hookCurve = new THREE.CatmullRomCurve3([
-                    V(0, 0.05, 0.012),
-                    V(0, 0.015, -0.008),
-                    V(0, -0.02, -0.038),
-                    V(0, -0.06, -0.055),
-                    V(0, -0.048, -0.078),
-                    V(0, -0.012, -0.082)
-                ]);
-                const tubeGeo = new THREE.TubeGeometry(hookCurve, 32, 0.008, 6, false);
-                const hookMat = LITMAT(0x5a4128, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                g.add(new THREE.Mesh(tubeGeo, hookMat));
-                g.add(new THREE.LineSegments(new THREE.EdgesGeometry(tubeGeo, 20), MAT));
-                const tip = edge(new THREE.SphereGeometry(0.011, 8, 6));
-                tip.position.set(0, -0.012, -0.082);
-                g.add(tip);
-                g.position.set(x, y, z);
-                scene.add(g);
-                return g;
-            }
-
-            makeWallHook(bagHookX, hookBaseY, wallHookZ);
-
-            /* —— 挎包：两条绷紧的背带从包顶两角拉向钩上挂环，构成三角 —— */
-            const bagG = new THREE.Group();
-            const bagHookPt = V(bagHookX, hookBaseY - 0.055, wallHookZ - 0.05);
-            const BAG_DROP = 0.50;
-            bagG.position.set(bagHookPt.x, bagHookPt.y - BAG_DROP, bagHookPt.z + 0.02);
-            scene.add(bagG);
-            {
-                const strapMat = LITMAT(0x4a2a1a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-
-                // 包身
-                bagG.add(crboxCol(0.24, 0.24, 0.10, 0.03, 0x8a5a3a));
-                // 包盖
-                const flap = crboxCol(0.245, 0.018, 0.108, 0.012, 0x6a3a2a);
-                flap.position.y = 0.125;
-                bagG.add(flap);
-                const front = crboxCol(0.245, 0.095, 0.016, 0.012, 0x6a3a2a);
-                front.position.set(0, 0.072, 0.051);
-                bagG.add(front);
-                // 金色搭扣
-                put(cbox(0.048, 0.03, 0.014, 0xc9a05a), 0, 0.052, 0.062, 0, 0, 0, bagG);
-                // 缝线装饰
-                bagG.add(iline([[-0.10, -0.11, 0.052], [0.10, -0.11, 0.052]]));
-                bagG.add(iline([[-0.10, -0.02, 0.052], [0.10, -0.02, 0.052]]));
-
-                // 顶部挂环
-                const hookLocal = V(0, BAG_DROP, -0.02);
-                const ringGeo = new THREE.TorusGeometry(0.022, 0.006, 6, 14);
-                const ring = new THREE.Mesh(ringGeo, strapMat);
-                ring.add(new THREE.LineSegments(new THREE.EdgesGeometry(ringGeo), MAT));
-                ring.rotation.y = Math.PI / 2;
-                ring.position.copy(hookLocal);
-                bagG.add(ring);
-
-                // 两条绷紧的背带
-                const strapTop = V(0, hookLocal.y - 0.02, hookLocal.z);
-                function tautStrapGeo(x0) {
-                    const from = V(x0, 0.115, 0.015);
-                    const mid = from.clone().lerp(strapTop, 0.5);
-                    mid.y -= 0.005;
-                    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([from, mid, strapTop]), 24, 0.008, 6, false);
-                }
-                const strapLGeo = tautStrapGeo(-0.095);
-                bagG.add(new THREE.Mesh(strapLGeo, strapMat));
-                bagG.add(new THREE.LineSegments(new THREE.EdgesGeometry(strapLGeo, 20), MAT));
-                const strapRGeo = tautStrapGeo(0.095);
-                bagG.add(new THREE.Mesh(strapRGeo, strapMat));
-                bagG.add(new THREE.LineSegments(new THREE.EdgesGeometry(strapRGeo, 20), MAT));
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/bag.js，此处只留装配调用。
+            installProp(bag);
             /* 置物箱（挎包旁边地上）：加宽 + 简化 + 颜色统一 */
-            /* ========================================================== */
-            const crateX = 0.95, crateZ = 3.48;
-            const CR_W = 0.68, CR_D = 0.55, CR_H = 0.32;
-            const CRATE_TOP = FY + CR_H + 0.092;
-            {
-                const CR_COL = 0xa07850;
-                const CR_DARK = 0x8a6238;
-                // 箱体
-                put(cbox(CR_W, CR_H, CR_D, CR_COL), crateX, FY + CR_H / 2, crateZ, 0, 0, 0);
-                // 箱盖沿（略大一圈）
-                put(cbox(CR_W + 0.04, 0.07, CR_D + 0.04, CR_DARK), crateX, FY + CR_H + 0.035, crateZ, 0, 0, 0);
-                // 盖顶面板
-                put(cbox(CR_W - 0.10, 0.022, CR_D - 0.10, CR_COL), crateX, FY + CR_H + 0.081, crateZ, 0, 0, 0);
-                // 正面搭扣（朝向房间一侧）
-                put(cbox(0.10, 0.11, 0.02, CR_DARK), crateX, FY + CR_H / 2, crateZ - CR_D / 2 - 0.006, 0, 0, 0);
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/crate.js，此处只留装配调用。
+            installProp(crate);
             /* 可推拉小凳子（挎包下方、箱子旁的地上，点击拉出/推回） */
             /* ========================================================== */
             const stoolG = new THREE.Group();
@@ -4901,452 +3255,14 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 魔女帽：更大帽檐 + 低弯折尖，点击飞起撒糖果 */
-            /* ========================================================== */
-            const hatG = new THREE.Group();
-            const HAT_HOME_POS = V(crateX, CRATE_TOP, crateZ);
-            const HAT_HOVER_POS = V(crateX - 0.05, FY + 1.45, crateZ - 0.10);
-            const HAT_TILT = 1.35;
-            hatG.position.copy(HAT_HOME_POS);
-            hatG.rotation.z = 0.05;
-            scene.add(hatG);
-            {
-                const hatMat = LITMAT(0x2a1a3a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const ribbonMat = LITMAT(0x5a2a4a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const buckleMat = LITMAT(0xc9a05a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-
-                // 超大帽檐
-                const brimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.022, 22);
-                const brim = new THREE.Mesh(brimGeo, hatMat);
-                brim.add(new THREE.LineSegments(new THREE.EdgesGeometry(brimGeo, 20), MAT));
-                brim.position.y = 0.011;
-                hatG.add(brim);
-
-                // 帽身（锥台，底接帽檐）
-                const bodyGeo = new THREE.CylinderGeometry(0.052, 0.16, 0.30, 18);
-                const body = new THREE.Mesh(bodyGeo, hatMat);
-                body.add(new THREE.LineSegments(new THREE.EdgesGeometry(bodyGeo, 20), MAT));
-                body.position.y = 0.17;
-                hatG.add(body);
-
-                // 弯折关节球（弯折点 y = 0.32）
-                const jointGeo = new THREE.SphereGeometry(0.052, 10, 8);
-                const joint = new THREE.Mesh(jointGeo, hatMat);
-                joint.add(new THREE.LineSegments(new THREE.EdgesGeometry(jointGeo, 15), MAT));
-                joint.position.y = 0.32;
-                hatG.add(joint);
-
-                // 弯折帽尖（从低处关节向侧上方伸出并微微下垂）
-                const tipGeo = new THREE.ConeGeometry(0.052, 0.17, 12);
-                const tip = new THREE.Mesh(tipGeo, hatMat);
-                tip.add(new THREE.LineSegments(new THREE.EdgesGeometry(tipGeo, 15), MAT));
-                tip.rotation.z = -1.0;
-                tip.position.set(0.072, 0.366, 0);
-                hatG.add(tip);
-
-                // 缎带环
-                const bandGeo = new THREE.TorusGeometry(0.136, 0.015, 6, 20);
-                const band = new THREE.Mesh(bandGeo, ribbonMat);
-                band.add(new THREE.LineSegments(new THREE.EdgesGeometry(bandGeo), MAT));
-                band.rotation.x = Math.PI / 2;
-                band.position.y = 0.075;
-                hatG.add(band);
-
-                // 金色带扣
-                const buckleGeo = new THREE.BoxGeometry(0.04, 0.03, 0.012);
-                const buckle = new THREE.Mesh(buckleGeo, buckleMat);
-                buckle.add(new THREE.LineSegments(new THREE.EdgesGeometry(buckleGeo), MAT));
-                buckle.position.set(0, 0.075, 0.157);
-                hatG.add(buckle);
-            }
-
-            /* —— 魔女帽交互：飞起悬浮撒糖果后落回 —— */
-            const hatState = { phase: 'idle', t0: 0 };
-            let hatCandyT = 0;
-            const candies = [];
-            const CANDY_COLORS = [0xe05555, 0xf0973c, 0xf0d355, 0x66c266, 0x5a9ad8, 0xa86ac9, 0xe07ab0, 0x8adfcb];
-
-            function makeCandy() {
-                const g = new THREE.Group();
-                const col = CANDY_COLORS[Math.floor(runtimeRng() * CANDY_COLORS.length)];
-                const mat = new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const type = Math.floor(runtimeRng() * 3);
-                if (type === 0) {
-                    // 包裹糖：圆球 + 两侧糖纸角
-                    const sg = new THREE.SphereGeometry(0.02, 10, 8);
-                    const s = new THREE.Mesh(sg, mat);
-                    s.add(new THREE.LineSegments(new THREE.EdgesGeometry(sg, 15), MAT));
-                    g.add(s);
-                    for (const sd of [-1, 1]) {
-                        const cg = new THREE.ConeGeometry(0.012, 0.022, 6);
-                        cg.rotateZ(sd * Math.PI / 2);
-                        cg.translate(sd * 0.03, 0, 0);
-                        const cm = new THREE.Mesh(cg, mat);
-                        cm.add(new THREE.LineSegments(new THREE.EdgesGeometry(cg, 20), MAT));
-                        g.add(cm);
-                    }
-                } else if (type === 1) {
-                    // 方块糖
-                    g.add(crboxCol(0.036, 0.036, 0.036, 0.008, col));
-                } else {
-                    // 圆环糖
-                    const tg = new THREE.TorusGeometry(0.018, 0.009, 6, 14);
-                    const tm = new THREE.Mesh(tg, mat);
-                    tm.add(new THREE.LineSegments(new THREE.EdgesGeometry(tg), MAT));
-                    g.add(tm);
-                }
-                scene.add(g);
-                return g;
-            }
-
-            function spawnCandy() {
-                const obj = makeCandy();
-                const mouth = V(Math.sin(hatG.rotation.z), -Math.cos(hatG.rotation.z), 0);
-                const p = hatG.position.clone().addScaledVector(mouth, 0.03);
-                p.x += (runtimeRng() - 0.5) * 0.06;
-                p.y += (runtimeRng() - 0.5) * 0.04;
-                p.z += (runtimeRng() - 0.5) * 0.06;
-                obj.position.copy(p);
-                obj.rotation.set(runtimeRng() * 6.28, runtimeRng() * 6.28, runtimeRng() * 6.28);
-                candies.push({
-                    obj: obj,
-                    v: mouth.clone().multiplyScalar(0.35 + runtimeRng() * 0.35)
-                        .add(V((runtimeRng() - 0.5) * 0.3, 0.1 + runtimeRng() * 0.3, (runtimeRng() - 0.62) * 0.5)),
-                    av: V((runtimeRng() - 0.5) * 10, (runtimeRng() - 0.5) * 10, (runtimeRng() - 0.5) * 10),
-                    r: 0.024,
-                    onCrate: false,
-                    resting: false, restT: 0,
-                    dying: false, dieT: 0
-                });
-            }
-
-            function updateHat(time, dt) {
-                const s = hatState;
-                if (s.phase === 'idle') return;
-                const e = time - s.t0;
-                if (s.phase === 'rising') {
-                    const D = 0.9;
-                    const k = smooth(Math.min(e / D, 1));
-                    hatG.position.lerpVectors(HAT_HOME_POS, HAT_HOVER_POS, k);
-                    hatG.position.y += Math.sin(k * Math.PI) * 0.18;
-                    hatG.rotation.z = 0.05 + (HAT_TILT - 0.05) * k;
-                    if (e >= D) {
-                        s.phase = 'floating';
-                        s.t0 = time;
-                        hatCandyT = 0.3;
-                    }
-                } else if (s.phase === 'floating') {
-                    const D = 3.4;
-                    hatG.position.copy(HAT_HOVER_POS);
-                    hatG.position.y += Math.sin(time * 2.6) * 0.03;
-                    hatG.rotation.z = HAT_TILT + Math.sin(time * 2.0) * 0.10;
-                    hatG.rotation.x = Math.sin(time * 1.5) * 0.07;
-                    hatCandyT -= dt;
-                    if (e < 2.1 && hatCandyT <= 0) {
-                        hatCandyT = 0.13;
-                        spawnCandy();
-                    }
-                    if (e >= D) {
-                        s.phase = 'returning';
-                        s.t0 = time;
-                    }
-                } else if (s.phase === 'returning') {
-                    const D = 0.9;
-                    const k = smooth(Math.min(e / D, 1));
-                    hatG.position.lerpVectors(HAT_HOVER_POS, HAT_HOME_POS, k);
-                    hatG.position.y += Math.sin(k * Math.PI) * 0.12;
-                    hatG.rotation.z = HAT_TILT + (0.05 - HAT_TILT) * k;
-                    hatG.rotation.x = Math.sin(time * 1.5) * 0.07 * (1 - k);
-                    if (e >= D) {
-                        hatG.position.copy(HAT_HOME_POS);
-                        hatG.rotation.set(0, 0, 0.05);
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
-            function updateCandies(dt) {
-                for (let i = candies.length - 1; i >= 0; i--) {
-                    const c = candies[i];
-                    if (c.dying) {
-                        c.dieT += dt;
-                        const k = Math.min(c.dieT / 0.5, 1);
-                        c.obj.scale.setScalar(Math.max(0.001, 1 - k));
-                        if (k >= 1) {
-                            scene.remove(c.obj);
-                            c.obj.traverse(o => {
-                                if (o.geometry) o.geometry.dispose();
-                                if (o.material) o.material.dispose();
-                            });
-                            candies.splice(i, 1);
-                        }
-                        continue;
-                    }
-                    if (c.resting) {
-                        c.restT += dt;
-                        if (c.restT > (c.onCrate ? 0.8 : 3.2)) {
-                            c.dying = true;
-                            c.dieT = 0;
-                        }
-                        continue;
-                    }
-                    c.v.y -= 3.0 * dt;
-                    c.obj.position.addScaledVector(c.v, dt);
-                    c.obj.rotation.x += c.av.x * dt;
-                    c.obj.rotation.y += c.av.y * dt;
-                    c.obj.rotation.z += c.av.z * dt;
-                    let floorY = FY;
-                    if (Math.abs(c.obj.position.x - crateX) < CR_W / 2 + 0.02 &&
-                        Math.abs(c.obj.position.z - crateZ) < CR_D / 2 + 0.02) {
-                        floorY = CRATE_TOP;
-                    }
-                    if (c.obj.position.y < floorY + c.r) {
-                        c.obj.position.y = floorY + c.r;
-                        c.onCrate = (floorY > FY + 0.1);
-                        if (Math.abs(c.v.y) > 0.55) {
-                            c.v.y = -c.v.y * 0.42;
-                            c.v.x *= 0.72;
-                            c.v.z *= 0.72;
-                            c.av.multiplyScalar(0.6);
-                        } else {
-                            c.v.y = 0;
-                            c.v.x *= 0.8;
-                            c.v.z *= 0.8;
-                            c.av.multiplyScalar(0.6);
-                            if (c.v.length() < 0.05) {
-                                c.resting = true;
-                                c.restT = 0;
-                                c.v.set(0, 0, 0);
-                            }
-                        }
-                    }
-                }
-            }
-
-            regMagic(hatG, () => {
-                if (hatState.phase !== 'idle') return;
-                hatState.phase = 'rising';
-                hatState.t0 = clock.now;
-            });
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/witchHat.js，此处只留装配调用。
+            const witchHatApi = installProp(witchHat);
             /* 垃圾桶 */
-            /* ========================================================== */
-            const BIN_X = 1.85;
-            const BIN_Z = -3.40;
-            const BIN_H = 0.60;
-            const BIN_R = 0.26;
-            const binG = new THREE.Group();
-            binG.position.set(BIN_X, FY, BIN_Z);
-            scene.add(binG);
-            {
-                const wallG = new THREE.CylinderGeometry(BIN_R, BIN_R - 0.03, BIN_H, 16, 1, true);
-                const wall = new THREE.Mesh(wallG, LITMAT(0xeef0ec, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                wall.position.y = BIN_H / 2;
-                binG.add(wall);
-                const bottomGeo = new THREE.CircleGeometry(BIN_R - 0.026, 16);
-                const bottom = new THREE.Mesh(bottomGeo, LITMAT(0xe3e6e3, { side: THREE.DoubleSide }));
-                bottom.rotation.x = -Math.PI / 2;
-                bottom.position.y = 0.008;
-                binG.add(bottom);
-                const bottomEdgeGeo = new THREE.EdgesGeometry(bottomGeo);
-                const bottomEdge = new THREE.LineSegments(bottomEdgeGeo, MAT);
-                bottomEdge.rotation.x = -Math.PI / 2;
-                bottomEdge.position.y = 0.008;
-                binG.add(bottomEdge);
-                const rim = edge(new THREE.TorusGeometry(BIN_R + 0.003, 0.014, 6, 20));
-                rim.rotation.x = Math.PI / 2;
-                rim.position.y = BIN_H;
-                binG.add(rim);
-                for (let i = 0; i < 6; i++) {
-                    const a = i * Math.PI / 3;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.13, 0.065, Math.sin(a) * 0.13);
-                    pb.rotation.y = a;
-                    binG.add(pb);
-                }
-                for (let i = 0; i < 6; i++) {
-                    const a = i * Math.PI / 3 + Math.PI / 6;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.13, 0.16, Math.sin(a) * 0.13);
-                    pb.rotation.y = a + 0.7;
-                    binG.add(pb);
-                }
-                for (let i = 0; i < 3; i++) {
-                    const a = i * Math.PI * 2 / 3;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.105, 0.26, Math.sin(a) * 0.105);
-                    pb.rotation.y = a + 1.3;
-                    binG.add(pb);
-                }
-                {
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(0, 0.26, 0);
-                    pb.rotation.y = 0.8;
-                    binG.add(pb);
-                }
-                const boxA = cbox(0.09, 0.05, 0.07, 0xcf8a76);
-                boxA.position.set(0.11, 0.34, 0.02);
-                boxA.rotation.y = 0.5;
-                binG.add(boxA);
-                const boxB = cbox(0.09, 0.05, 0.07, 0x8fb4c9);
-                boxB.position.set(-0.10, 0.34, -0.06);
-                boxB.rotation.y = -0.4;
-                binG.add(boxB);
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/bin.js，此处只留装配调用。
+            installProp(bin);
             /* 抽纸盒 */
-            /* ========================================================== */
-            const TISSUE_X = 1.42;
-            const TISSUE_Z = -2.15;
-            const tissueBoxG = new THREE.Group();
-            tissueBoxG.position.set(TISSUE_X, TBL_TOP, TISSUE_Z);
-            tissueBoxG.rotation.y = 0.22;
-            scene.add(tissueBoxG);
-            let standbyPaper = null;
-            {
-                const body = crboxCol(0.22, 0.13, 0.16, 0.015, 0xa9c29b);
-                body.position.y = 0.065;
-                tissueBoxG.add(body);
-                const slot = cbox(0.13, 0.008, 0.03, 0x4e5a4e);
-                slot.position.y = 0.132;
-                tissueBoxG.add(slot);
-                standbyPaper = new THREE.Group();
-                const sb = crboxCol(0.10, 0.07, 0.005, 0.004, 0xfdfdf6);
-                standbyPaper.add(sb);
-                standbyPaper.add(iline([[-0.03, -0.028, 0.004], [0.032, -0.028, 0.004]]));
-                standbyPaper.position.set(0, 0.168, 0);
-                standbyPaper.rotation.x = 0.06;
-                tissueBoxG.add(standbyPaper);
-            }
-            const SLOT_POS = V(TISSUE_X, TBL_TOP + 0.135, TISSUE_Z);
-            const DESK_REST = V(2.05, TBL_TOP + 0.008, -2.00);
-            const BIN_MOUTH = V(BIN_X, FY + BIN_H + 0.10, BIN_Z);
-            const BIN_FALL = V(BIN_X, FY + 0.18, BIN_Z);
-            const tissuePaperG = new THREE.Group();
-            tissuePaperG.visible = false;
-            scene.add(tissuePaperG);
-            const paperFlat = new THREE.Group();
-            {
-                const sheet = crboxCol(0.10, 0.15, 0.005, 0.004, 0xfdfdf6);
-                sheet.position.y = 0.075;
-                paperFlat.add(sheet);
-                paperFlat.add(iline([[-0.025, 0.03, 0.004], [-0.032, 0.12, 0.004]]));
-                paperFlat.add(iline([[0.025, 0.03, 0.004], [0.018, 0.12, 0.004]]));
-            }
-            tissuePaperG.add(paperFlat);
-            const paperBallFly = crumpleBall(0.05);
-            paperBallFly.visible = false;
-            tissuePaperG.add(paperBallFly);
-            const tissueState = { phase: 'idle', t: 0 };
-            let standbyAnimT = -1;
-            regMagic(tissueBoxG, function () {
-                if (tissueState.phase !== 'idle') return;
-                tissueState.phase = 'rise';
-                tissueState.t = 0;
-                standbyAnimT = 0;
-                paperFlat.visible = true;
-                paperFlat.scale.set(1, 0.15, 1);
-                paperFlat.rotation.set(0, 0, 0);
-                paperFlat.position.set(0, 0, 0);
-                paperBallFly.visible = false;
-                paperBallFly.scale.setScalar(1);
-                tissuePaperG.rotation.set(0, 0.22, 0);
-                tissuePaperG.position.copy(SLOT_POS);
-                tissuePaperG.visible = true;
-            });
-            regMagic(tissuePaperG, function () {
-                if (tissueState.phase !== 'rest') return;
-                tissueState.phase = 'crumple';
-                tissueState.t = 0;
-            });
-
-            function updateTissue(time, dt) {
-                const s = tissueState;
-                if (standbyAnimT >= 0) {
-                    standbyAnimT += dt;
-                    const e = standbyAnimT;
-                    if (e < 0.35) {
-                        standbyPaper.scale.y = 1 - 0.78 * smooth(e / 0.35);
-                    } else if (e < 0.75) {
-                        standbyPaper.scale.y = 0.22 + 0.78 * smooth((e - 0.35) / 0.40);
-                    } else {
-                        standbyPaper.scale.y = 1;
-                        standbyAnimT = -1;
-                    }
-                }
-                if (s.phase === 'idle') return;
-                s.t += dt;
-                const e = s.t;
-                if (s.phase === 'rise') {
-                    const k = smooth(Math.min(e / 0.50, 1));
-                    paperFlat.scale.y = 0.15 + 0.85 * k;
-                    if (e >= 0.50) {
-                        paperFlat.scale.y = 1;
-                        s.phase = 'lift';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'lift') {
-                    const k = smooth(Math.min(e / 0.30, 1));
-                    tissuePaperG.position.y = SLOT_POS.y + 0.10 * k;
-                    if (e >= 0.30) {
-                        s.phase = 'lay';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'lay') {
-                    const k = smooth(Math.min(e / 0.45, 1));
-                    const from = V(SLOT_POS.x, SLOT_POS.y + 0.10, SLOT_POS.z);
-                    tissuePaperG.position.copy(arcPos(from, DESK_REST, k, 0.03));
-                    paperFlat.rotation.x = -Math.PI / 2 * k;
-                    if (e >= 0.45) {
-                        tissuePaperG.position.copy(DESK_REST);
-                        paperFlat.rotation.x = -Math.PI / 2;
-                        s.phase = 'rest';
-                    }
-                } else if (s.phase === 'crumple') {
-                    const k = smooth(Math.min(e / 0.70, 1));
-                    const sc = 1 - 0.85 * k;
-                    paperFlat.scale.set(sc, sc, 1);
-                    paperFlat.rotation.z = Math.sin(e * 22) * 0.30 * k;
-                    paperFlat.position.x = Math.sin(e * 31) * 0.012 * k;
-                    paperFlat.position.y = Math.sin(e * 27) * 0.006 * k;
-                    paperBallFly.visible = true;
-                    paperBallFly.scale.setScalar(0.15 + 0.85 * k);
-                    paperBallFly.rotation.y += dt * 7;
-                    paperBallFly.rotation.x += dt * 4;
-                    if (e >= 0.70) {
-                        paperFlat.visible = false;
-                        paperFlat.scale.set(1, 1, 1);
-                        paperFlat.rotation.set(-Math.PI / 2, 0, 0);
-                        paperFlat.position.set(0, 0, 0);
-                        s.phase = 'toss';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'toss') {
-                    const k = smooth(Math.min(e / 1.15, 1));
-                    tissuePaperG.position.copy(arcPos(DESK_REST, BIN_MOUTH, k, 1.2));
-                    paperBallFly.rotation.x += dt * 9;
-                    paperBallFly.rotation.y += dt * 6;
-                    if (e >= 1.15) {
-                        s.phase = 'drop';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'drop') {
-                    const k = smooth(Math.min(e / 0.5, 1));
-                    tissuePaperG.position.lerpVectors(BIN_MOUTH, BIN_FALL, k);
-                    paperBallFly.rotation.x += dt * 6;
-                    if (k > 0.7) {
-                        paperBallFly.scale.setScalar(Math.max(0.001, 1 - (k - 0.7) / 0.3));
-                    }
-                    if (e >= 0.5) {
-                        tissuePaperG.visible = false;
-                        paperBallFly.scale.setScalar(1);
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/tissueBox.js，此处只留装配调用。
+            const tissueBoxApi = installProp(tissueBox);
             /* 18.12 烟囱墙：魔法时钟（与现实时间同步） */
             /* ========================================================== */
             function colEdge(g, col, th) {
@@ -5427,478 +3343,30 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 18.13 前墙挂画（镜子旁，点击编辑链接，支持 gif 动图） */
-            /* ========================================================== */
-            const picG = new THREE.Group();
-            picG.position.set(1.45, FY + 1.55, 3.82);
-            picG.rotation.y = Math.PI;
-            scene.add(picG);
-            {
-                const FR_W = 0.72, FR_H = 0.54, FR_B = 0.06;
-                put(cbox(FR_W, FR_B, 0.04, 0x8a6238), 0, FR_H / 2 - FR_B / 2, 0, 0, 0, 0, picG);
-                put(cbox(FR_W, FR_B, 0.04, 0x8a6238), 0, -FR_H / 2 + FR_B / 2, 0, 0, 0, 0, picG);
-                put(cbox(FR_B, FR_H - 2 * FR_B, 0.04, 0x8a6238), -FR_W / 2 + FR_B / 2, 0, 0, 0, 0, 0, picG);
-                put(cbox(FR_B, FR_H - 2 * FR_B, 0.04, 0x8a6238), FR_W / 2 - FR_B / 2, 0, 0, 0, 0, 0, picG);
-                put(cbox(FR_W - 2 * FR_B, FR_H - 2 * FR_B, 0.016, 0xf5efdf), 0, 0, -0.006, 0, 0, 0, picG);
-                put(colEdge(new THREE.CylinderGeometry(0.011, 0.011, 0.05, 6), 0x5a4128), 0, 0.52, -0.03, Math.PI / 2, 0, 0, picG);
-                picG.add(iline([[-0.26, 0.25, 0.005], [0, 0.50, -0.012], [0.26, 0.25, 0.005]]));
-            }
-            const picCv = document.createElement('canvas');
-            picCv.width = 256;
-            picCv.height = 176;
-            const pctx = picCv.getContext('2d');
-            const picTex = new THREE.CanvasTexture(picCv);
-            const picPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: picTex }));
-            picPlane.position.set(0, 0, 0.008);
-            picPlane.scale.set(0.58, 0.40, 1);
-            picG.add(picPlane);
-            const picState = { url: '', img: null, lastT: 0 };
-            function drawPicBlank() {
-                pctx.fillStyle = '#f7f2e6';
-                pctx.fillRect(0, 0, 256, 176);
-                pctx.strokeStyle = 'rgba(180,168,140,0.5)';
-                pctx.lineWidth = 2;
-                pctx.strokeRect(6, 6, 244, 164);
-                picTex.needsUpdate = true;
-            }
-            drawPicBlank();
-            function drawPicImage() {
-                const img = picState.img;
-                if (!img || !img.width || !img.height) return;
-                const iw = img.width, ih = img.height;
-                const maxW = 244, maxH = 164;
-                const a = iw / ih;
-                let w = maxW, h = maxW / a;
-                if (h > maxH) { h = maxH; w = maxH * a; }
-                pctx.fillStyle = '#f7f2e6';
-                pctx.fillRect(0, 0, 256, 176);
-                pctx.drawImage(img, (256 - w) / 2, (176 - h) / 2, w, h);
-                picTex.needsUpdate = true;
-            }
-            /* 图片加载：直连失败时依次走中转代理（解决防盗链 / 无CORS / http链接） */
-            const PIC_SOURCES = [
-                function (u) { return u; },
-                function (u) { return 'https://images.weserv.nl/?url=' + encodeURIComponent(u); },
-                function (u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
-                function (u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); }
-            ];
-            function tryLoadPic(url, idx) {
-                if (idx >= PIC_SOURCES.length) {
-                    picState.img = null;
-                    drawPicBlank();
-                    return;
-                }
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = function () {
-                    if (!img.width || !img.height) { tryLoadPic(url, idx + 1); return; }
-                    picState.img = img;
-                    picState.lastT = 0;
-                    drawPicImage();
-                };
-                img.onerror = function () { tryLoadPic(url, idx + 1); };
-                img.src = PIC_SOURCES[idx](url);
-            }
-            function setPicture(url) { tryLoadPic(url, 0); }
-            function openPicEditor() {
-                const ed = document.getElementById('picEditor');
-                const inp = document.getElementById('picInput');
-                inp.value = picState.url;
-                ed.classList.add('show');
-                inp.focus();
-                inp.select();
-            }
-            regMagic(picG, openPicEditor);
-            function applyPic() {
-                let u = document.getElementById('picInput').value.trim();
-                document.getElementById('picEditor').classList.remove('show');
-                document.getElementById('picInput').blur();
-                if (!u) return;
-                if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-                picState.url = u;
-                setPicture(u);
-                SND.play('chim');
-            }
-            document.getElementById('picOk').addEventListener('click', applyPic);
-            document.getElementById('picInput').addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') applyPic();
-                if (e.key === 'Escape') {
-                    document.getElementById('picEditor').classList.remove('show');
-                    document.getElementById('picInput').blur();
-                }
-                e.stopPropagation();
-            });
-
-
-            /* ========================================================== */
+            // J3（B5）：几何已搬入 src/cabin/world/floor2/picture.js，此处只留装配调用。
+            const pictureApi = installProp(picture);
             /* 18.14 拱形全身镜（点击镜面泛起水波涟漪） */
-            /* ========================================================== */
-            const mirrorG = new THREE.Group();
-            mirrorG.position.set(2.55, FY, 3.60);
-            mirrorG.rotation.y = Math.PI;
-            scene.add(mirrorG);
-            const mirrorTilt = new THREE.Group();
-            mirrorTilt.rotation.x = -0.09;
-            mirrorG.add(mirrorTilt);
-            const mirrorCv = document.createElement('canvas');
-            mirrorCv.width = 160;
-            mirrorCv.height = 480;
-            const mctx = mirrorCv.getContext('2d');
-            const mirrorTex = new THREE.CanvasTexture(mirrorCv);
-            const mirrorRipples = [];
-            let mirrorPane;
-            {
-                // ---- 拱形木框：外拱形轮廓挖内拱形孔，挤出厚度 ----
-                const OUT_W = 0.66, OUT_H = 1.80;
-                const IN_W = 0.54, IN_H = 1.66, IN_Y0 = 0.07;
-                const frameShape = new THREE.Shape();
-                const oR = OUT_W / 2, oTop = OUT_H - oR;
-                frameShape.moveTo(-oR, 0);
-                frameShape.lineTo(-oR, oTop);
-                frameShape.absarc(0, oTop, oR, Math.PI, 0, true);
-                frameShape.lineTo(oR, 0);
-                frameShape.closePath();
-                const holePath2 = new THREE.Path();
-                const iR = IN_W / 2, iBot = IN_Y0, iTop = IN_Y0 + IN_H - iR;
-                holePath2.moveTo(-iR, iBot);
-                holePath2.lineTo(-iR, iTop);
-                holePath2.absarc(0, iTop, iR, Math.PI, 0, true);
-                holePath2.lineTo(iR, iBot);
-                holePath2.closePath();
-                frameShape.holes.push(holePath2);
-                const frameGeo = new THREE.ExtrudeGeometry(frameShape, { depth: 0.05, bevelEnabled: false, curveSegments: 20 });
-                const frameMesh = new THREE.Mesh(frameGeo, LITMAT(0x7a5a3a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                frameMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(frameGeo, 8), MAT));
-                frameMesh.position.z = -0.025;
-                mirrorTilt.add(frameMesh);
-                // ---- 镜面（拱形绘制在 canvas 上，嵌入框内 ----
-                mirrorPane = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 1.60), new THREE.MeshBasicMaterial({ map: mirrorTex }));
-                mirrorPane.position.set(0, IN_Y0 + IN_H / 2, 0.018);
-                mirrorTilt.add(mirrorPane);
-                // ---- 框顶金色月牙 ----
-                const moonShape = new THREE.Shape();
-                moonShape.absarc(0, 0, 0.058, Math.PI / 2, Math.PI * 1.5, false);
-                moonShape.absarc(0.024, 0, 0.046, Math.PI * 1.5, Math.PI / 2, true);
-                const moonGeo = new THREE.ExtrudeGeometry(moonShape, { depth: 0.012, bevelEnabled: false, curveSegments: 14 });
-                const moon = new THREE.Mesh(moonGeo, LITMAT(0xc9a227, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                moon.add(new THREE.LineSegments(new THREE.EdgesGeometry(moonGeo, 8), MAT));
-                moon.position.set(0, 1.87, 0);
-                mirrorTilt.add(moon);
-                // ---- 月牙两侧小星（拉长八面体） ----
-                for (const sxy of [[-0.20, 1.74], [0.20, 1.74]]) {
-                    const st = colEdge(new THREE.OctahedronGeometry(0.026), 0xc9a227);
-                    st.scale.set(0.7, 1.4, 0.7);
-                    st.position.set(sxy[0], sxy[1], 0.01);
-                    mirrorTilt.add(st);
-                }
-                // ---- 底部横木底座 ----
-                put(cbox(0.58, 0.06, 0.11, 0x5a4128), 0, 0.02, 0.01, 0, 0, 0, mirrorTilt);
-            }
-            const mirrorStars = [];
-            for (let i = 0; i < 16; i++) {
-                mirrorStars.push({ x: 12 + (i * 53 + 23) % 136, y: 120 + (i * 97 + 41) % 340, s: i % 3 === 0 ? 1.8 : 1.1 });
-            }
-            function mirrorArchPath(c) {
-                c.beginPath();
-                c.moveTo(2, 480);
-                c.lineTo(2, 72);
-                c.arc(80, 72, 78, Math.PI, 0, false);
-                c.lineTo(158, 480);
-                c.closePath();
-            }
-            function drawMirror(time) {
-                const c = mctx;
-                c.fillStyle = '#4a3a2c';
-                c.fillRect(0, 0, 160, 480);
-                c.save();
-                mirrorArchPath(c);
-                c.clip();
-                const g = c.createLinearGradient(0, 0, 0, 480);
-                g.addColorStop(0, '#eef5f8');
-                g.addColorStop(0.5, '#d8e9f0');
-                g.addColorStop(1, '#c6dbe6');
-                c.fillStyle = g;
-                c.fillRect(0, 0, 160, 480);
-                const sx = 45 + Math.sin(time * 0.45) * 55;
-                const g2 = c.createLinearGradient(sx - 40, 0, sx + 40, 0);
-                g2.addColorStop(0, 'rgba(255,255,255,0)');
-                g2.addColorStop(0.5, 'rgba(255,255,255,0.4)');
-                g2.addColorStop(1, 'rgba(255,255,255,0)');
-                c.fillStyle = g2;
-                c.fillRect(0, 0, 160, 480);
-                c.fillStyle = 'rgba(250,244,214,0.5)';
-                c.beginPath(); c.arc(106, 150, 27, 0, 7); c.fill();
-                c.fillStyle = 'rgba(214,232,240,0.6)';
-                c.beginPath(); c.arc(114, 142, 23, 0, 7); c.fill();
-                for (let i = 0; i < mirrorStars.length; i++) {
-                    const st = mirrorStars[i];
-                    const tw = 0.3 + 0.3 * Math.abs(Math.sin(time * 1.8 + i * 1.7));
-                    c.fillStyle = 'rgba(255,255,255,' + tw.toFixed(2) + ')';
-                    c.beginPath(); c.arc(st.x, st.y, st.s, 0, 7); c.fill();
-                }
-                for (const rp of mirrorRipples) {
-                    for (let k = 0; k < 3; k++) {
-                        const rr = rp.r * (1 - k * 0.18);
-                        if (rr < 2) continue;
-                        c.strokeStyle = 'rgba(255,255,255,' + (rp.a * (1 - k * 0.28)).toFixed(3) + ')';
-                        c.lineWidth = 2.6 - k * 0.8;
-                        c.beginPath();
-                        c.ellipse(rp.x, rp.y, rr, rr * 0.62, 0, 0, 7);
-                        c.stroke();
-                        c.strokeStyle = 'rgba(90,130,155,' + (rp.a * 0.35 * (1 - k * 0.28)).toFixed(3) + ')';
-                        c.beginPath();
-                        c.ellipse(rp.x, rp.y, rr * 0.9, rr * 0.62 * 0.9, 0, 0, 7);
-                        c.stroke();
-                    }
-                }
-                c.restore();
-                mirrorArchPath(c);
-                c.strokeStyle = 'rgba(70,52,36,0.6)';
-                c.lineWidth = 3;
-                c.stroke();
-                mirrorTex.needsUpdate = true;
-            }
-            function spawnMirrorRipple(x, y) {
-                mirrorRipples.push({ x: x, y: y, r: 3, a: 1, max: 130 + runtimeRng() * 40 });
-                for (let i = 0; i < 3; i++) {
-                    mirrorRipples.push({
-                        x: x + (runtimeRng() - 0.5) * 46,
-                        y: y + (runtimeRng() - 0.5) * 90,
-                        r: 2, a: 0.7, max: 40 + runtimeRng() * 30
-                    });
-                }
-            }
-            let mirrorDown = null;
-            const mirrorRay = new THREE.Raycaster();
-            const mirrorMouse = new THREE.Vector2();
-            renderer.domElement.addEventListener('pointerdown', function (e) {
-                mirrorDown = { x: e.clientX, y: e.clientY };
-            });
-            renderer.domElement.addEventListener('pointerup', function (e) {
-                if (!mirrorDown) return;
-                const moved = Math.abs(e.clientX - mirrorDown.x) + Math.abs(e.clientY - mirrorDown.y);
-                mirrorDown = null;
-                if (moved >= 6) return;
-                mirrorMouse.x = (e.clientX / innerWidth) * 2 - 1;
-                mirrorMouse.y = -(e.clientY / innerHeight) * 2 + 1;
-                mirrorRay.setFromCamera(mirrorMouse, camera);
-                const hits = mirrorRay.intersectObject(mirrorPane, false);
-                if (hits.length) {
-                    const lp = mirrorPane.worldToLocal(hits[0].point.clone());
-                    spawnMirrorRipple((lp.x / 0.54 + 0.5) * 160, (0.5 - lp.y / 1.60) * 480);
-                }
-            });
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/mirror.js，此处只留装配调用。
+            const mirrorApi = installProp(mirror);
             /* 18.15 毛茸茸大地毯（右前角与书桌之间） */
-            /* ========================================================== */
-            const rugG = new THREE.Group();
-            rugG.position.set(2.7, FY + 0.02, 0.7);
-            scene.add(rugG);
-            const rugCv = document.createElement('canvas');
-            rugCv.width = 512;
-            rugCv.height = 420;
-            const rctx = rugCv.getContext('2d');
-            const rugTex = new THREE.CanvasTexture(rugCv);
-            {
-                rugG.add(crboxCol(2.2, 0.04, 1.8, 0.02, 0x7d5064));
-                const rugPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.8), new THREE.MeshBasicMaterial({ map: rugTex }));
-                rugPlane.rotation.x = -Math.PI / 2;
-                rugPlane.position.y = 0.024;
-                rugG.add(rugPlane);
-            }
-            function canvasRoundRect(c, x, y, w, h, r) {
-                c.beginPath();
-                c.moveTo(x + r, y);
-                c.lineTo(x + w - r, y);
-                c.arcTo(x + w, y, x + w, y + r, r);
-                c.lineTo(x + w, y + h - r);
-                c.arcTo(x + w, y + h, x + w - r, y + h, r);
-                c.lineTo(x + r, y + h);
-                c.arcTo(x, y + h, x, y + h - r, r);
-                c.lineTo(x, y + r);
-                c.arcTo(x, y, x + r, y, r);
-                c.closePath();
-            }
-            function drawRug() {
-                const c = rctx;
-                c.fillStyle = '#8a5a70';
-                c.fillRect(0, 0, 512, 420);
-                c.strokeStyle = '#e9dcc8';
-                c.lineWidth = 7;
-                canvasRoundRect(c, 22, 22, 468, 376, 34);
-                c.stroke();
-                c.lineWidth = 2.5;
-                canvasRoundRect(c, 38, 38, 436, 344, 26);
-                c.stroke();
-                c.fillStyle = '#e9dcc8';
-                c.beginPath(); c.arc(225, 210, 60, 0, 7); c.fill();
-                c.fillStyle = '#8a5a70';
-                c.beginPath(); c.arc(248, 194, 52, 0, 7); c.fill();
-                c.fillStyle = '#e9dcc8';
-                c.font = '34px serif';
-                c.textAlign = 'center';
-                c.textBaseline = 'middle';
-                c.fillText('✦', 320, 160);
-                c.fillText('✧', 360, 215);
-                c.fillText('✦', 318, 262);
-                c.font = '22px serif';
-                c.fillText('✧', 78, 76); c.fillText('✦', 434, 76);
-                c.fillText('✦', 78, 344); c.fillText('✧', 434, 344);
-                for (let i = 0; i < 3400; i++) {
-                    const x = textureRng() * 512, y = textureRng() * 420;
-                    const a = textureRng() * Math.PI * 2;
-                    const l = 4 + textureRng() * 7;
-                    c.strokeStyle = textureRng() < 0.5 ? 'rgba(255,214,228,0.09)' : 'rgba(48,20,36,0.09)';
-                    c.lineWidth = 1.6;
-                    c.beginPath();
-                    c.moveTo(x, y);
-                    c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
-                    c.stroke();
-                }
-                c.strokeStyle = '#c9a2b4';
-                c.lineWidth = 2;
-                for (let i = 0; i < 58; i++) {
-                    const x = 14 + i * 8.4;
-                    c.beginPath(); c.moveTo(x, 26); c.lineTo(x + (textureRng() - 0.5) * 7, 5 + textureRng() * 6); c.stroke();
-                    c.beginPath(); c.moveTo(x, 394); c.lineTo(x + (textureRng() - 0.5) * 7, 415 - textureRng() * 6); c.stroke();
-                }
-                for (let i = 0; i < 46; i++) {
-                    const y = 14 + i * 8.6;
-                    c.beginPath(); c.moveTo(26, y); c.lineTo(5 + textureRng() * 6, y + (textureRng() - 0.5) * 7); c.stroke();
-                    c.beginPath(); c.moveTo(486, y); c.lineTo(507 - textureRng() * 6, y + (textureRng() - 0.5) * 7); c.stroke();
-                }
-                rugTex.needsUpdate = true;
-            }
-            drawRug();
-
-            /* ========================================================== */
+            // J3（B1）：几何已搬入 src/cabin/world/floor2/rugLarge.js，此处只留装配调用。
+            installProp(rugLarge);
             /* 18.16 右前角杂物纸箱（左右两片盖向外翻开） */
-            /* ========================================================== */
-            const junkG = new THREE.Group();
-            junkG.position.set(3.34, FY, 3.34);
-            junkG.rotation.y = Math.PI / 4;
-            scene.add(junkG);
-            const CB_COL = 0xc9a878, CB_DARK = 0xb0906a;
-            let junkOpen = false, junkT = 0;
-            const junkFlaps = [];
-            const junkInside = new THREE.Group();
-            junkG.add(junkInside);
-            {
-                const S = 0.56, H = 0.40, T = 0.028;
-                // 箱体五面（底 + 四壁，顶部敞开由盖子封）
-                put(cbox(S, T, S, CB_COL), 0, T / 2, 0, 0, 0, 0, junkG);
-                put(cbox(S, H, T, CB_COL), 0, H / 2, -S / 2 + T / 2, 0, 0, 0, junkG);
-                put(cbox(S, H, T, CB_COL), 0, H / 2, S / 2 - T / 2, 0, 0, 0, junkG);
-                put(cbox(T, H, S - 2 * T, CB_COL), -S / 2 + T / 2, H / 2, 0, 0, 0, 0, junkG);
-                put(cbox(T, H, S - 2 * T, CB_COL), S / 2 - T / 2, H / 2, 0, 0, 0, 0, junkG);
-                // 正面胶带与手写标签
-                put(cbox(0.10, 0.34, 0.008, CB_DARK), 0.07, 0.20, -S / 2 - 0.004, 0, 0, 0, junkG);
-                const junkCv = document.createElement('canvas');
-                junkCv.width = 96;
-                junkCv.height = 48;
-                const jc = junkCv.getContext('2d');
-                jc.fillStyle = '#f2ead6';
-                jc.fillRect(0, 0, 96, 48);
-                jc.strokeStyle = '#8a6a4a';
-                jc.lineWidth = 3;
-                jc.strokeRect(3, 3, 90, 42);
-                jc.fillStyle = '#5a4a3a';
-                jc.font = 'bold 19px "Microsoft YaHei", serif';
-                jc.textAlign = 'center';
-                jc.textBaseline = 'middle';
-                jc.fillText('杂物 ✦', 48, 26);
-                const junkTex = new THREE.CanvasTexture(junkCv);
-                const junkLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.10), new THREE.MeshBasicMaterial({ map: junkTex }));
-                junkLabel.position.set(-0.15, 0.24, -S / 2 - 0.006);
-                junkLabel.rotation.y = Math.PI;
-                junkG.add(junkLabel);
-                // 左盖：铰链在箱口左缘，盖板向右平铺盖住左半箱口
-                const flapL = new THREE.Group();
-                flapL.position.set(-S / 2, H, 0);
-                const pl = cbox(S / 2 - 0.005, 0.018, S - 0.05, CB_COL);
-                pl.position.set(S / 4, 0, 0);
-                flapL.add(pl);
-                junkG.add(flapL);
-                junkFlaps.push({ pivot: flapL, target: Math.PI + 0.35 });
-                // 右盖：铰链在箱口右缘，盖板向左平铺盖住右半箱口
-                const flapR = new THREE.Group();
-                flapR.position.set(S / 2, H, 0);
-                const pr = cbox(S / 2 - 0.005, 0.018, S - 0.05, CB_COL);
-                pr.position.set(-S / 4, 0, 0);
-                flapR.add(pr);
-                junkG.add(flapR);
-                junkFlaps.push({ pivot: flapR, target: -(Math.PI + 0.35) });
-                // ---- 箱内杂物 ----
-                const bottle = new THREE.Group();
-                const bb = colEdge(new THREE.CylinderGeometry(0.040, 0.048, 0.13, 10), 0x6a9a7a);
-                bb.position.y = 0.065;
-                bottle.add(bb);
-                const bn = colEdge(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 8), 0x8a6238);
-                bn.position.y = 0.155;
-                bottle.add(bn);
-                const bc = colEdge(new THREE.SphereGeometry(0.017, 8, 6), 0xb08a5a);
-                bc.position.y = 0.185;
-                bottle.add(bc);
-                bottle.position.set(-0.13, T, 0.07);
-                bottle.rotation.y = 0.5;
-                junkInside.add(bottle);
-                const yarn = colEdge(new THREE.SphereGeometry(0.062, 12, 10), 0xc26a8a, 15);
-                yarn.position.set(0.14, T + 0.062, -0.10);
-                junkInside.add(yarn);
-                for (let k = 0; k < 3; k++) {
-                    const tr = colEdge(new THREE.TorusGeometry(0.062, 0.005, 6, 18), 0xe8a8c0);
-                    tr.rotation.set(k * 0.9, k * 1.2, 0);
-                    tr.position.copy(yarn.position);
-                    junkInside.add(tr);
-                }
-                const bk1 = cbox(0.17, 0.035, 0.12, 0x7a4638);
-                bk1.position.set(0.06, T + 0.018, 0.13);
-                bk1.rotation.y = 0.45;
-                junkInside.add(bk1);
-                const bk2 = cbox(0.15, 0.03, 0.11, 0x4a6a8a);
-                bk2.position.set(0.075, T + 0.05, 0.125);
-                bk2.rotation.y = 0.12;
-                junkInside.add(bk2);
-                const bone = new THREE.Group();
-                const shaft = colEdge(new THREE.CylinderGeometry(0.011, 0.011, 0.15, 8), 0xf0ead8);
-                shaft.rotation.z = Math.PI / 2;
-                bone.add(shaft);
-                for (const e of [-1, 1]) {
-                    for (const o of [-0.011, 0.011]) {
-                        const knob = colEdge(new THREE.SphereGeometry(0.019, 8, 6), 0xf0ead8);
-                        knob.position.set(e * 0.078, o, 0);
-                        bone.add(knob);
-                    }
-                }
-                bone.position.set(-0.08, T + 0.02, -0.12);
-                bone.rotation.y = 0.6;
-                junkInside.add(bone);
-            }
-            regMagic(junkG, function () { junkOpen = !junkOpen; });
-
-            /* ========================================================== */
+            // J3（B3）：几何已搬入 src/cabin/world/floor2/junkBoxes.js，此处只留装配调用。
+            const junkApi = installProp(junkBoxes);
             /* 18.17 新增装饰统一刷新（独立动画循环） */
             /* ========================================================== */
             function updateNewDecor(time, dt) {
                 drawClock();
-                if (picState.img && time - picState.lastT > 0.1) {
-                    drawPicImage();
-                    picState.lastT = time;
-                }
-                for (let i = mirrorRipples.length - 1; i >= 0; i--) {
-                    const rp = mirrorRipples[i];
-                    rp.r += 62 * dt;
-                    rp.a = Math.max(0, 1 - rp.r / rp.max);
-                    if (rp.a <= 0.01) mirrorRipples.splice(i, 1);
-                }
-                mirrorDirtyT += dt;
-                if (mirrorRipples.length || mirrorDirtyT > 0.12) { drawMirror(time); mirrorDirtyT = 0; }
-                junkT += ((junkOpen ? 1 : 0) - junkT) * 0.075;
-                const jk = smooth(Math.max(0, Math.min(1, junkT)));
-                for (const f of junkFlaps) {
-                    f.pivot.rotation.z = f.target * jk;
-                }
-                junkInside.position.y = Math.sin(Math.min(1, junkT) * Math.PI) * 0.05;
+                // J3（B5）：挂画 GIF 帧重绘（每 0.1 秒）的每帧分支已搬入 world/floor2/picture.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                pictureApi.tick(dt, time);
+                // J3（B4）：镜面涟漪的每帧分支已搬入 world/floor2/mirror.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 本函数 updateNewDecor(time, dt) 的形参是反的。
+                mirrorApi.tick(dt, time);
+                // J3（B3）：右前角杂物纸箱的开合分支已搬入 world/floor2/junkBoxes.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 而本函数 `updateNewDecor` 自己的形参是 (time, dt)，写反会改变开合速度。
+                junkApi.tick(dt, time);
             }
             let decorLastT = 0;
             let mirrorDirtyT = 0;
@@ -7265,8 +4733,9 @@ export function installCabin(app) {
                 { x1: 1.59, z1: -3.66, x2: 2.11, z2: -3.14, top: FY + 0.60, bot: FY }                 // 二楼垃圾桶
             ];
             const movingPlatforms = [
-                { g: stools[0], hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: stools[1], hx: 0.23, hz: 0.23, top: 0.475 },
+                // J3（B2）：三脚圆凳已搬入 world/floor1/stools.js —— 碰撞平台改用装配记录里的部件
+                { g: stoolsApi.parts.stoolA, hx: 0.23, hz: 0.23, top: 0.475 },
+                { g: stoolsApi.parts.stoolB, hx: 0.23, hz: 0.23, top: 0.475 },
                 { g: cartG, hx: 0.21, hz: 0.16, top: 0.482 },
                 { g: chairG, hx: 0.24, hz: 0.24, top: FY + 0.49, bot: FY },
                 { g: stoolG, hx: 0.17, hz: 0.15, top: FY + 0.33, bot: FY },
@@ -7320,7 +4789,7 @@ export function installCabin(app) {
             function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (nearestInteract) interaction.activate(nearestInteract); }
             function updateInteractHint() {
                 if (hintUI.applyOverride()) return;
-                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
+                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { nearestInteract = null; aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
             }
 
             const keys = {}; const signInput = document.getElementById('signInput'); const signEditor = document.getElementById('signEditor'); const picInput = document.getElementById('picInput');
@@ -7331,7 +4800,9 @@ export function installCabin(app) {
                 keys[e.code] = true;
                 if (e.code === 'KeyV' && viewMode !== 'fixed') setViewMode(viewMode === 'fp' ? 'tp' : 'fp');
                 if (e.code === 'Space') { e.preventDefault(); tryJump(); }
-                if (e.code === 'KeyE' && nearestInteract) doInteract();
+                // J3.1：不再以 `nearestInteract` 为前置 —— 第一人称（准星通路）下它按设计是 null，
+                // 旧写法会让"准星对准 + 按 E"依赖一个陈旧值才能生效。是否真有可激活目标由 doInteract() 判定。
+                if (e.code === 'KeyE') doInteract();
                 if (e.code === 'Digit1' || e.code === 'Numpad1') selectSlot(1);
                 if (e.code === 'Digit2' || e.code === 'Numpad2') selectSlot(2);
                 if (e.code === 'KeyF') tryCast();
@@ -7363,7 +4834,7 @@ export function installCabin(app) {
                 ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); pinchMode = true; didPinch = true; dragInfo = null; } else if (ptrs.size === 1) { dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; didPinch = false; }
             });
             renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = pinchD - nd; if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + diff * 0.02)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + diff * 0.006)); pinchD = nd; return; } if (!dragInfo) return; if (viewMode === 'fp' && isLocked()) return; const dx = e.clientX - dragInfo.x, dy = e.clientY - dragInfo.y; dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.moved += Math.abs(dx) + Math.abs(dy); pendYaw -= dx * 0.0055; pendPitch += dy * 0.0045 * (viewMode === 'fp' ? -1 : 1); });
-            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
+            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
                 // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
                 const clickTarget = interaction.aimTarget(raycaster); if (clickTarget) interaction.activate(clickTarget); });
             renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; dragInfo = null; });
@@ -7985,14 +5456,8 @@ export function installCabin(app) {
                 ffUniforms.uTime.value = time;
 
                 /* ============ 室内陈设动画（一二楼家具·猫·坩埚·塔罗牌·茶壶等） ============ */
-                for (const s of stools) {
-                    const u = s.userData;
-                    const target = u.open ? 0.42 : 0;
-                    u.vel += (target - u.cur) * 0.02;
-                    u.vel *= 0.88;
-                    u.cur += u.vel;
-                    s.position.z = u.bz + u.dz * u.cur;
-                }
+                // J3（B2）：三脚圆凳的每帧分支已搬入 world/floor1/stools.js（原地 tick）
+                stoolsApi.tick(dt, time);
 
                 for (const c of chairs) {
                     const u = c.userData;
@@ -8004,121 +5469,24 @@ export function installCabin(app) {
                     c.position.z = u.bz + u.az * u.cur;
                 }
 
-                orbP += ((orbOn ? 1 : 0) - orbP) * 0.02;
-                for (const r of orbRings) {
-                    r.holder.rotation.y += r.spd * 0.02 * orbP;
-                    const sc = Math.max(orbP, 0.001);
-                    r.holder.scale.set(sc, sc, sc);
-                    r.holder.visible = orbP > 0.02;
-                }
-                orbStars.rotation.y += 0.018 * orbP;
-                orbStars.scale.setScalar(Math.max(orbP, 0.001));
-                orbStars.visible = orbP > 0.03;
-
-                updateLiquid(time);
-                for (const b of potBubbles) {
-                    b.visible = corkOut;
-                    if (corkOut) {
-                        const prog = (time * 0.5 + b.userData.phase) % 1;
-                        b.position.set(PX + Math.sin(prog * 9 + b.userData.wob) * 0.018,
-                            MTTOP + 0.012 + prog * 0.052,
-                            PZ + Math.cos(prog * 7 + b.userData.wob) * 0.018);
-                        const sc = 0.55 + prog * 0.95;
-                        b.scale.set(sc, sc, sc);
-                    }
-                }
-
-                corkT += ((corkOut ? 1 : 0) - corkT) * 0.022;
                 {
-                    const raw = Math.min(Math.max(corkT, 0), 1);
-                    const tC = raw * raw * (3 - 2 * raw);
-                    let cx, cy, cz;
-                    if (tC < 0.5) {
-                        const u = tC / 0.5;
-                        cx = CORK_M[0]; cz = CORK_M[2];
-                        cy = CORK_M[1] + u * 0.20;
-                    } else {
-                        const u = (tC - 0.5) / 0.5;
-                        cx = CORK_M[0] + (CORK_L[0] - CORK_M[0]) * u;
-                        cz = CORK_M[2] + (CORK_L[2] - CORK_M[2]) * u;
-                        cy = (CORK_M[1] + 0.20) - u * ((CORK_M[1] + 0.20) - CORK_L[1]);
-                    }
-                    corkG.position.set(cx, cy, cz);
-                    corkG.rotation.z = Math.sin(tC * Math.PI) * 0.45;
+                    // J3（B4）：星象仪的每帧分支已搬入 world/floor1/orrery.js（原地 tick）
+                    orreryApi.tick(dt, time);
                 }
 
-                bookP += ((bookOn ? 1 : 0) - bookP) * 0.02;
-                if (flipping) {
-                    flipCur += dt * 1.6;
-                    if (flipCur >= 1) { flipCur = 0; flipping = false; }
-                }
-                pagePivot.visible = flipping;
-                if (flipping) {
-                    const e = flipCur * flipCur * (3 - 2 * flipCur);
-                    pagePivot.rotation.z = 0.12 + e * (Math.PI - 0.24);
-                }
-                for (const g of glyphs) {
-                    const u = g.userData;
-                    u.age += dt;
-                    if (u.age >= u.life) {
-                        if (bookOn && bookP > 0.5) {
-                            u.age = 0;
-                            u.life = 2.5 + runtimeRng() * 1.2;
-                            u.ox = (runtimeRng() - 0.5) * 0.22;
-                            u.oz = (runtimeRng() - 0.5) * 0.18;
-                            u.sway = runtimeRng() * 6.28;
-                            g.visible = true;
-                        } else {
-                            g.visible = false;
-                        }
-                    }
-                    if (g.visible) {
-                        const p = u.age / u.life;
-                        const rise = p * 0.38;
-                        const sway = Math.sin(time * 2 + u.sway) * 0.03 * p;
-                        g.position.set(BX + u.ox + sway, MTTOP + 0.06 + rise, BZ + u.oz);
-                        const env = Math.min(p * 6, 1) * (1 - Math.max(0, (p - 0.65) / 0.35));
-                        g.scale.setScalar(Math.max(env, 0.001));
-                        g.rotation.y = Math.sin(time * 1.5 + u.sway) * 0.4;
-                    }
-                }
-
-                /* ---- 书堆 ---- */
                 {
-                    const n = pileBooks.length;
-                    if (pileState === 'falling') {
-                        pileT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const b = pileBooks[i], u = b.userData;
-                            const delay = (n - 1 - i) * 0.075;
-                            const p = Math.min(Math.max((pileT - delay) / 0.55, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p;
-                            b.position.x = u.sx + (u.fx - u.sx) * e;
-                            b.position.z = u.sz + (u.fz - u.sz) * e;
-                            b.position.y = u.sy + (u.fy - u.sy) * e + Math.sin(p * Math.PI) * 0.05;
-                            b.rotation.y = u.sry + (u.fry - u.sry) * e;
-                            b.rotation.z = Math.sin(p * Math.PI) * 0.45;
-                        }
-                        if (done) pileState = 'fallen';
-                    } else if (pileState === 'rising') {
-                        pileT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const b = pileBooks[i], u = b.userData;
-                            const delay = i * 0.11;
-                            const p = Math.min(Math.max((pileT - delay) / 0.65, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            b.position.x = u.fx + (u.sx - u.fx) * e;
-                            b.position.z = u.fz + (u.sz - u.fz) * e;
-                            b.position.y = u.fy + (u.sy - u.fy) * e + Math.sin(p * Math.PI) * 0.24;
-                            b.rotation.y = u.fry + (u.sry - u.fry) * e + Math.sin(p * Math.PI * 2) * 0.4;
-                            b.rotation.z = Math.sin((1 - p) * Math.PI) * 0.3;
-                        }
-                        if (done) pileState = 'stacked';
-                    }
+                    // J3（B4）：魔法药剂瓶的每帧分支已搬入 world/floor1/potionBottle.js（原地 tick）
+                    potionBottleApi.tick(dt, time);
+                }
+
+                {
+                    // J3（B4）：魔法书的每帧分支已搬入 world/floor1/diningBook.js（原地 tick）
+                    diningBookApi.tick(dt, time);
+                }
+
+                {
+                    // J3（B3）：左窗下魔法书堆的每帧分支已搬入 world/floor1/bookPile.js（原地 tick）
+                    bookPileApi.tick(dt, time);
                 }
 
                 lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;
@@ -8407,52 +5775,9 @@ export function installCabin(app) {
                     }
                 }
 
-                /* ---- 塔罗牌 ---- */
                 {
-                    const n = tarotCards.length;
-                    if (tarotState === 'flying') {
-                        tarotT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const delay = i * 0.08;
-                            const p = Math.min(Math.max((tarotT - delay) / 0.75, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            const fp = tarotPose(u, i, time);
-                            c.position.x = u.sx + (fp.x - u.sx) * e;
-                            c.position.y = u.sy + (fp.y - u.sy) * e + Math.sin(p * Math.PI) * 0.18;
-                            c.position.z = u.sz + (fp.z - u.sz) * e;
-                            c.rotation.y = u.sry + (fp.ry - u.sry) * e;
-                            c.rotation.x = fp.rx * e;
-                            c.rotation.z = fp.rz * e;
-                        }
-                        if (done) tarotState = 'floating';
-                    } else if (tarotState === 'floating') {
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const fp = tarotPose(u, i, time);
-                            c.position.set(fp.x, fp.y, fp.z);
-                            c.rotation.set(fp.rx, fp.ry, fp.rz);
-                        }
-                    } else if (tarotState === 'returning') {
-                        tarotT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const delay = (n - 1 - i) * 0.07;
-                            const p = Math.min(Math.max((tarotT - delay) / 0.65, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            c.position.x = u.px + (u.sx - u.px) * e;
-                            c.position.y = u.py + (u.sy - u.py) * e + Math.sin(p * Math.PI) * 0.15;
-                            c.position.z = u.pz + (u.sz - u.pz) * e;
-                            c.rotation.y = u.pry + (u.sry - u.pry) * e;
-                            c.rotation.x = u.prx * (1 - e);
-                            c.rotation.z = u.prz * (1 - e);
-                        }
-                        if (done) tarotState = 'stacked';
-                    }
+                    // J3（B3）：塔罗牌阵的每帧分支已搬入 world/floor1/tarot.js（原地 tick）
+                    tarotApi.tick(dt, time);
                 }
 
                 for (const f of candleWavy) {
@@ -8522,44 +5847,14 @@ export function installCabin(app) {
                 }
 
                 {
-                    const target = hgFlip ? Math.PI : 0;
-                    hgRotV += (target - hgRot) * 0.012;
-                    hgRotV *= 0.93;
-                    hgRot += hgRotV;
-                    hg.rotation.x = hgRot;
-                    if (hgRun > 0) {
-                        hgRun -= dt;
-                        hgSand = Math.max(0.2, hgRun / 5);
-                    }
-                    const topP = hgFlip ? pileBotG : pileTopG;
-                    const botP = hgFlip ? pileTopG : pileBotG;
-                    topP.scale.setScalar(0.25 + 0.75 * hgSand);
-                    botP.scale.setScalar(0.3 + 0.8 * (1 - hgSand));
-                    const settled = Math.abs(hgRot - target) < 0.3;
-                    const sv = hgRun > 0 && settled;
-                    for (let i = 0; i < hgStreams.length; i++) {
-                        const s = hgStreams[i];
-                        s.visible = sv;
-                        if (sv) {
-                            const prog = (time * 1.5 + i / 3) % 1;
-                            const y0 = 0.185;
-                            const y1 = hgFlip ? 0.235 : 0.14;
-                            s.position.y = y0 + (y1 - y0) * prog;
-                        }
-                    }
+                    // J3（B2）：沙漏的每帧分支已搬入 world/floor1/hourglass.js。
+                    // **原位置调用** —— 每帧顺序与搬迁前一个字节不差，画面因此逐字节不变。
+                    hourglassApi.tick(dt, time);
                 }
 
                 {
-                    const target = chestOpen ? 1 : 0;
-                    chestV += (target - chestP) * 0.02;
-                    chestV *= 0.9;
-                    chestP += chestV;
-                    chestLid.rotation.x = -1.25 * chestP;
-                    chestGem.visible = chestP > 0.3;
-                    if (chestGem.visible) {
-                        chestGem.position.y = 0.11 + Math.sin(time * 2.5) * 0.008 + chestP * 0.015;
-                        chestGem.rotation.y = time * 1.2;
-                    }
+                    // J3（B2）：小宝箱的每帧分支已搬入 world/floor1/chest.js（原地 tick）
+                    chestApi.tick(dt, time);
                 }
 
                 /* ---- 楼梯下储物箱：开盖 + 矿石旋转起伏 ---- */
@@ -8582,58 +5877,20 @@ export function installCabin(app) {
                 }
 
                 {
-                    carP += ((carOn ? 1 : 0) - carP) * 0.015;
-                    carCanopy.rotation.y += 0.05 * carP;
-                    for (let i = 0; i < carStars.length; i++) {
-                        carStars[i].position.y = -0.072 + Math.sin(time * 3 + i * 1.57) * 0.01 * carP;
-                    }
+                    // J3（B3）：旋转星铃的每帧分支已搬入 world/floor1/starBell.js（原地 tick）
+                    starBellApi.tick(dt, time);
                 }
 
                 /* ---- 大魔女坩埚 ---- */
                 {
-                    if (stirRun > 0) stirRun -= dt;
-                    const active = stirRun > 0;
-                    const prog = active ? Math.min(Math.max(1 - stirRun / 4.5, 0), 1) : 0;
-                    const ramp = Math.min(prog / 0.16, 1);
-                    const down = Math.min(Math.max((prog - 0.72) / 0.28, 0), 1);
-                    const spdEnv = active ? ramp * (1 - down * down) : 0;
-                    stirAng += dt * (0.45 + 3.0 * spdEnv);
-                    stirG.rotation.y = stirAng;
-                    stickAsm.rotation.z = active ? Math.sin(time * 7) * 0.03 : Math.sin(time * 1.2) * 0.012;
-                    bubbleI += ((active ? 1 : 0.3) - bubbleI) * 0.0035;
-
-                    const arr = calSurfGeom.attributes.position.array;
-                    const amp = 0.008 + 0.02 * ((bubbleI - 0.3) / 0.7);
-                    for (let i = 0; i < 28; i++) {
-                        const a = i / 28 * Math.PI * 2;
-                        const rr = 0.37 + Math.sin(a * 3 + time * (active ? 2.2 : 1.4)) * amp * 0.8;
-                        arr[i * 3] = Math.cos(a) * rr;
-                        arr[i * 3 + 1] = 0.74 + CAL_UP + Math.sin(a * 3 - time * 1.8) * amp * 0.5;
-                        arr[i * 3 + 2] = Math.sin(a) * rr;
-                    }
-                    calSurfGeom.attributes.position.needsUpdate = true;
-
-                    for (const b of calBubbles) {
-                        const pr = (time * (0.40 + 0.50 * bubbleI) + b.userData.phase) % 1;
-                        const ba = b.userData.ba + time * 0.2;
-                        b.position.set(CCX + Math.cos(ba) * b.userData.br,
-                            0.74 + CAL_UP + pr * 0.14,
-                            CCZ + Math.sin(ba) * b.userData.br);
-                        const sc = (0.4 + pr * 1.3) * (pr < 0.85 ? 1 : (1 - pr) / 0.15);
-                        b.scale.setScalar(Math.max(sc, 0.001));
-                    }
-                    const calPW = 0.85 + 0.15 * Math.sin(time * 6.3);
-                    for (const f of calWavy) {
-                        f.obj.visible = true;
-                        updateWavyFlame(f, time, calPW);
-                    }
-                    calGlowMat.opacity = 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(time * 6.3));
+                    // J3（B4）：大魔女坩埚的每帧分支已搬入 world/floor1/cauldron.js（原地 tick）
+                    cauldronApi.tick(dt, time);
                 }
 
                 /* ---- 长餐桌 ---- */
-                for (const p of plates) {
-                    p.rotation.y += p.userData.spinV * dt;
-                    p.userData.spinV *= Math.max(0, 1 - 2.0 * dt);
+                {
+                    // J3（B4）：三只餐盘的转动已搬入 world/floor1/longTable.js（原地 tick）
+                    longTableApi.tick(dt, time);
                 }
                 for (const c of cups) {
                     const u = c.userData;
@@ -8649,14 +5906,9 @@ export function installCabin(app) {
                         u.steam.scale.set(ss, 1, ss);
                     }
                 }
-                for (const it of tableItems) {
-                    const u = it.userData;
-                    if (u.run > 0) u.run -= dt;
-                    const pr = u.run > 0 ? 1 - u.run / 1.4 : 1;
-                    const env = u.run > 0 ? Math.sin(Math.PI * pr) : 0;
-                    it.position.y = u.baseY + env * 0.05;
-                    it.rotation.z = env * Math.sin(pr * 12) * 0.18;
-                    it.rotation.y = u.ry + env * Math.sin(pr * 8) * 0.3;
+                {
+                    // J3（B4）：桌面散放餐具的弹跳已搬入 world/floor1/tableware.js（原地 tick）
+                    tablewareApi.tick(dt, time);
                 }
 
                 /* ---- 茶壶 ---- */
@@ -8715,23 +5967,9 @@ export function installCabin(app) {
                 }
 
                 {
-                    broomP += ((broomHover ? 1 : 0) - broomP) * 0.02;
-                    const p = broomP;
-                    broomG.position.x = BROOM_REST.x + (BROOM_FLY.x - BROOM_REST.x) * p;
-                    broomG.position.z = BROOM_REST.z + (BROOM_FLY.z - BROOM_REST.z) * p;
-                    broomG.position.y = BROOM_REST.y + (BROOM_FLY.y - BROOM_REST.y) * p
-                        + Math.sin(time * 1.3) * 0.03 * p;
-                    broomG.rotation.z = BROOM_REST.rz + (BROOM_FLY.rz - BROOM_REST.rz) * p
-                        + Math.sin(time * 1.1) * 0.02 * p;
-                    broomG.rotation.x = Math.sin(time * 0.9) * 0.03 * p;
-                    broomG.rotation.y = Math.sin(time * 0.5) * 0.12 * p;
-                    broomGlow.visible = p > 0.05;
-                    if (broomGlow.visible) {
-                        broomGlow.position.set(0, -0.20 + Math.sin(time * 2.2) * 0.012, 0);
-                        broomGlow.rotation.y = time * 0.6;
-                        const gs = 0.85 + 0.15 * Math.sin(time * 2.5);
-                        broomGlow.scale.setScalar(gs * Math.min(p * 1.5, 1));
-                    }
+                    // J3：魔法扫帚的每帧分支已搬入 world/floor1/broom.js。
+                    // **原位置调用** —— 顺序与搬迁前一致，画面因此逐字节不变。
+                    broomApi.tick(dt, time);
                 }
 
                 /* ---- 门铃：按钮按压 + 音波涟漪 ---- */
@@ -8756,13 +5994,9 @@ export function installCabin(app) {
 
                 /* ---- 晴天娃娃 + 风铃 ---- */
                 {
-                    for (const h of [sunPivot, chimePivot]) {
-                        const u = h.userData;
-                        u.energy *= Math.pow(0.35, dt);
-                        if (u.energy < 0.002) u.energy = 0;
-                        h.rotation.z = Math.sin(time * 1.1 + u.ph) * 0.045 + u.energy * Math.sin(time * 9 + u.ph) * 0.30;
-                        h.rotation.x = Math.cos(time * 0.9 + u.ph) * 0.040 + u.energy * Math.cos(time * 8 + u.ph) * 0.22;
-                    }
+                    // J3（B3）：挂杆 / 晴天娃娃 / 风铃三段的每帧分支已合并搬入
+                    // world/floor1/doorHangBar.js（原地 tick，顺序不变）。
+                    doorHangBarApi.tick(dt, time);
                 }
 
                 chairT += ((chairOpen ? 1 : 0) - chairT) * 0.07;
@@ -8776,19 +6010,29 @@ export function installCabin(app) {
                 eraserG.rotation.x = Math.PI * ee;
                 updateChalk(time);
                 updateWand2(time);
-                updateRubik(time);
-                updateLayerAnim(dt);
-                updateSnow(time, dt);
-                updateHourglass(time);
-                updateDeck(time);
+                // J3（B5）：魔方（浮起打乱 / 落回还原）的每帧分支已搬入 world/floor2/rubik.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                rubikApi.tick(dt, time);
+                // J3（B5）：玻璃雪景球（雪花翻滚 / 落回 / 复位）的每帧分支已搬入 world/floor2/snowGlobe.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                snowGlobeApi.tick(dt, time);
+                // J3（B5）：桌面沙漏（翻身 / 流沙）的每帧分支已搬入 world/floor2/deskHourglass.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                deskHourglassApi.tick(dt, time);
+                // J3（B5）：扑克牌堆（浮起 / 扇开 / 洗牌 / 翻牌）的每帧分支已搬入 world/floor2/cardDeck.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                cardDeckApi.tick(dt, time);
                 updateBook(time, dt);
-                updateCal(dt);
+                // J3（B5）：台历翻页（12 页翻完再整体翻回 1 月）的每帧分支已搬入 world/floor2/calendar.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                calendarApi.tick(dt, time);
                 updateGlyphs(time, dt);
-                for (const tg of toppleGroups) updateTopple(tg);
-                updateTissue(time, dt);
+                // J3（B5）：金币柱倒塌/恢复的每帧分支已搬入 world/floor2/coinTowers.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
+                coinTowersApi.tick(dt, time);
+                tissueBoxApi.tick(dt, time);
                 updateWobblers(dt);
-                updateHat(time, dt);
-                updateCandies(dt);
+                witchHatApi.tick(dt, time);
 
                 candleP += ((candleLit ? 1 : 0) - candleP) * 0.03;
                 const candleVisible = candleP > 0.02;

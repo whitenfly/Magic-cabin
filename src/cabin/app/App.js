@@ -37,6 +37,7 @@ import { clock } from './clock.js'
 import { scene as rngScene, runtime as runtimeRng, SCENE_SEED } from './rng.js'
 import { createEventBus } from './EventBus.js'
 import { createRegistry } from './Registry.js'
+import { createMounts } from './mounts.js'
 import { createUpdateScheduler } from './UpdateScheduler.js'
 import { createStore } from './store.js'
 
@@ -53,6 +54,9 @@ export function createApp(options = {}) {
   const scheduler = createUpdateScheduler()
   const log = options.log || (() => {})
   const seed = options.rngSeed ?? SCENE_SEED
+  // J3：挂载点 ID 表 —— 「物品 ↔ 功能模块」两侧互不 import 的唯一接口（N2/N3）。
+  // 物件在 `installProp` 里认领自己的挂载点，功能模块通过 `ctx.mounts.get(id)` 拿场景对象。
+  const mounts = createMounts({ warn: (m) => log(m) })
   // J2.8：设置存储。`persist: false` 时只写内存 —— 测试必须**环境无关**
   // （否则"上一次测试把音量调到 0"会变成画面差异，而这与代码有没有改坏无关）。
   const store = createStore({ persist: options.persist !== false, warn: (m) => log(m) })
@@ -69,6 +73,7 @@ export function createApp(options = {}) {
     bus,
     scheduler,
     registry,
+    mounts,
     store,
     log,
     seed,
@@ -126,6 +131,7 @@ export function createApp(options = {}) {
     bus,
     scheduler,
     registry,
+    mounts,
     store,
     ctx,
     /** 场景随机源（构建期永久确定）与运行期随机源 */
@@ -149,6 +155,8 @@ export function createApp(options = {}) {
         seed,
         features: app.featureIds,
         registry: registry.stats(),
+        // J3：已认领的挂载点（`BB3` 的"物品恢复纯装饰"要靠它知道哪些挂载点没被认领）
+        mounts: mounts.stats(),
         scheduler: scheduler.stats(),
         clock: clock.snapshot(),
         // J2.8：设置与持久化状态（`persist: false` 时说明跑在确定性模式）

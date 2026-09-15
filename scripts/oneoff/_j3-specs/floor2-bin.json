@@ -1,0 +1,14 @@
+{
+  "id": "floor2/bin",
+  "name": "bin",
+  "file": "src/cabin/world/floor2/bin.js",
+  "batch": "B4",
+  "startMarker": "            /* 垃圾桶 */",
+  "endMarker": "            /* 抽纸盒 */",
+  "layout": [
+    { "name": "BIN_X", "value": "1.85", "doc": "二楼垃圾桶中心 x（floor2/tissue-box 的抛纸终点也用它）" },
+    { "name": "BIN_Z", "value": "-3.40", "doc": "二楼垃圾桶中心 z（floor2/tissue-box 的抛纸终点也用它）" },
+    { "name": "BIN_H", "value": "0.60", "doc": "垃圾桶高度（floor2/tissue-box 的桶口高度 FY + BIN_H + 0.10 由它推出）" }
+  ],
+  "notes": "纯装饰：本段**原本就没有 regMagic**（L4962–5023 一处也没有）⇒ 无 state / update / interactables / assign，monolith 侧不需要任何人工改动。区间 = L4961–L5025（吞掉两端 ==== 分隔线，纯注释）。用到的 ctx 键：scene / L / edge / cbox / crumpleBall / LITMAT / MAT。16 个纸团由 `crumpleBall(0.05)`（ctx 注入；内部 jitterGeo + hash01 是**纯函数**，不查种子随机源）生成，调用次数与顺序一字未改。layout：BIN_X / BIN_Z / BIN_H 是**跨件共享**的 —— 抽纸盒的 `BIN_MOUTH = V(BIN_X, FY + BIN_H + 0.10, BIN_Z)` 与 `BIN_FALL = V(BIN_X, FY + 0.18, BIN_Z)` 必须与桶的几何同源（N9：否则纸团扔到空气里），故进 layout；`BIN_R = 0.26` 只有桶自己用，留在 build 内。build 用重命名解构 `const { BIN_X, BIN_Z, BIN_H, FY } = L` ⇒ 桶的每一行几何代码逐字不变。★★ 本件**必须与 floor2/tissue-box 同批应用**：单独 `--only=floor2/tissue-box` 会让 L.BIN_X / BIN_Z / BIN_H 为 undefined，纸团的抛物线终点全变 NaN。"
+}

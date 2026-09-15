@@ -99,6 +99,15 @@ export function createLayout() {
   const DT_Z = -3.35
   const DTOP = 0.77
 
+  /** 灶台旁固定木台（原无编号分区）—— 位置与朝向 */
+  const PLATFORM_X = -1.35
+  const PLATFORM_Z = -1.5
+  const PLATFORM_ROT = 0.4
+
+  /** 魔法扫帚（12.10）：静止位与悬浮位。`rz` 是 Z 轴倾角 */
+  const BROOM_REST = { x: -3.3, y: 0.105, z: 3.35, rz: 0.33 }
+  const BROOM_FLY = { x: -2.7, y: 0.95, z: 2.65, rz: 0.05 }
+
   /* ══════════ 二楼锚点 ══════════ */
 
   /** 二楼楼面（语义别名，方便"二楼的东西都以它为准"） */
@@ -117,13 +126,103 @@ export function createLayout() {
   const TBLZ = -2.5
   const TBL_TOP = FY + 0.80
 
+  /* ══════════ J3 搬迁新增 ══════════ */
+  /** 二楼书桌桌面台历（18.4）中心 x（floor2/calendar） */
+  const CAL_X = 2.62
+  /** 二楼书桌桌面台历（18.4）中心 z（floor2/calendar） */
+  const CAL_Z = -2.34
+  /** 二楼书桌桌面扑克牌堆（18.4）的静止位（组原点）（floor2/card-deck） */
+  const DECK_HOME = { x: 3.35, y: TBL_TOP + 0.002, z: -2.15 }
+  /** 二楼书桌桌面金币柱（18.4）的基座（交互锚点与几何同源）（floor2/coin-towers） */
+  const COIN_BASE = { x: 3.34, z: -2.28 }
+  /** 二楼书桌桌面沙漏（18.4）中心 x（floor2/desk-hourglass） */
+  const DESK_HG_X = 2.15
+  /** 二楼书桌桌面沙漏（18.4）中心 z（floor2/desk-hourglass） */
+  const DESK_HG_Z = -2.50
+  /** 二楼前墙挂画（18.13）中心（原 `picG.position.set(1.45, FY + 1.55, 3.82)` 拆出，y 是相对二楼楼面的高度）（floor2/picture） */
+  const PIC_POS = { x: 1.45, y: 1.55, z: 3.82 }
+  /** 二楼书桌桌面魔方（18.4）的静止位（组原点）（floor2/rubik） */
+  const RUBIK_HOME = { x: 3.15, y: TBL_TOP + 0.085, z: -2.68 }
+  /** 二楼书桌桌面玻璃雪景球（18.4）中心 x（floor2/snow-globe） */
+  const SNOW_X = 3.50
+  /** 二楼书桌桌面玻璃雪景球（18.4）中心 z（floor2/snow-globe） */
+  const SNOW_Z = -2.80
+  /** 左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）（floor1/book-pile） */
+  const BOOK_PILE_POS = { x: -3.62, y: 0, z: -1.4 }
+  /** 旋转星铃（12.9d）的组原点（x 与 12.9 左墙书架的 SFX 同值，y 是吊挂高度）（floor1/star-bell） */
+  const STARBELL_POS = { x: -3.72, y: 1.975, z: -3.05 }
+  /** 塔罗牌牌堆（12.12）的组原点（`tarotG.position`）（floor1/tarot） */
+  const TAROT_POS = { x: -0.75, y: 0, z: -2.8 }
+  /** 门口旁墙钩中心 x（挎包挂在它上面）（floor2/bag） */
+  const BAG_HOOK_X = 0.15
+  /** 墙钩中心高度 y（floor2/bag） */
+  const BAG_HOOK_Y = FY + 1.38
+  /** 墙钩中心 z（前墙内侧）（floor2/bag） */
+  const BAG_HOOK_Z = 3.825
+  /** 二楼垃圾桶中心 x（floor2/tissue-box 的抛纸终点也用它）（floor2/bin） */
+  const BIN_X = 1.85
+  /** 二楼垃圾桶中心 z（floor2/tissue-box 的抛纸终点也用它）（floor2/bin） */
+  const BIN_Z = -3.40
+  /** 垃圾桶高度（floor2/tissue-box 的桶口高度 FY + BIN_H + 0.10 由它推出）（floor2/bin） */
+  const BIN_H = 0.60
+  /** 二楼置物箱中心 x（floor2/crate 与 floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_X = 0.95
+  /** 二楼置物箱中心 z（floor2/crate 与 floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_Z = 3.48
+  /** 置物箱箱体宽（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_W = 0.68
+  /** 置物箱箱体深（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_D = 0.55
+  /** 置物箱箱体高（CRATE_TOP 由它推出，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_H = 0.32
+  /** 置物箱盖顶面高度（魔女帽的帽座 HAT_HOME_POS 与糖果落点判定，floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_TOP = FY + CR_H + 0.092
+  /** 二楼拱形全身镜（18.14）中心 x（floor2/mirror） */
+  const MIRROR_X = 2.55
+  /** 二楼拱形全身镜（18.14）中心 z（floor2/mirror） */
+  const MIRROR_Z = 3.60
+  /** 二楼书桌上的抽纸盒中心 x（floor2/tissue-box） */
+  const TISSUE_X = 1.42
+  /** 二楼书桌上的抽纸盒中心 z（floor2/tissue-box） */
+  const TISSUE_Z = -2.15
+  /** 二楼衣柜中心 x（floor2/wardrobe） */
+  const WD_X = -1.40
+  /** 二楼衣柜中心 z（floor2/wardrobe） */
+  const WD_Z = 3.55
+  /** 小宝箱（12.9c）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）（floor1/chest） */
+  const CHEST_POS = { x: -3.72, y: 0.805, z: -2.66 }
+  /** 门口上方挂杆（含晴天娃娃 / 玻璃风铃）中心 x（floor1/hang-bar） */
+  const HANGBAR_X = 0
+  /** 门口上方挂杆中心高度 y（floor1/hang-bar） */
+  const HANGBAR_Y = 2.66
+  /** 门口上方挂杆中心 z（门内侧）（floor1/hang-bar） */
+  const HANGBAR_Z = 3.86
+  /** 沙漏（12.9b）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）（floor1/hourglass） */
+  const HG_POS = { x: -3.72, y: 0.805, z: -2.44 }
+  /** 右前角杂物纸箱（18.16）中心 x（floor2/junk-boxes） */
+  const JUNK_X = 3.34
+  /** 右前角杂物纸箱（18.16）中心 z（floor2/junk-boxes） */
+  const JUNK_Z = 3.34
+  /** 二楼毛茸茸大地毯（18.15）中心 x（floor2/rug-large） */
+  const RUG2_X = 2.7
+  /** 二楼毛茸茸大地毯（18.15）中心 z（floor2/rug-large） */
+  const RUG2_Z = 0.7
+
   return {
     // 建筑外壳
     HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
     // 一楼
     CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
     CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
+    PLATFORM_X, PLATFORM_Z, PLATFORM_ROT,
+    BROOM_REST, BROOM_FLY,
     // 二楼
     FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
+    // J3 搬迁新增
+    CHEST_POS, HANGBAR_X, HANGBAR_Y, HANGBAR_Z, HG_POS, JUNK_X, JUNK_Z, RUG2_X, RUG2_Z,
+    // J3 搬迁新增
+    BOOK_PILE_POS, STARBELL_POS, TAROT_POS, BAG_HOOK_X, BAG_HOOK_Y, BAG_HOOK_Z, BIN_X, BIN_Z, BIN_H, CRATE_X, CRATE_Z, CR_W, CR_D, CR_H, CRATE_TOP, MIRROR_X, MIRROR_Z, TISSUE_X, TISSUE_Z, WD_X, WD_Z,
+    // J3 搬迁新增
+    CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
   }
 }
