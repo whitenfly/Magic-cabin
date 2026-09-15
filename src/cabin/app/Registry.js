@@ -24,7 +24,14 @@
  *
  * · `N7`：不新增全局可变状态 —— 注册中心由 `App` 持有，随一局生命周期存在；
  * · 同一 `id` 重复注册会被拒绝（`J3` 搬迁时最能暴露"两处定义了同一个物件"）。
+ *
+ * ## 关于依赖 `systems/interaction/types.js`
+ *
+ * 与 `installProp.js` 同理：`types.js` 是**契约定义**（无副作用、无场景依赖），
+ * `app/` 只从它取"什么算需要 aim 入口"这一条判据（`wantsAim`），不碰任何具体实现。
  */
+import { wantsAim } from '../systems/interaction/types.js'
+
 export function createRegistry() {
   /** 所有登记在册的物件根：`{ id, root, kind, mount }` */
   const props = []
@@ -103,6 +110,14 @@ export function createRegistry() {
       // 「搬走一件 `regMagic` 物件」最容易出的错就是它**悄悄失去准星入口**：
       // 画面逐字节相同、冒烟也不覆盖，只有这个清单能把它照出来。
       magicPropIds: [...new Set(magicMeshes.map((m) => m.userData.magicRoot?.userData?.cabinProp).filter(Boolean))],
+      // ★ `J3.1`：aim 通路的**逐条**诊断。`magicPropIds` 的粒度是"每件物件"——
+      // 只要一件物件有**一个**入口就算通过，于是"餐桌三只餐盘只有第一只点得动"
+      // 这类缺口全部漏网（实测确认过）。下面两条把粒度下沉到**每条 `Interactable`**：
+      //   · `aimBound`   —— 真的拿到了命中体的条目 id；
+      //   · `aimMissing` —— 声明了 aim（`mode` 为 `aim` / `both`）却没有命中体的条目 id。
+      // 判据：`aimMissing` 必须为空（`mode: 'proximity'` 的条目本就不该有 aim 入口，不计入）。
+      aimBound: interactables.filter((it) => it.aimBound).map((it) => it.id),
+      aimMissing: interactables.filter((it) => wantsAim(it) && !it.aimBound).map((it) => it.id),
       lights: lights.length,
       interactables: interactables.length,
       features: features.length,
