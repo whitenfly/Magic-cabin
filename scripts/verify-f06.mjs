@@ -106,8 +106,11 @@ console.log('\n【J0.6-2】钩子契约：要了才给，且与 manual 模式无
   for (const key of ['calls', 'triangles', 'geometries', 'textures', 'sceneObjects']) {
     check(`钩子返回 ${key}`, new RegExp(`\\b${key}\\b`).test(cur))
   }
-  check('数据源是 three 的 renderer.info', /const r = renderer\.info;/.test(cur))
-  check('场景计数用 scene.traverse 递归统计', /scene\.traverse\(/.test(cur))
+  // ★ `J4.1` 起 `renderer` / `scene` 住进了段间通信载体 `ctx`（段切片），
+  //   所以这里接受 `renderer.info` 与 `ctx.renderer.info` 两种写法 ——
+  //   判据的**语义**（数据源是 three 的 renderer.info）没变，变的只是名字怎么解析。
+  check('数据源是 three 的 renderer.info', /const r = (?:ctx\.)?renderer\.info;/.test(cur))
+  check('场景计数用 scene.traverse 递归统计', /(?:ctx\.)?scene\.traverse\(/.test(cur))
 
   // boot 侧：必须**在 legacy 实现执行之前**置位，否则钩子挂不上
   const wantFlagAt = boot.indexOf('window.__CABIN_WANT_STATS = true')

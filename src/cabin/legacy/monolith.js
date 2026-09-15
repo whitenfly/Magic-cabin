@@ -42,6 +42,8 @@ import { createEnvironment } from '../systems/weather/environment.js'
 // J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
 // 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
 import { createPropInstaller } from '../app/installProp.js'
+import { installMenuPanel } from './../systems/ui/MenuPanel.js'
+import { installNoteEditor } from './../systems/ui/editors/NoteEditor.js'
 import calendar from '../world/floor2/calendar.js'
 import cardDeck from '../world/floor2/cardDeck.js'
 import coinTowers from '../world/floor2/coinTowers.js'
@@ -108,14 +110,23 @@ const runtimeRng = runtime;
  */
 export function installCabin(app) {
     const { registry, bus, scheduler, store } = app;
-    (function () {
+    /* __J4_CTX__ ★ J4 段间通信的唯一载体（段表见 scripts/oneoff/_j4-segments.mjs）。
+       段内顶层 let 都住在这里；段内顶层 const/function 在段末挂到这里。
+       段序 = 执行序（rng 调用顺序 / scene.add 顺序 / 光源槽序都由它决定）。 */
+    const ctx = Object.create(null);
+    (function (ctx) {
+            /* ==================== [J4:seg prelude] ==================== */
             'use strict';
             const mqCoarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
+            ctx.mqCoarse = mqCoarse;
             const mqFine = window.matchMedia ? window.matchMedia('(pointer: fine)').matches : true;
+            ctx.mqFine = mqFine;
             const IS_TOUCH = mqCoarse || (('ontouchstart' in window) && navigator.maxTouchPoints > 0 && !mqFine);
+            ctx.IS_TOUCH = IS_TOUCH;
             if (IS_TOUCH) document.body.classList.add('touch');
 
             /* ============ 音效系统：文件放 sounds/ 目录，缺失时静默跳过 ============ */
+            /* ==================== [J4:seg audio] ==================== */
             const SND = (() => {
                 const NAMES = ['door', 'window', 'fire', 'lamp', 'cast', 'magic', 'cat', 'toggle', 'ui', 'chim', 'doorbell'];
                 const pool = {};
@@ -136,28 +147,38 @@ export function installCabin(app) {
                     isEnabled() { return on; }
                 };
             })();
+            ctx.SND = SND;
 
+            /* ==================== [J4:seg core3d] ==================== */
             const scene = new THREE.Scene();
+            ctx.scene = scene;
             scene.background = new THREE.Color(0xfdfbf6);
             scene.fog = new THREE.Fog(0xfdfbf6, 60, 160);
 
             const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 300);
+            ctx.camera = camera;
             const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1.5 : 2));
+            ctx.renderer = renderer;
+            renderer.setPixelRatio(Math.min(devicePixelRatio, ctx.IS_TOUCH ? 1.5 : 2));
             renderer.setSize(innerWidth, innerHeight);
             document.body.appendChild(renderer.domElement);
 
             // J2.2：三种线材质已提取到 cabin/core/materials/lineMaterials.js（实现零改动）
             const { MAT, DASHMAT, IN_MAT } = createLineMaterials();
+            ctx.MAT = MAT; ctx.DASHMAT = DASHMAT; ctx.IN_MAT = IN_MAT;
 
             // J2.2：全局 FILL 材质与彩色材质工厂已提取到 cabin/core/materials/。
             // shader 与 uniforms 由 scripts/oneoff/_j22-extract.mjs **逐字节提取**（非手抄）。
             // 全屋的彩色材质都与这里的 FILL **共享 uniform 引用**，只换 uTint。
             const FILL = createFillMaterial();
+            ctx.FILL = FILL;
             const LITMAT = createLitMaterialFactory(FILL);
+            ctx.LITMAT = LITMAT;
 
             const WIN_GLASS = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            ctx.WIN_GLASS = WIN_GLASS;
             const WIN_GLASS_UP = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            ctx.WIN_GLASS_UP = WIN_GLASS_UP;
 
             // J2.1：线稿几何 DSL 已提取到 cabin/core/geometry/sketch.js（实现零改动）。
             // 场景与四种共享材质**显式注入** —— core/ 不持有全局场景（不变量 N1 / N7）。
@@ -166,6 +187,8 @@ export function installCabin(app) {
                 scene,
                 materials: { line: MAT, inner: IN_MAT, dash: DASHMAT, fill: FILL },
             });
+            ctx.V = V; ctx.geo = geo; ctx.line = line; ctx.iline = iline; ctx.dline = dline; ctx.edge = edge;
+            ctx.box = box; ctx.log = log; ctx.put = put; ctx.logBetween = logBetween;
 
             put(new THREE.Mesh(new THREE.PlaneGeometry(130, 130), FILL), 0, -0.01, 0, -Math.PI / 2, 0, 0);
             for (let z = -9; z <= 9; z += 1.5) put(line([[-10, 0.01, z], [10, 0.01, z]]), 0, 0, 0);
@@ -174,17 +197,29 @@ export function installCabin(app) {
             // 数值一个没改 —— 交互判定与几何构建从此共用同一份坐标（J2.6 的 anchor 直接用它们）。
             // J3：整表保留为 `L`，供搬出的物件按需解构（旧调用点仍在文件内直接解构，一行未改）。
             const L = createLayout();
+            ctx.L = L;
             const {
                 HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
                 CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
                 CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
                 FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
             } = L;
+            ctx.HOLE_R = HOLE_R; ctx.FLOOR_TOP = FLOOR_TOP; ctx.DOOR_HOLE = DOOR_HOLE; ctx.WIN_F_L = WIN_F_L; ctx.WIN_F_R = WIN_F_R; ctx.WIN_LEFT = WIN_LEFT;
+            ctx.WIN_GABLE = WIN_GABLE; ctx.LOG_R = LOG_R; ctx.LOG_GAP = LOG_GAP; ctx.WALL_TOP = WALL_TOP; ctx.WALL_Y0 = WALL_Y0; ctx.CHX = CHX;
+            ctx.CHZ = CHZ; ctx.HEARTH = HEARTH; ctx.FX = FX; ctx.FZ = FZ; ctx.MTX = MTX; ctx.MTZ = MTZ;
+            ctx.MTTOP = MTTOP; ctx.CCX = CCX; ctx.CCZ = CCZ; ctx.MC_X = MC_X; ctx.MC_Z = MC_Z; ctx.KOT_X = KOT_X;
+            ctx.KOT_Z = KOT_Z; ctx.KTOP = KTOP; ctx.CBX = CBX; ctx.CBZ = CBZ; ctx.PLX = PLX; ctx.PLZ = PLZ;
+            ctx.DT_X = DT_X; ctx.DT_Z = DT_Z; ctx.DTOP = DTOP; ctx.FY = FY; ctx.BEDX = BEDX; ctx.BEDZ = BEDZ;
+            ctx.NSX = NSX; ctx.NSZ = NSZ; ctx.TBLX = TBLX; ctx.TBLZ = TBLZ; ctx.TBL_TOP = TBL_TOP;
 
+            /* ==================== [J4:seg houseShell] ==================== */
+            // ↓ J4 段导出（houseShell）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.logWall = logWall; ctx.logGable = logGable; ctx.interiorWallLines = interiorWallLines; ctx.squareWindow = squareWindow; ctx.regFire = regFire; ctx.makeWavyFlame = makeWavyFlame;
+            ctx.updateWavyFlame = updateWavyFlame; ctx.regMagic = regMagic; ctx.buildStairs = buildStairs; ctx.drawSign = drawSign; ctx.openSignEditor = openSignEditor; ctx.mushroom = mushroom;
             function logWall(along, fixed, halfLen, openings, cornerExt, parent) {
-                const g = new THREE.Group(); const nLogs = Math.floor((WALL_TOP - WALL_Y0) / LOG_GAP);
+                const g = new THREE.Group(); const nLogs = Math.floor((ctx.WALL_TOP - ctx.WALL_Y0) / ctx.LOG_GAP);
                 for (let i = 0; i <= nLogs; i++) {
-                    const y = WALL_Y0 + LOG_R + i * LOG_GAP; if (y > WALL_TOP) break;
+                    const y = ctx.WALL_Y0 + ctx.LOG_R + i * ctx.LOG_GAP; if (y > ctx.WALL_TOP) break;
                     let segs = [[-halfLen - cornerExt, halfLen + cornerExt]];
                     for (const op of openings) {
                         if (y > op.y0 && y < op.y1) {
@@ -197,49 +232,56 @@ export function installCabin(app) {
                         }
                     }
                     for (const [a, b] of segs) {
-                        if (b - a < 0.15) continue; const L = log(b - a);
+                        if (b - a < 0.15) continue; const L = ctx.log(b - a);
                         if (along === 'x') { L.rotation.z = Math.PI / 2; L.position.set((a + b) / 2, y, fixed); }
                         else { L.rotation.x = Math.PI / 2; L.position.set(fixed, y, (a + b) / 2); }
                         g.add(L);
                     }
-                } (parent || scene).add(g);
+                } (parent || ctx.scene).add(g);
             }
 
             const D_HALF = 4;
-            logWall('x', 4, D_HALF, [DOOR_HOLE, WIN_F_L, WIN_F_R], 0.18);
-            logWall('z', -4, D_HALF, [WIN_LEFT], 0);
+            ctx.D_HALF = D_HALF;
+            logWall('x', 4, D_HALF, [ctx.DOOR_HOLE, ctx.WIN_F_L, ctx.WIN_F_R], 0.18);
+            logWall('z', -4, D_HALF, [ctx.WIN_LEFT], 0);
 
-            const dashedGroup = new THREE.Group(); scene.add(dashedGroup);
+            const dashedGroup = new THREE.Group();
+            ctx.dashedGroup = dashedGroup; ctx.scene.add(dashedGroup);
             const WX = 4.18;
-            put(dline([[4, 0.02, -WX], [4, 0.02, WX], [4, WALL_TOP, WX], [4, WALL_TOP, -WX], [4, 0.02, -WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[4, 0.02, -WX], [4, WALL_TOP, -WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[4, 0.02, WX], [4, WALL_TOP, WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[-WX, 0.02, -4], [WX, 0.02, -4], [WX, WALL_TOP, -4], [-WX, WALL_TOP, -4], [-WX, 0.02, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[-WX, 0.02, -4], [-WX, WALL_TOP, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[WX, 0.02, -4], [WX, WALL_TOP, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[-4, 4.5, -4], [0, 6.35, -4], [4, 4.5, -4], [-4, 4.5, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[0, 6.7, 4.6], [4.4, 4.4, 4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[0, 6.7, -4.6], [4.4, 4.4, -4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
-            put(dline([[4.4, 4.4, -4.6], [4.4, 4.4, 4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.WX = WX;
+            ctx.put(ctx.dline([[4, 0.02, -WX], [4, 0.02, WX], [4, ctx.WALL_TOP, WX], [4, ctx.WALL_TOP, -WX], [4, 0.02, -WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[4, 0.02, -WX], [4, ctx.WALL_TOP, -WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[4, 0.02, WX], [4, ctx.WALL_TOP, WX]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[-WX, 0.02, -4], [WX, 0.02, -4], [WX, ctx.WALL_TOP, -4], [-WX, ctx.WALL_TOP, -4], [-WX, 0.02, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[-WX, 0.02, -4], [-WX, ctx.WALL_TOP, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[WX, 0.02, -4], [WX, ctx.WALL_TOP, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[-4, 4.5, -4], [0, 6.35, -4], [4, 4.5, -4], [-4, 4.5, -4]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[0, 6.7, 4.6], [4.4, 4.4, 4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[0, 6.7, -4.6], [4.4, 4.4, -4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
+            ctx.put(ctx.dline([[4.4, 4.4, -4.6], [4.4, 4.4, 4.6]]), 0, 0, 0, 0, 0, 0, dashedGroup);
 
             const ridgeY = 6.6, eaveY = 4.4, eaveX = 4.4, roofSpan = 9.2;
+            ctx.ridgeY = ridgeY; ctx.eaveY = eaveY; ctx.eaveX = eaveX; ctx.roofSpan = roofSpan;
             const roofAng = Math.atan2(ridgeY - eaveY, eaveX);
+            ctx.roofAng = roofAng;
             const slopeLen = Math.hypot(eaveX, ridgeY - eaveY);
-            put(box(slopeLen, 0.08, roofSpan), -eaveX / 2, (eaveY + ridgeY) / 2 + 0.04, 0, 0, 0, roofAng);
-            put(log(roofSpan, 0.1), 0, ridgeY + 0.05, 0, Math.PI / 2, 0, 0);
-            for (let t = 0.14; t < 0.96; t += 0.145) { const px = -eaveX + t * eaveX, py = eaveY + t * (ridgeY - eaveY) + 0.13; put(log(roofSpan, 0.09), px, py, 0, Math.PI / 2, 0, 0); }
-            put(log(slopeLen + 0.15, 0.1), -eaveX / 2, (eaveY + ridgeY) / 2 + 0.02, 4.55, 0, 0, roofAng - Math.PI / 2);
-            put(line([[0, ridgeY + 0.05, -4.55], [-eaveX, eaveY, -4.55]]), 0, 0, 0);
-            put(log(9.1, 0.12), 0, eaveY - 0.12, 4.55, 0, 0, Math.PI / 2);
-            put(edge(new THREE.CircleGeometry(0.1, 8)), 0, ridgeY + 0.05, -4.6, 0, Math.PI / 2, 0);
-            put(box(0.68, 0.045, 9.0), -4.12, 4.45, 0, 0, 0, roofAng);
-            for (const zs of [4.28, -4.28]) put(box(slopeLen - 0.1, 0.05, 0.6), -eaveX / 2, (eaveY + ridgeY) / 2 - 0.03, zs, 0, 0, roofAng);
+            ctx.slopeLen = slopeLen;
+            ctx.put(ctx.box(slopeLen, 0.08, roofSpan), -eaveX / 2, (eaveY + ridgeY) / 2 + 0.04, 0, 0, 0, roofAng);
+            ctx.put(ctx.log(roofSpan, 0.1), 0, ridgeY + 0.05, 0, Math.PI / 2, 0, 0);
+            for (let t = 0.14; t < 0.96; t += 0.145) { const px = -eaveX + t * eaveX, py = eaveY + t * (ridgeY - eaveY) + 0.13; ctx.put(ctx.log(roofSpan, 0.09), px, py, 0, Math.PI / 2, 0, 0); }
+            ctx.put(ctx.log(slopeLen + 0.15, 0.1), -eaveX / 2, (eaveY + ridgeY) / 2 + 0.02, 4.55, 0, 0, roofAng - Math.PI / 2);
+            ctx.put(ctx.line([[0, ridgeY + 0.05, -4.55], [-eaveX, eaveY, -4.55]]), 0, 0, 0);
+            ctx.put(ctx.log(9.1, 0.12), 0, eaveY - 0.12, 4.55, 0, 0, Math.PI / 2);
+            ctx.put(ctx.edge(new THREE.CircleGeometry(0.1, 8)), 0, ridgeY + 0.05, -4.6, 0, Math.PI / 2, 0);
+            ctx.put(ctx.box(0.68, 0.045, 9.0), -4.12, 4.45, 0, 0, 0, roofAng);
+            for (const zs of [4.28, -4.28]) ctx.put(ctx.box(slopeLen - 0.1, 0.05, 0.6), -eaveX / 2, (eaveY + ridgeY) / 2 - 0.03, zs, 0, 0, roofAng);
 
             const GABLE_TOP = ridgeY - 0.25;
+            ctx.GABLE_TOP = GABLE_TOP;
             function logGable(z, openings, parent) {
-                const g = new THREE.Group(); let y = WALL_TOP + LOG_R;
+                const g = new THREE.Group(); let y = ctx.WALL_TOP + ctx.LOG_R;
                 while (true) {
-                    const halfW = D_HALF * (GABLE_TOP - y) / (GABLE_TOP - WALL_TOP); if (halfW < 0.3) break;
+                    const halfW = D_HALF * (GABLE_TOP - y) / (GABLE_TOP - ctx.WALL_TOP); if (halfW < 0.3) break;
                     let segs = [[-halfW, halfW]];
                     for (const op of openings) {
                         if (y > op.y0 && y < op.y1) {
@@ -248,84 +290,94 @@ export function installCabin(app) {
                             segs = next;
                         }
                     }
-                    for (const [a, b] of segs) { if (b - a < 0.15) continue; const L = log(b - a); L.rotation.z = Math.PI / 2; L.position.set((a + b) / 2, y, z); g.add(L); }
-                    y += LOG_GAP;
-                } (parent || scene).add(g);
+                    for (const [a, b] of segs) { if (b - a < 0.15) continue; const L = ctx.log(b - a); L.rotation.z = Math.PI / 2; L.position.set((a + b) / 2, y, z); g.add(L); }
+                    y += ctx.LOG_GAP;
+                } (parent || ctx.scene).add(g);
             }
-            logGable(4, [WIN_GABLE]);
+            logGable(4, [ctx.WIN_GABLE]);
 
-            const fullHouseGroup = new THREE.Group(); fullHouseGroup.visible = false; scene.add(fullHouseGroup);
+            const fullHouseGroup = new THREE.Group();
+            ctx.fullHouseGroup = fullHouseGroup; fullHouseGroup.visible = false; ctx.scene.add(fullHouseGroup);
             // J2.8：小屋形态由 store 决定（默认剖切）。可见性由菜单就绪后的 applyFullHouse() 统一应用，
             // 所以这里刻意**不**直接同步 fullHouseGroup.visible —— 只有一处应用点，不会出现两套状态。
-            let fullHouse = store.get('house.full');
+            ctx.fullHouse = store.get('house.full');
             {
                 const WIN_R = { c: -1.5, hw: 0.52, y0: 1.1, y1: 2.1 }; const WIN_B = { c: 1.5, hw: 0.52, y0: 1.1, y1: 2.1 };
                 logWall('z', 4, D_HALF, [WIN_R], 0.18, fullHouseGroup); logWall('x', -4, D_HALF, [WIN_B], 0.18, fullHouseGroup); logGable(-4, [], fullHouseGroup);
-                put(box(slopeLen, 0.08, roofSpan), eaveX / 2, (eaveY + ridgeY) / 2 + 0.04, 0, 0, 0, -roofAng, fullHouseGroup);
-                for (let t = 0.14; t < 0.96; t += 0.145) { const px = eaveX - t * eaveX, py = eaveY + t * (ridgeY - eaveY) + 0.13; put(log(roofSpan, 0.09), px, py, 0, Math.PI / 2, 0, 0, fullHouseGroup); }
-                put(log(slopeLen + 0.15, 0.1), eaveX / 2, (eaveY + ridgeY) / 2 + 0.02, 4.55, 0, 0, -(roofAng - Math.PI / 2), fullHouseGroup);
-                put(line([[0, ridgeY + 0.05, -4.55], [eaveX, eaveY, -4.55]]), 0, 0, 0, 0, 0, 0, fullHouseGroup);
-                put(box(0.68, 0.045, 9.0), 4.12, 4.45, 0, 0, 0, -roofAng, fullHouseGroup);
-                for (const zs of [4.28, -4.28]) put(box(slopeLen - 0.1, 0.05, 0.6), eaveX / 2, (eaveY + ridgeY) / 2 - 0.03, zs, 0, 0, -roofAng, fullHouseGroup);
+                ctx.put(ctx.box(slopeLen, 0.08, roofSpan), eaveX / 2, (eaveY + ridgeY) / 2 + 0.04, 0, 0, 0, -roofAng, fullHouseGroup);
+                for (let t = 0.14; t < 0.96; t += 0.145) { const px = eaveX - t * eaveX, py = eaveY + t * (ridgeY - eaveY) + 0.13; ctx.put(ctx.log(roofSpan, 0.09), px, py, 0, Math.PI / 2, 0, 0, fullHouseGroup); }
+                ctx.put(ctx.log(slopeLen + 0.15, 0.1), eaveX / 2, (eaveY + ridgeY) / 2 + 0.02, 4.55, 0, 0, -(roofAng - Math.PI / 2), fullHouseGroup);
+                ctx.put(ctx.line([[0, ridgeY + 0.05, -4.55], [eaveX, eaveY, -4.55]]), 0, 0, 0, 0, 0, 0, fullHouseGroup);
+                ctx.put(ctx.box(0.68, 0.045, 9.0), 4.12, 4.45, 0, 0, 0, -roofAng, fullHouseGroup);
+                for (const zs of [4.28, -4.28]) ctx.put(ctx.box(slopeLen - 0.1, 0.05, 0.6), eaveX / 2, (eaveY + ridgeY) / 2 - 0.03, zs, 0, 0, -roofAng, fullHouseGroup);
             }
 
             const floorShape = new THREE.Shape();
+            ctx.floorShape = floorShape;
             floorShape.moveTo(-4, -4); floorShape.lineTo(4, -4); floorShape.lineTo(4, 4); floorShape.lineTo(-4, 4); floorShape.closePath();
-            const holePath = new THREE.Path(); holePath.absarc(0, 0, HOLE_R, 0, Math.PI * 2, true); floorShape.holes.push(holePath);
+            const holePath = new THREE.Path();
+            ctx.holePath = holePath; holePath.absarc(0, 0, ctx.HOLE_R, 0, Math.PI * 2, true); floorShape.holes.push(holePath);
             const floorGeo = new THREE.ExtrudeGeometry(floorShape, { depth: 0.12, bevelEnabled: false });
-            floorGeo.rotateX(-Math.PI / 2); floorGeo.translate(0, 3, 0); scene.add(edge(floorGeo));
-            const ring = edge(new THREE.TorusGeometry(HOLE_R, 0.04, 8, 32)); ring.rotation.x = Math.PI / 2; ring.position.set(0, FLOOR_TOP + 0.01, 0); scene.add(ring);
+            ctx.floorGeo = floorGeo;
+            floorGeo.rotateX(-Math.PI / 2); floorGeo.translate(0, 3, 0); ctx.scene.add(ctx.edge(floorGeo));
+            const ring = ctx.edge(new THREE.TorusGeometry(ctx.HOLE_R, 0.04, 8, 32));
+            ctx.ring = ring; ring.rotation.x = Math.PI / 2; ring.position.set(0, ctx.FLOOR_TOP + 0.01, 0); ctx.scene.add(ring);
 
-            const landingShape = new THREE.Shape(); landingShape.moveTo(0, 0); landingShape.absarc(0, 0, HOLE_R, Math.PI / 6, Math.PI - Math.PI / 6, false); landingShape.lineTo(0, 0);
+            const landingShape = new THREE.Shape();
+            ctx.landingShape = landingShape; landingShape.moveTo(0, 0); landingShape.absarc(0, 0, ctx.HOLE_R, Math.PI / 6, Math.PI - Math.PI / 6, false); landingShape.lineTo(0, 0);
             const landingGeo = new THREE.ExtrudeGeometry(landingShape, { depth: 0.12, bevelEnabled: false, curveSegments: 10 });
-            landingGeo.rotateX(Math.PI / 2); put(edge(landingGeo), 0, FLOOR_TOP + 0.01, 0);
+            ctx.landingGeo = landingGeo;
+            landingGeo.rotateX(Math.PI / 2); ctx.put(ctx.edge(landingGeo), 0, ctx.FLOOR_TOP + 0.01, 0);
 
             const RAIL_R = 1.24, RAIL_H = 0.85, D2R = Math.PI / 180;
-            for (let deg = 60; deg <= 300; deg += 30) { const th = deg * D2R; put(edge(new THREE.CylinderGeometry(0.025, 0.025, RAIL_H, 6)), Math.sin(th) * RAIL_R, FLOOR_TOP + RAIL_H / 2, Math.cos(th) * RAIL_R, 0, 0, 0); }
-            for (const hy of [RAIL_H, 0.45]) { const pts = []; for (let deg = 60; deg <= 300; deg += 5) { const th = deg * D2R; pts.push([Math.sin(th) * RAIL_R, FLOOR_TOP + hy, Math.cos(th) * RAIL_R]); } put(line(pts), 0, 0, 0); }
+            ctx.RAIL_R = RAIL_R; ctx.RAIL_H = RAIL_H; ctx.D2R = D2R;
+            for (let deg = 60; deg <= 300; deg += 30) { const th = deg * D2R; ctx.put(ctx.edge(new THREE.CylinderGeometry(0.025, 0.025, RAIL_H, 6)), Math.sin(th) * RAIL_R, ctx.FLOOR_TOP + RAIL_H / 2, Math.cos(th) * RAIL_R, 0, 0, 0); }
+            for (const hy of [RAIL_H, 0.45]) { const pts = []; for (let deg = 60; deg <= 300; deg += 5) { const th = deg * D2R; pts.push([Math.sin(th) * RAIL_R, ctx.FLOOR_TOP + hy, Math.cos(th) * RAIL_R]); } ctx.put(ctx.line(pts), 0, 0, 0); }
             const eX = Math.sin(60 * D2R), eZ = Math.cos(60 * D2R);
-            for (const r of [0.38, 0.8]) put(edge(new THREE.CylinderGeometry(0.025, 0.025, RAIL_H, 6)), eX * r, FLOOR_TOP + RAIL_H / 2, eZ * r, 0, 0, 0);
-            for (const hy of [RAIL_H, 0.45]) put(line([[eX * 0.15, FLOOR_TOP + hy, eZ * 0.15], [eX * RAIL_R, FLOOR_TOP + hy, eZ * RAIL_R]]), 0, 0, 0);
-            for (let z = -3.2; z <= 3.2; z += 0.9) { const avoidR = HOLE_R + 0.05; if (Math.abs(z) >= avoidR) { put(log(8, 0.07), 0, 2.86, z, 0, 0, Math.PI / 2); } else { const dx = Math.sqrt(avoidR * avoidR - z * z); put(log(4 - dx, 0.07), -(4 + dx) / 2, 2.86, z, 0, 0, Math.PI / 2); put(log(4 - dx, 0.07), (4 + dx) / 2, 2.86, z, 0, 0, Math.PI / 2); } }
+            ctx.eX = eX; ctx.eZ = eZ;
+            for (const r of [0.38, 0.8]) ctx.put(ctx.edge(new THREE.CylinderGeometry(0.025, 0.025, RAIL_H, 6)), eX * r, ctx.FLOOR_TOP + RAIL_H / 2, eZ * r, 0, 0, 0);
+            for (const hy of [RAIL_H, 0.45]) ctx.put(ctx.line([[eX * 0.15, ctx.FLOOR_TOP + hy, eZ * 0.15], [eX * RAIL_R, ctx.FLOOR_TOP + hy, eZ * RAIL_R]]), 0, 0, 0);
+            for (let z = -3.2; z <= 3.2; z += 0.9) { const avoidR = ctx.HOLE_R + 0.05; if (Math.abs(z) >= avoidR) { ctx.put(ctx.log(8, 0.07), 0, 2.86, z, 0, 0, Math.PI / 2); } else { const dx = Math.sqrt(avoidR * avoidR - z * z); ctx.put(ctx.log(4 - dx, 0.07), -(4 + dx) / 2, 2.86, z, 0, 0, Math.PI / 2); ctx.put(ctx.log(4 - dx, 0.07), (4 + dx) / 2, 2.86, z, 0, 0, Math.PI / 2); } }
 
             function interiorWallLines(along, fixed, openings, skipV) {
                 for (let y = 0.6; y < 4.4; y += 0.8) {
                     let segs = [[-3.9, 3.9]];
                     for (const op of openings) { if (y > op.y0 && y < op.y1) { const next = []; for (const [a, b] of segs) { const lo = op.c - op.hw, hi = op.c + op.hw; if (hi <= a || lo >= b) { next.push([a, b]); continue; } if (lo > a) next.push([a, lo]); if (hi < b) next.push([hi, b]); } segs = next; } }
-                    for (const [a, b] of segs) { if (b - a < 0.2) continue; if (along === 'x') put(line([[a, y, fixed], [b, y, fixed]]), 0, 0, 0); else put(line([[fixed, y, a], [fixed, y, b]]), 0, 0, 0); }
+                    for (const [a, b] of segs) { if (b - a < 0.2) continue; if (along === 'x') ctx.put(ctx.line([[a, y, fixed], [b, y, fixed]]), 0, 0, 0); else ctx.put(ctx.line([[fixed, y, a], [fixed, y, b]]), 0, 0, 0); }
                 }
                 for (let p = -3; p <= 3; p += 1.5) {
                     if (skipV && skipV.indexOf(p) !== -1) continue; let segs = [[0.1, 4.4]];
                     for (const op of openings) { if (p > op.c - op.hw && p < op.c + op.hw) { const next = []; for (const [a, b] of segs) { if (op.y1 <= a || op.y0 >= b) { next.push([a, b]); continue; } if (op.y0 > a) next.push([a, op.y0]); if (op.y1 < b) next.push([op.y1, b]); } segs = next; } }
-                    for (const [a, b] of segs) { if (b - a < 0.2) continue; if (along === 'x') put(line([[p, a, fixed], [p, b, fixed]]), 0, 0, 0); else put(line([[fixed, a, p], [fixed, b, p]]), 0, 0, 0); }
+                    for (const [a, b] of segs) { if (b - a < 0.2) continue; if (along === 'x') ctx.put(ctx.line([[p, a, fixed], [p, b, fixed]]), 0, 0, 0); else ctx.put(ctx.line([[fixed, a, p], [fixed, b, p]]), 0, 0, 0); }
                 }
             }
-            interiorWallLines('x', 3.9, [DOOR_HOLE, WIN_F_L, WIN_F_R], [0]);
-            interiorWallLines('z', -3.9, [WIN_LEFT]);
+            interiorWallLines('x', 3.9, [ctx.DOOR_HOLE, ctx.WIN_F_L, ctx.WIN_F_R], [0]);
+            interiorWallLines('z', -3.9, [ctx.WIN_LEFT]);
 
             // J2.4：弹簧与滑轨已提取到 cabin/core/util/spring.js（实现零改动）。
             // 解构保留原有标识符名 —— 文件内其余 200+ 处调用点（registerHinge / regSlide /
             // hingeMeshes / updateSprings）因此一行都不用改。
             const { hinges, hingeMeshes, slides, registerHinge, regSlide, updateSprings } = createSpringSystem();
+            ctx.hinges = hinges; ctx.hingeMeshes = hingeMeshes; ctx.slides = slides; ctx.registerHinge = registerHinge; ctx.regSlide = regSlide; ctx.updateSprings = updateSprings;
 
             function squareWindow(cx, cy, cz, face, w, h, holeHw, parent, glassMat) {
                 const g = new THREE.Group(); g.userData = { base: 0, delta: 0 }; const parts = new THREE.Group(); const t = 0.09, d = 0.12;
-                put(box(w, t, d), w / 2, h / 2 - t / 2, 0, 0, 0, 0, parts); put(box(w, t, d), w / 2, -h / 2 + t / 2, 0, 0, 0, 0, parts);
-                put(box(t, h, d), t / 2, 0, 0, 0, 0, 0, parts); put(box(t, h, d), w - t / 2, 0, 0, 0, 0, 0, parts);
-                put(box(w - 2 * t, 0.05, 0.07), w / 2, 0, 0.02, 0, 0, 0, parts); put(box(0.05, h - 2 * t, 0.07), w / 2, 0, 0.02, 0, 0, 0, parts);
-                { const gg = new THREE.BoxGeometry(w - 2 * t, h - 2 * t, 0.04); const glass = new THREE.Mesh(gg, glassMat || WIN_GLASS); glass.position.set(w / 2, 0, 0); parts.add(glass); const glassEdge = new THREE.LineSegments(new THREE.EdgesGeometry(gg), MAT); glassEdge.position.set(w / 2, 0, 0); parts.add(glassEdge); }
-                g.add(parts); put(box(0.07, 0.16, 0.16), 0.02, h / 2 - 0.2, 0, 0, 0, 0, g); put(box(0.07, 0.16, 0.16), 0.02, -h / 2 + 0.2, 0, 0, 0, 0, g);
-                const P = parent || scene; const sideOff = holeHw - 0.045;
+                ctx.put(ctx.box(w, t, d), w / 2, h / 2 - t / 2, 0, 0, 0, 0, parts); ctx.put(ctx.box(w, t, d), w / 2, -h / 2 + t / 2, 0, 0, 0, 0, parts);
+                ctx.put(ctx.box(t, h, d), t / 2, 0, 0, 0, 0, 0, parts); ctx.put(ctx.box(t, h, d), w - t / 2, 0, 0, 0, 0, 0, parts);
+                ctx.put(ctx.box(w - 2 * t, 0.05, 0.07), w / 2, 0, 0.02, 0, 0, 0, parts); ctx.put(ctx.box(0.05, h - 2 * t, 0.07), w / 2, 0, 0.02, 0, 0, 0, parts);
+                { const gg = new THREE.BoxGeometry(w - 2 * t, h - 2 * t, 0.04); const glass = new THREE.Mesh(gg, glassMat || ctx.WIN_GLASS); glass.position.set(w / 2, 0, 0); parts.add(glass); const glassEdge = new THREE.LineSegments(new THREE.EdgesGeometry(gg), ctx.MAT); glassEdge.position.set(w / 2, 0, 0); parts.add(glassEdge); }
+                g.add(parts); ctx.put(ctx.box(0.07, 0.16, 0.16), 0.02, h / 2 - 0.2, 0, 0, 0, 0, g); ctx.put(ctx.box(0.07, 0.16, 0.16), 0.02, -h / 2 + 0.2, 0, 0, 0, 0, g);
+                const P = parent || ctx.scene; const sideOff = holeHw - 0.045;
                 if (face === '+z' || face === '-z') {
-                    for (const s of [-1, 1]) put(box(0.1, h + 0.24, 0.22), cx + s * sideOff, cy + 0.02, cz, 0, 0, 0, P);
-                    put(box(2 * holeHw + 0.06, 0.1, 0.22), cx, cy + h / 2 + 0.06, cz, 0, 0, 0, P);
-                    if (face === '+z') put(box(w + 0.24, 0.08, 0.2), cx, cy - h / 2 - 0.06, cz + 0.02, 0, 0, 0, P);
-                    if (face === '-z') put(box(w + 0.24, 0.08, 0.2), cx, cy - h / 2 - 0.06, cz - 0.02, 0, 0, 0, P);
+                    for (const s of [-1, 1]) ctx.put(ctx.box(0.1, h + 0.24, 0.22), cx + s * sideOff, cy + 0.02, cz, 0, 0, 0, P);
+                    ctx.put(ctx.box(2 * holeHw + 0.06, 0.1, 0.22), cx, cy + h / 2 + 0.06, cz, 0, 0, 0, P);
+                    if (face === '+z') ctx.put(ctx.box(w + 0.24, 0.08, 0.2), cx, cy - h / 2 - 0.06, cz + 0.02, 0, 0, 0, P);
+                    if (face === '-z') ctx.put(ctx.box(w + 0.24, 0.08, 0.2), cx, cy - h / 2 - 0.06, cz - 0.02, 0, 0, 0, P);
                 } else {
-                    for (const s of [-1, 1]) put(box(0.22, h + 0.24, 0.1), cx, cy + 0.02, cz + s * sideOff, 0, 0, 0, P);
-                    put(box(0.22, 0.1, 2 * holeHw + 0.06), cx, cy + h / 2 + 0.06, cz, 0, 0, 0, P);
-                    if (face === '-x') put(box(0.2, 0.08, w + 0.24), cx - 0.02, cy - h / 2 - 0.06, cz, 0, 0, 0, P);
-                    if (face === '+x') put(box(0.2, 0.08, w + 0.24), cx + 0.02, cy - h / 2 - 0.06, cz, 0, 0, 0, P);
+                    for (const s of [-1, 1]) ctx.put(ctx.box(0.22, h + 0.24, 0.1), cx, cy + 0.02, cz + s * sideOff, 0, 0, 0, P);
+                    ctx.put(ctx.box(0.22, 0.1, 2 * holeHw + 0.06), cx, cy + h / 2 + 0.06, cz, 0, 0, 0, P);
+                    if (face === '-x') ctx.put(ctx.box(0.2, 0.08, w + 0.24), cx - 0.02, cy - h / 2 - 0.06, cz, 0, 0, 0, P);
+                    if (face === '+x') ctx.put(ctx.box(0.2, 0.08, w + 0.24), cx + 0.02, cy - h / 2 - 0.06, cz, 0, 0, 0, P);
                 }
                 if (face === '+z') { g.userData.base = 0; g.position.set(cx - w / 2, cy, cz); }
                 if (face === '-x') { g.userData.base = -Math.PI / 2; g.position.set(cx, cy, cz - w / 2); }
@@ -333,61 +385,81 @@ export function installCabin(app) {
                 if (face === '-z') { g.userData.base = Math.PI; g.position.set(cx + w / 2, cy, cz); }
                 g.userData.delta = -1.35; P.add(g); registerHinge(g); return g;
             }
-            const winFL = squareWindow(WIN_F_L.c, 1.6, 4.03, '+z', 0.95, 0.9, WIN_F_L.hw);
-            const winFR = squareWindow(WIN_F_R.c, 1.6, 4.03, '+z', 0.95, 0.9, WIN_F_R.hw);
-            const winL = squareWindow(-4.03, 1.6, WIN_LEFT.c, '-x', 0.95, 0.9, WIN_LEFT.hw);
-            const winG = squareWindow(WIN_GABLE.c, 5.38, 4.03, '+z', 0.85, 0.75, WIN_GABLE.hw, null, WIN_GLASS_UP);
+            const winFL = squareWindow(ctx.WIN_F_L.c, 1.6, 4.03, '+z', 0.95, 0.9, ctx.WIN_F_L.hw);
+            ctx.winFL = winFL;
+            const winFR = squareWindow(ctx.WIN_F_R.c, 1.6, 4.03, '+z', 0.95, 0.9, ctx.WIN_F_R.hw);
+            ctx.winFR = winFR;
+            const winL = squareWindow(-4.03, 1.6, ctx.WIN_LEFT.c, '-x', 0.95, 0.9, ctx.WIN_LEFT.hw);
+            ctx.winL = winL;
+            const winG = squareWindow(ctx.WIN_GABLE.c, 5.38, 4.03, '+z', 0.85, 0.75, ctx.WIN_GABLE.hw, null, ctx.WIN_GLASS_UP);
+            ctx.winG = winG;
             const winR = squareWindow(4.03, 1.6, -1.5, '+x', 0.95, 0.9, 0.52, fullHouseGroup);
+            ctx.winR = winR;
             const winB = squareWindow(1.5, 1.6, -4.03, '-z', 0.95, 0.9, 0.52, fullHouseGroup);
+            ctx.winB = winB;
 
-            put(log(2.42, 0.1), -0.84, 1.21, 4.02, 0, 0, 0); put(log(2.42, 0.1), 0.84, 1.21, 4.02, 0, 0, 0); put(box(1.7, 0.1, 0.28), 0, 0.05, 4.12);
-            const doorGroup = new THREE.Group(); doorGroup.userData = { base: 0, delta: 1.9 };
-            const doorShape = new THREE.Shape(); doorShape.moveTo(-0.72, 0); doorShape.lineTo(-0.72, 1.63); doorShape.absarc(0, 1.63, 0.72, Math.PI, 0, true); doorShape.lineTo(0.72, 0); doorShape.lineTo(-0.72, 0);
-            put(edge(new THREE.ExtrudeGeometry(doorShape, { depth: 0.07, bevelEnabled: false }).translate(0.72, 0, 0)), 0, 0, 0, 0, 0, 0, doorGroup);
-            for (const px of [0.28, 0.54, 0.8, 1.06]) put(line([[px, 0.05, 0.09], [px, 1.63, 0.09]]), 0, 0, 0, doorGroup);
-            put(box(0.22, 0.07, 0.04), 0.13, 0.5, 0.09, 0, 0, 0, doorGroup);
-            put(edge(new THREE.TorusGeometry(0.07, 0.02, 6, 16)), 1.2, 1.05, 0.10, 0, 0, 0, doorGroup);
-            doorGroup.position.set(-0.72, 0, 3.96); scene.add(doorGroup); registerHinge(doorGroup);
+            ctx.put(ctx.log(2.42, 0.1), -0.84, 1.21, 4.02, 0, 0, 0); ctx.put(ctx.log(2.42, 0.1), 0.84, 1.21, 4.02, 0, 0, 0); ctx.put(ctx.box(1.7, 0.1, 0.28), 0, 0.05, 4.12);
+            const doorGroup = new THREE.Group();
+            ctx.doorGroup = doorGroup; doorGroup.userData = { base: 0, delta: 1.9 };
+            const doorShape = new THREE.Shape();
+            ctx.doorShape = doorShape; doorShape.moveTo(-0.72, 0); doorShape.lineTo(-0.72, 1.63); doorShape.absarc(0, 1.63, 0.72, Math.PI, 0, true); doorShape.lineTo(0.72, 0); doorShape.lineTo(-0.72, 0);
+            ctx.put(ctx.edge(new THREE.ExtrudeGeometry(doorShape, { depth: 0.07, bevelEnabled: false }).translate(0.72, 0, 0)), 0, 0, 0, 0, 0, 0, doorGroup);
+            for (const px of [0.28, 0.54, 0.8, 1.06]) ctx.put(ctx.line([[px, 0.05, 0.09], [px, 1.63, 0.09]]), 0, 0, 0, doorGroup);
+            ctx.put(ctx.box(0.22, 0.07, 0.04), 0.13, 0.5, 0.09, 0, 0, 0, doorGroup);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.07, 0.02, 6, 16)), 1.2, 1.05, 0.10, 0, 0, 0, doorGroup);
+            doorGroup.position.set(-0.72, 0, 3.96); ctx.scene.add(doorGroup); registerHinge(doorGroup);
             doorGroup.userData.aimLabel = '打开 / 关上大门';
             winFL.userData.aimLabel = '开 / 关前左窗'; winFR.userData.aimLabel = '开 / 关前右窗'; winL.userData.aimLabel = '开 / 关左侧窗'; winG.userData.aimLabel = '开 / 关阁楼窗'; winR.userData.aimLabel = '开 / 关右侧窗'; winB.userData.aimLabel = '开 / 关后窗';
 
-            FILL.uniforms.uFireCenter.value.set(FX, 0.55, FZ);
+            ctx.FILL.uniforms.uFireCenter.value.set(ctx.FX, 0.55, ctx.FZ);
 
-            const fireMeshes = []; let fireLit = true; let fireP = 1;
+            const fireMeshes = [];
+            ctx.fireMeshes = fireMeshes; ctx.fireLit = true; ctx.fireP = 1;
             function regFire(o) { o.traverse(m => { if (m.isMesh) { m.userData.isFire = true; fireMeshes.push(m); } }); return o; }
-            regFire(put(box(1.0, 0.12, 1.9), CHX, 0.06, CHZ)); regFire(put(box(0.08, 1.33, 1.8), CHX - 0.46, 0.785, CHZ)); regFire(put(box(0.94, 1.33, 0.35), CHX, 0.785, CHZ - 0.725)); regFire(put(box(0.94, 1.33, 0.35), CHX, 0.785, CHZ + 0.725));
-            regFire(put(box(0.94, 0.25, 1.8), CHX, 1.325, CHZ)); regFire(put(box(1.05, 0.12, 2.2), CHX, 1.46, CHZ)); regFire(put(box(0.7, 0.08, 2.0), CHX + 0.8, 0.04, CHZ));
-            const fwShape = new THREE.Shape(); fwShape.moveTo(-0.9, 0); fwShape.lineTo(0.9, 0); fwShape.lineTo(0.9, 1.52); fwShape.lineTo(-0.9, 1.52); fwShape.closePath();
-            const fwHole = new THREE.Path(); fwHole.moveTo(-0.55, 0.12); fwHole.lineTo(-0.55, 0.62); fwHole.absarc(0, 0.62, 0.55, Math.PI, 0, true); fwHole.lineTo(0.55, 0.12); fwHole.closePath(); fwShape.holes.push(fwHole);
-            const fwGeo = new THREE.ExtrudeGeometry(fwShape, { depth: 0.08, bevelEnabled: false, curveSegments: 12 }); fwGeo.rotateY(-Math.PI / 2); regFire(put(edge(fwGeo), CHX + 0.5, 0, CHZ));
-            const BK = CHX - 0.42;
-            for (let y = 0.26; y <= 1.0; y += 0.22) put(iline([[BK, y, CHZ - 0.5], [BK, y, CHZ + 0.5]]), 0, 0, 0);
-            for (let r = 0; r < 4; r++) { const y0 = 0.26 + r * 0.22; for (let zq = -0.44; zq <= 0.44; zq += 0.22) { const zo = zq + (r % 2 ? 0.11 : 0); if (Math.abs(zo) < 0.5) put(iline([[BK, y0, CHZ + zo], [BK, y0 + 0.22, CHZ + zo]]), 0, 0, 0); } }
-            for (let i = 0; i < 5; i++) put(iline([[FX - 0.18 + i * 0.07, HEARTH, FZ - 0.28 + i * 0.13], [FX - 0.10 + i * 0.07, HEARTH, FZ - 0.22 + i * 0.13]]), 0, 0, 0);
+            regFire(ctx.put(ctx.box(1.0, 0.12, 1.9), ctx.CHX, 0.06, ctx.CHZ)); regFire(ctx.put(ctx.box(0.08, 1.33, 1.8), ctx.CHX - 0.46, 0.785, ctx.CHZ)); regFire(ctx.put(ctx.box(0.94, 1.33, 0.35), ctx.CHX, 0.785, ctx.CHZ - 0.725)); regFire(ctx.put(ctx.box(0.94, 1.33, 0.35), ctx.CHX, 0.785, ctx.CHZ + 0.725));
+            regFire(ctx.put(ctx.box(0.94, 0.25, 1.8), ctx.CHX, 1.325, ctx.CHZ)); regFire(ctx.put(ctx.box(1.05, 0.12, 2.2), ctx.CHX, 1.46, ctx.CHZ)); regFire(ctx.put(ctx.box(0.7, 0.08, 2.0), ctx.CHX + 0.8, 0.04, ctx.CHZ));
+            const fwShape = new THREE.Shape();
+            ctx.fwShape = fwShape; fwShape.moveTo(-0.9, 0); fwShape.lineTo(0.9, 0); fwShape.lineTo(0.9, 1.52); fwShape.lineTo(-0.9, 1.52); fwShape.closePath();
+            const fwHole = new THREE.Path();
+            ctx.fwHole = fwHole; fwHole.moveTo(-0.55, 0.12); fwHole.lineTo(-0.55, 0.62); fwHole.absarc(0, 0.62, 0.55, Math.PI, 0, true); fwHole.lineTo(0.55, 0.12); fwHole.closePath(); fwShape.holes.push(fwHole);
+            const fwGeo = new THREE.ExtrudeGeometry(fwShape, { depth: 0.08, bevelEnabled: false, curveSegments: 12 });
+            ctx.fwGeo = fwGeo; fwGeo.rotateY(-Math.PI / 2); regFire(ctx.put(ctx.edge(fwGeo), ctx.CHX + 0.5, 0, ctx.CHZ));
+            const BK = ctx.CHX - 0.42;
+            ctx.BK = BK;
+            for (let y = 0.26; y <= 1.0; y += 0.22) ctx.put(ctx.iline([[BK, y, ctx.CHZ - 0.5], [BK, y, ctx.CHZ + 0.5]]), 0, 0, 0);
+            for (let r = 0; r < 4; r++) { const y0 = 0.26 + r * 0.22; for (let zq = -0.44; zq <= 0.44; zq += 0.22) { const zo = zq + (r % 2 ? 0.11 : 0); if (Math.abs(zo) < 0.5) ctx.put(ctx.iline([[BK, y0, ctx.CHZ + zo], [BK, y0 + 0.22, ctx.CHZ + zo]]), 0, 0, 0); } }
+            for (let i = 0; i < 5; i++) ctx.put(ctx.iline([[ctx.FX - 0.18 + i * 0.07, ctx.HEARTH, ctx.FZ - 0.28 + i * 0.13], [ctx.FX - 0.10 + i * 0.07, ctx.HEARTH, ctx.FZ - 0.22 + i * 0.13]]), 0, 0, 0);
             const WOOD_R = 0.05;
-            regFire(logBetween([FX - 0.06, HEARTH + WOOD_R, FZ - 0.42], [FX - 0.06, HEARTH + WOOD_R, FZ + 0.42], WOOD_R));
-            regFire(logBetween([FX + 0.12, HEARTH + WOOD_R, FZ - 0.38], [FX + 0.12, HEARTH + WOOD_R, FZ + 0.38], WOOD_R));
-            regFire(logBetween([FX - 0.34, HEARTH + WOOD_R * 3, FZ + 0.05], [FX + 0.38, HEARTH + WOOD_R * 3, FZ - 0.03], WOOD_R));
-            for (const p of [[FX - 0.06, HEARTH + WOOD_R, FZ - 0.42], [FX + 0.12, HEARTH + WOOD_R, FZ + 0.38]]) { put(edge(new THREE.CircleGeometry(WOOD_R * 0.9, 8)), p[0], p[1], p[2], 0, 0, 0); put(edge(new THREE.CircleGeometry(WOOD_R * 0.35, 6)), p[0], p[1], p[2], 0, 0, 0); }
-            const TEEPEE_BASE_R = 0.30, TEEPEE_TOP_Y = HEARTH + 0.62, STICK_Y = HEARTH + WOOD_R * 0.9;
-            for (let i = 0; i < 5; i++) { const a = i * (Math.PI * 2 / 5) + 0.35; const bx = FX + Math.cos(a) * TEEPEE_BASE_R; const bz = FZ + Math.sin(a) * TEEPEE_BASE_R; regFire(logBetween([bx, STICK_Y, bz], [FX, TEEPEE_TOP_Y, FZ], WOOD_R * 0.9)); put(edge(new THREE.CircleGeometry(WOOD_R * 0.8, 8)), bx + Math.cos(a) * 0.005, STICK_Y, bz + Math.sin(a) * 0.005, 0, 0, 0); }
+            ctx.WOOD_R = WOOD_R;
+            regFire(ctx.logBetween([ctx.FX - 0.06, ctx.HEARTH + WOOD_R, ctx.FZ - 0.42], [ctx.FX - 0.06, ctx.HEARTH + WOOD_R, ctx.FZ + 0.42], WOOD_R));
+            regFire(ctx.logBetween([ctx.FX + 0.12, ctx.HEARTH + WOOD_R, ctx.FZ - 0.38], [ctx.FX + 0.12, ctx.HEARTH + WOOD_R, ctx.FZ + 0.38], WOOD_R));
+            regFire(ctx.logBetween([ctx.FX - 0.34, ctx.HEARTH + WOOD_R * 3, ctx.FZ + 0.05], [ctx.FX + 0.38, ctx.HEARTH + WOOD_R * 3, ctx.FZ - 0.03], WOOD_R));
+            for (const p of [[ctx.FX - 0.06, ctx.HEARTH + WOOD_R, ctx.FZ - 0.42], [ctx.FX + 0.12, ctx.HEARTH + WOOD_R, ctx.FZ + 0.38]]) { ctx.put(ctx.edge(new THREE.CircleGeometry(WOOD_R * 0.9, 8)), p[0], p[1], p[2], 0, 0, 0); ctx.put(ctx.edge(new THREE.CircleGeometry(WOOD_R * 0.35, 6)), p[0], p[1], p[2], 0, 0, 0); }
+            const TEEPEE_BASE_R = 0.30, TEEPEE_TOP_Y = ctx.HEARTH + 0.62, STICK_Y = ctx.HEARTH + WOOD_R * 0.9;
+            ctx.TEEPEE_BASE_R = TEEPEE_BASE_R; ctx.TEEPEE_TOP_Y = TEEPEE_TOP_Y; ctx.STICK_Y = STICK_Y;
+            for (let i = 0; i < 5; i++) { const a = i * (Math.PI * 2 / 5) + 0.35; const bx = ctx.FX + Math.cos(a) * TEEPEE_BASE_R; const bz = ctx.FZ + Math.sin(a) * TEEPEE_BASE_R; regFire(ctx.logBetween([bx, STICK_Y, bz], [ctx.FX, TEEPEE_TOP_Y, ctx.FZ], WOOD_R * 0.9)); ctx.put(ctx.edge(new THREE.CircleGeometry(WOOD_R * 0.8, 8)), bx + Math.cos(a) * 0.005, STICK_Y, bz + Math.sin(a) * 0.005, 0, 0, 0); }
 
             const fireOut = new THREE.LineBasicMaterial({ color: 0xb8421f }), fireMid = new THREE.LineBasicMaterial({ color: 0xe0862e }), fireIn = new THREE.LineBasicMaterial({ color: 0xf5c542 });
+            ctx.fireOut = fireOut; ctx.fireMid = fireMid; ctx.fireIn = fireIn;
             const wavyFlames = [];
-            function makeWavyFlame(x0, z0, y0, h, w, mat, phase, speed, list) { const K = 24; const count = (K + 1) * 2; const geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3)); const ln = new THREE.LineLoop(geom, mat); ln.frustumCulled = false; scene.add(ln); const f = { obj: ln, x0, z0, y0, h, w, phase, speed, geom, K }; (list || wavyFlames).push(f); return f; }
+            ctx.wavyFlames = wavyFlames;
+            function makeWavyFlame(x0, z0, y0, h, w, mat, phase, speed, list) { const K = 24; const count = (K + 1) * 2; const geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3)); const ln = new THREE.LineLoop(geom, mat); ln.frustumCulled = false; ctx.scene.add(ln); const f = { obj: ln, x0, z0, y0, h, w, phase, speed, geom, K }; (list || wavyFlames).push(f); return f; }
             function updateWavyFlame(f, time, pw) { const p = f.geom.attributes.position.array; const K = f.K; const hh = f.h * pw; const wsc = 0.3 + 0.7 * pw; let idx = 0; for (let k = 0; k <= K; k++) { const t = k / K; const ww = f.w * wsc * Math.sin(Math.PI * (0.16 + 0.84 * t)); const wob = Math.sin(t * 5.2 - time * f.speed + f.phase) * 0.028 * t * pw; const zo = Math.sin(t * 4 - time * f.speed * 0.7 + f.phase * 1.7) * 0.02 * t * pw; p[idx++] = f.x0 + wob + ww; p[idx++] = f.y0 + t * hh; p[idx++] = f.z0 + zo; } for (let k = K; k >= 0; k--) { const t = k / K; const ww = f.w * wsc * Math.sin(Math.PI * (0.16 + 0.84 * t)); const wob = Math.sin(t * 5.2 - time * f.speed + f.phase) * 0.028 * t * pw; const zo = Math.sin(t * 4 - time * f.speed * 0.7 + f.phase * 1.7) * 0.02 * t * pw; p[idx++] = f.x0 + wob - ww; p[idx++] = f.y0 + t * hh; p[idx++] = f.z0 + zo; } f.geom.attributes.position.needsUpdate = true; }
-            makeWavyFlame(FX, FZ, HEARTH + 0.02, 0.80, 0.30, fireOut, 0.0, 2.6); makeWavyFlame(FX + 0.01, FZ - 0.01, HEARTH + 0.04, 0.60, 0.20, fireMid, 2.3, 3.1); makeWavyFlame(FX - 0.01, FZ + 0.01, HEARTH + 0.06, 0.38, 0.11, fireIn, 4.1, 3.6); makeWavyFlame(FX - 0.14, FZ - 0.10, HEARTH + 0.02, 0.34, 0.11, fireOut, 1.2, 3.3); makeWavyFlame(FX + 0.15, FZ + 0.12, HEARTH + 0.02, 0.28, 0.10, fireOut, 3.4, 3.0);
+            makeWavyFlame(ctx.FX, ctx.FZ, ctx.HEARTH + 0.02, 0.80, 0.30, fireOut, 0.0, 2.6); makeWavyFlame(ctx.FX + 0.01, ctx.FZ - 0.01, ctx.HEARTH + 0.04, 0.60, 0.20, fireMid, 2.3, 3.1); makeWavyFlame(ctx.FX - 0.01, ctx.FZ + 0.01, ctx.HEARTH + 0.06, 0.38, 0.11, fireIn, 4.1, 3.6); makeWavyFlame(ctx.FX - 0.14, ctx.FZ - 0.10, ctx.HEARTH + 0.02, 0.34, 0.11, fireOut, 1.2, 3.3); makeWavyFlame(ctx.FX + 0.15, ctx.FZ + 0.12, ctx.HEARTH + 0.02, 0.28, 0.10, fireOut, 3.4, 3.0);
             const sparks = [];
-            for (let i = 0; i < 6; i++) { const sp = edge(new THREE.OctahedronGeometry(0.016)); sp.userData.phase = i / 6; sp.userData.drift = (runtimeRng() - 0.5) * 0.25; scene.add(sp); sparks.push(sp); }
-            put(box(0.85, 1.0, 1.6), CHX, 1.9, CHZ); put(box(0.7, 4.9, 0.7), CHX, 4.85, CHZ);
-            put(line([[CHX - 0.42, 3.13, CHZ - 0.42], [CHX + 0.42, 3.13, CHZ - 0.42], [CHX + 0.42, 3.13, CHZ + 0.42], [CHX - 0.42, 3.13, CHZ + 0.42], [CHX - 0.42, 3.13, CHZ - 0.42]]), 0, 0, 0);
+            ctx.sparks = sparks;
+            for (let i = 0; i < 6; i++) { const sp = ctx.edge(new THREE.OctahedronGeometry(0.016)); sp.userData.phase = i / 6; sp.userData.drift = (runtimeRng() - 0.5) * 0.25; ctx.scene.add(sp); sparks.push(sp); }
+            ctx.put(ctx.box(0.85, 1.0, 1.6), ctx.CHX, 1.9, ctx.CHZ); ctx.put(ctx.box(0.7, 4.9, 0.7), ctx.CHX, 4.85, ctx.CHZ);
+            ctx.put(ctx.line([[ctx.CHX - 0.42, 3.13, ctx.CHZ - 0.42], [ctx.CHX + 0.42, 3.13, ctx.CHZ - 0.42], [ctx.CHX + 0.42, 3.13, ctx.CHZ + 0.42], [ctx.CHX - 0.42, 3.13, ctx.CHZ + 0.42], [ctx.CHX - 0.42, 3.13, ctx.CHZ - 0.42]]), 0, 0, 0);
             const smokePuffs = [];
-            for (let i = 0; i < 5; i++) { const p = edge(new THREE.TorusGeometry(0.14, 0.035, 6, 20)); p.rotation.x = Math.PI / 2; p.userData.phase = i / 5; scene.add(p); smokePuffs.push(p); }
+            ctx.smokePuffs = smokePuffs;
+            for (let i = 0; i < 5; i++) { const p = ctx.edge(new THREE.TorusGeometry(0.14, 0.035, 6, 20)); p.rotation.x = Math.PI / 2; p.userData.phase = i / 5; ctx.scene.add(p); smokePuffs.push(p); }
 
             // J2.5：交互登记交给应用内核的注册中心（J2.6 会在它之上做统一契约）。
             // ★ magicMeshes 仍是**同一个数组实例**（注册中心持有它），
             //   准星射线（aimRay）与点击射线照旧直接用它做 intersectObjects —— 命中行为零改动。
             const magicMeshes = registry.magicMeshes;
+            ctx.magicMeshes = magicMeshes;
             function regMagic(o, onClick) {
                 o.userData.onClick = onClick;
                 const meshes = [];
@@ -397,46 +469,59 @@ export function installCabin(app) {
             }
 
             const STAIR_N = 14;
+            ctx.STAIR_N = STAIR_N;
             function buildStairs() {
-                const g = new THREE.Group(); const N = STAIR_N; const riseTotal = FLOOR_TOP; const stepH = riseTotal / (N + 1); const dTheta = 270 / N; const rI = 0.14, rO = 1.1; const railH = 0.85, rPost = rO - 0.07; const treadHalf = dTheta * 0.46; const thick = 0.06;
-                put(log(FLOOR_TOP + RAIL_H, 0.08), 0, (FLOOR_TOP + RAIL_H) / 2, 0, 0, 0, 0, g);
+                const g = new THREE.Group(); const N = STAIR_N; const riseTotal = ctx.FLOOR_TOP; const stepH = riseTotal / (N + 1); const dTheta = 270 / N; const rI = 0.14, rO = 1.1; const railH = 0.85, rPost = rO - 0.07; const treadHalf = dTheta * 0.46; const thick = 0.06;
+                ctx.put(ctx.log(ctx.FLOOR_TOP + RAIL_H, 0.08), 0, (ctx.FLOOR_TOP + RAIL_H) / 2, 0, 0, 0, 0, g);
                 function treadGeo(a0, a1) { const s = new THREE.Shape(); s.moveTo(rI * Math.sin(a0), rI * Math.cos(a0)); s.lineTo(rO * Math.sin(a0), rO * Math.cos(a0)); const nSeg = 5; for (let j = 1; j <= nSeg; j++) { const a = a0 + (a1 - a0) * j / nSeg; s.lineTo(rO * Math.sin(a), rO * Math.cos(a)); } s.lineTo(rI * Math.sin(a1), rI * Math.cos(a1)); s.closePath(); const gg = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false }); gg.rotateX(Math.PI / 2); gg.translate(0, thick, 0); return gg; }
                 const thetaEnd = -60 - dTheta / 2; const railPts = [];
-                for (let k = 0; k < N; k++) { const thDeg = thetaEnd - (N - 1 - k) * dTheta; const th = thDeg * D2R; const yTop = (k + 1) * stepH; const tread = edge(treadGeo(th - treadHalf * D2R, th + treadHalf * D2R)); tread.position.y = yTop - thick; g.add(tread); const norm = ((thDeg % 360) + 360) % 360; const underPlatform = (norm <= 60 || norm >= 300) && (yTop + railH > FLOOR_TOP - 0.1); if (!underPlatform) { put(edge(new THREE.CylinderGeometry(0.02, 0.02, railH, 6)), rPost * Math.sin(th), yTop + railH / 2, rPost * Math.cos(th), 0, 0, 0, g); } railPts.push(V(rPost * Math.sin(th), yTop + railH, rPost * Math.cos(th))); }
-                g.add(edge(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 64, 0.03, 6, false))); return g;
+                for (let k = 0; k < N; k++) { const thDeg = thetaEnd - (N - 1 - k) * dTheta; const th = thDeg * D2R; const yTop = (k + 1) * stepH; const tread = ctx.edge(treadGeo(th - treadHalf * D2R, th + treadHalf * D2R)); tread.position.y = yTop - thick; g.add(tread); const norm = ((thDeg % 360) + 360) % 360; const underPlatform = (norm <= 60 || norm >= 300) && (yTop + railH > ctx.FLOOR_TOP - 0.1); if (!underPlatform) { ctx.put(ctx.edge(new THREE.CylinderGeometry(0.02, 0.02, railH, 6)), rPost * Math.sin(th), yTop + railH / 2, rPost * Math.cos(th), 0, 0, 0, g); } railPts.push(ctx.V(rPost * Math.sin(th), yTop + railH, rPost * Math.cos(th))); }
+                g.add(ctx.edge(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 64, 0.03, 6, false))); return g;
             }
-            scene.add(buildStairs());
+            ctx.scene.add(buildStairs());
 
-            put(box(1.25, 0.06, 1.0), -0.58, 2.98, 4.55, 0, 0, 0.35); put(box(1.25, 0.06, 1.0), 0.58, 2.98, 4.55, 0, 0, -0.35);
-            put(log(2.78, 0.06), -1.15, 1.39, 4.95, 0, 0, 0.03); put(log(2.78, 0.06), 1.15, 1.39, 4.95, 0, 0, -0.03);
-            put(line([[-1.15, 2.5, 4.95], [-0.7, 2.92, 4.55]]), 0, 0, 0); put(line([[1.15, 2.5, 4.95], [0.7, 2.92, 4.55]]), 0, 0, 0); put(box(1.4, 0.03, 0.6), 0, 0.02, 4.45);
-            for (let i = 0; i < 4; i++) put(box(0.7, 0.05, 0.5), (i % 2) * 0.25 - 0.1, 0.025, 5.1 + i * 0.85);
+            ctx.put(ctx.box(1.25, 0.06, 1.0), -0.58, 2.98, 4.55, 0, 0, 0.35); ctx.put(ctx.box(1.25, 0.06, 1.0), 0.58, 2.98, 4.55, 0, 0, -0.35);
+            ctx.put(ctx.log(2.78, 0.06), -1.15, 1.39, 4.95, 0, 0, 0.03); ctx.put(ctx.log(2.78, 0.06), 1.15, 1.39, 4.95, 0, 0, -0.03);
+            ctx.put(ctx.line([[-1.15, 2.5, 4.95], [-0.7, 2.92, 4.55]]), 0, 0, 0); ctx.put(ctx.line([[1.15, 2.5, 4.95], [0.7, 2.92, 4.55]]), 0, 0, 0); ctx.put(ctx.box(1.4, 0.03, 0.6), 0, 0.02, 4.45);
+            for (let i = 0; i < 4; i++) ctx.put(ctx.box(0.7, 0.05, 0.5), (i % 2) * 0.25 - 0.1, 0.025, 5.1 + i * 0.85);
 
-            const signG = new THREE.Group(); signG.position.set(3.1, 0, 6.3); signG.rotation.y = -0.45; scene.add(signG);
-            put(edge(new THREE.CylinderGeometry(0.035, 0.05, 1.5, 8)), 0, 0.75, 0, 0.04, 0, 0.05, signG);
-            const signCanvas = document.createElement('canvas'); signCanvas.width = 256; signCanvas.height = 128; const sctx = signCanvas.getContext('2d');
-            const signTexture = new THREE.CanvasTexture(signCanvas); let signText = '魔女小屋';
+            const signG = new THREE.Group();
+            ctx.signG = signG; signG.position.set(3.1, 0, 6.3); signG.rotation.y = -0.45; ctx.scene.add(signG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.035, 0.05, 1.5, 8)), 0, 0.75, 0, 0.04, 0, 0.05, signG);
+            const signCanvas = document.createElement('canvas');
+            ctx.signCanvas = signCanvas; signCanvas.width = 256; signCanvas.height = 128; const sctx = signCanvas.getContext('2d');
+            ctx.sctx = sctx;
+            const signTexture = new THREE.CanvasTexture(signCanvas);
+            ctx.signTexture = signTexture; ctx.signText = '魔女小屋';
             function drawSign(text) { const n = Math.max(text.length, 1); const size = n <= 4 ? 46 : n <= 6 ? 36 : n <= 8 ? 28 : 22; sctx.fillStyle = '#ffffff'; sctx.fillRect(0, 0, 256, 128); sctx.strokeStyle = '#111111'; sctx.lineWidth = 5; sctx.strokeRect(5, 5, 246, 118); sctx.lineWidth = 1.5; sctx.strokeRect(14, 14, 228, 100); sctx.fillStyle = '#111111'; sctx.font = 'bold ' + size + 'px "Microsoft YaHei", monospace'; sctx.textAlign = 'center'; sctx.textBaseline = 'middle'; sctx.fillText(text, 128, 66); signTexture.needsUpdate = true; }
-            drawSign(signText);
-            const signSideMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); const signFaceMat = new THREE.MeshBasicMaterial({ map: signTexture });
-            const signBoardG = new THREE.Group(); signBoardG.position.set(0, 1.5, 0.10); signBoardG.rotation.z = 0.07; signBoardG.rotation.x = 0.03; signG.add(signBoardG);
-            { const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.48, 0.045), [signSideMat, signSideMat, signSideMat, signSideMat, signFaceMat, signSideMat]); signBoardG.add(boardMesh); signBoardG.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.85, 0.48, 0.045)), MAT)); for (const [nx, ny] of [[-0.36, 0.19], [0.36, 0.19], [-0.36, -0.19], [0.36, -0.19]]) put(edge(new THREE.CylinderGeometry(0.008, 0.008, 0.014, 6)), nx, ny, 0.028, 0, 0, 0, signBoardG); }
-            function openSignEditor() { if (document.pointerLockElement) document.exitPointerLock(); const ed = document.getElementById('signEditor'); const inp = document.getElementById('signInput'); inp.value = signText; ed.classList.add('show'); inp.focus(); inp.select(); }
+            drawSign(ctx.signText);
+            const signSideMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            ctx.signSideMat = signSideMat; const signFaceMat = new THREE.MeshBasicMaterial({ map: signTexture });
+            ctx.signFaceMat = signFaceMat;
+            const signBoardG = new THREE.Group();
+            ctx.signBoardG = signBoardG; signBoardG.position.set(0, 1.5, 0.10); signBoardG.rotation.z = 0.07; signBoardG.rotation.x = 0.03; signG.add(signBoardG);
+            { const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.48, 0.045), [signSideMat, signSideMat, signSideMat, signSideMat, signFaceMat, signSideMat]); signBoardG.add(boardMesh); signBoardG.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.85, 0.48, 0.045)), ctx.MAT)); for (const [nx, ny] of [[-0.36, 0.19], [0.36, 0.19], [-0.36, -0.19], [0.36, -0.19]]) ctx.put(ctx.edge(new THREE.CylinderGeometry(0.008, 0.008, 0.014, 6)), nx, ny, 0.028, 0, 0, 0, signBoardG); }
+            function openSignEditor() { if (document.pointerLockElement) document.exitPointerLock(); const ed = document.getElementById('signEditor'); const inp = document.getElementById('signInput'); inp.value = ctx.signText; ed.classList.add('show'); inp.focus(); inp.select(); }
             signG.userData.aimLabel = '编辑路牌文字'; regMagic(signG, openSignEditor);
 
-            put(edge(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6)), 0, ridgeY + 0.4, 0); put(edge(new THREE.CylinderGeometry(0.015, 0.015, 0.5, 6)), 0, ridgeY + 0.55, 0, 0, 0, Math.PI / 2); put(edge(new THREE.ConeGeometry(0.06, 0.16, 6)), 0.3, ridgeY + 0.55, 0, 0, 0, -Math.PI / 2); put(edge(new THREE.ConeGeometry(0.06, 0.14, 4)), -0.28, ridgeY + 0.55, 0, 0, 0, Math.PI / 2);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6)), 0, ridgeY + 0.4, 0); ctx.put(ctx.edge(new THREE.CylinderGeometry(0.015, 0.015, 0.5, 6)), 0, ridgeY + 0.55, 0, 0, 0, Math.PI / 2); ctx.put(ctx.edge(new THREE.ConeGeometry(0.06, 0.16, 6)), 0.3, ridgeY + 0.55, 0, 0, 0, -Math.PI / 2); ctx.put(ctx.edge(new THREE.ConeGeometry(0.06, 0.14, 4)), -0.28, ridgeY + 0.55, 0, 0, 0, Math.PI / 2);
 
             const GATE_L = -1.4, GATE_R = 1.4;
-            for (let x = -7; x <= 7; x += 0.8) { if (x > GATE_L - 0.1 && x < GATE_R + 0.1) continue; const picket = new THREE.Group(); put(box(0.12, 0.9, 0.06), 0, 0.45, 0, 0, 0, 0, picket); put(edge(new THREE.ConeGeometry(0.09, 0.22, 4)), 0, 1.0, 0, 0, 0, 0, picket); put(picket, x, 0, 7.5); }
-            for (const cy of [0.75, 0.35]) { const len = 7 - GATE_R; put(log(len, 0.04), (GATE_L - 7) / 2, cy, 7.5, 0, 0, Math.PI / 2); put(log(len, 0.04), (GATE_R + 7) / 2, cy, 7.5, 0, 0, Math.PI / 2); }
-            for (const gx of [GATE_L - 0.08, GATE_R + 0.08]) { put(box(0.14, 1.15, 0.1), gx, 0.575, 7.5); put(edge(new THREE.ConeGeometry(0.1, 0.2, 4)), gx, 1.25, 7.5); }
-            function mushroom(x, z, s) { const g = new THREE.Group(); put(edge(new THREE.CylinderGeometry(0.05 * s, 0.08 * s, 0.3 * s, 8)), 0, 0.15 * s, 0, 0, 0, 0, g); put(edge(new THREE.SphereGeometry(0.22 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)), 0, 0.28 * s, 0, 0, 0, 0, g); put(g, x, 0, z); }
+            ctx.GATE_L = GATE_L; ctx.GATE_R = GATE_R;
+            for (let x = -7; x <= 7; x += 0.8) { if (x > GATE_L - 0.1 && x < GATE_R + 0.1) continue; const picket = new THREE.Group(); ctx.put(ctx.box(0.12, 0.9, 0.06), 0, 0.45, 0, 0, 0, 0, picket); ctx.put(ctx.edge(new THREE.ConeGeometry(0.09, 0.22, 4)), 0, 1.0, 0, 0, 0, 0, picket); ctx.put(picket, x, 0, 7.5); }
+            for (const cy of [0.75, 0.35]) { const len = 7 - GATE_R; ctx.put(ctx.log(len, 0.04), (GATE_L - 7) / 2, cy, 7.5, 0, 0, Math.PI / 2); ctx.put(ctx.log(len, 0.04), (GATE_R + 7) / 2, cy, 7.5, 0, 0, Math.PI / 2); }
+            for (const gx of [GATE_L - 0.08, GATE_R + 0.08]) { ctx.put(ctx.box(0.14, 1.15, 0.1), gx, 0.575, 7.5); ctx.put(ctx.edge(new THREE.ConeGeometry(0.1, 0.2, 4)), gx, 1.25, 7.5); }
+            function mushroom(x, z, s) { const g = new THREE.Group(); ctx.put(ctx.edge(new THREE.CylinderGeometry(0.05 * s, 0.08 * s, 0.3 * s, 8)), 0, 0.15 * s, 0, 0, 0, 0, g); ctx.put(ctx.edge(new THREE.SphereGeometry(0.22 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)), 0, 0.28 * s, 0, 0, 0, 0, g); ctx.put(g, x, 0, z); }
             mushroom(-5.8, 6.2, 1.2); mushroom(-5.2, 6.8, 0.8); mushroom(5.6, 6.5, 1.0);
 
             /* ========================================================== */
             /* ============ 室外场景：森林 · 草地 · 石头 · 花 · 萤火虫 ============ */
             /* ========================================================== */
+            /* ==================== [J4:seg outdoor] ==================== */
+            // ↓ J4 段导出（outdoor）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.addStatic = addStatic; ctx.yardSpotFree = yardSpotFree; ctx.grassClumpStatic = grassClumpStatic; ctx.vHash = vHash; ctx.stoneStatic = stoneStatic;
             const staticFillGeoms = [], staticEdgeGeoms = [];
+            ctx.staticFillGeoms = staticFillGeoms; ctx.staticEdgeGeoms = staticEdgeGeoms;
             function addStatic(g, x, y, z, rx, ry, rz, sx, sy, sz) {
                 const m = new THREE.Matrix4();
                 const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0));
@@ -448,6 +533,7 @@ export function installCabin(app) {
             }
 
             const STUMPS = [[7.6, -5.8], [-8.2, 3.6], [-6.5, -8.5]];
+            ctx.STUMPS = STUMPS;
             function yardSpotFree(x, z) {
                 if (x > -5.05 && x < 5.05 && z > -5.05 && z < 5.05) return false;
                 if (x > -1.35 && x < 1.35 && z > 4.35 && z < 5.3) return false;
@@ -458,10 +544,15 @@ export function installCabin(app) {
             }
 
             const TREE_TRUNK = new THREE.CylinderGeometry(0.10, 0.17, 1.3, 7);
+            ctx.TREE_TRUNK = TREE_TRUNK;
             const TREE_C1 = new THREE.ConeGeometry(1.35, 1.7, 7);
+            ctx.TREE_C1 = TREE_C1;
             const TREE_C2 = new THREE.ConeGeometry(1.05, 1.55, 7);
+            ctx.TREE_C2 = TREE_C2;
             const TREE_C3 = new THREE.ConeGeometry(0.75, 1.4, 7);
+            ctx.TREE_C3 = TREE_C3;
             const TREE_C4 = new THREE.ConeGeometry(0.45, 1.2, 7);
+            ctx.TREE_C4 = TREE_C4;
             {
                 for (let r = 20.8; r < 34.5; r += 2.9) {
                     const circ = Math.PI * 2 * r;
@@ -485,6 +576,7 @@ export function installCabin(app) {
             }
 
             const GRASS_BLADE = new THREE.ConeGeometry(0.022, 1, 4);
+            ctx.GRASS_BLADE = GRASS_BLADE;
             function grassClumpStatic(x, z) {
                 const n = 2 + Math.floor(outdoorRng() * 2);
                 for (let i = 0; i < n; i++) {
@@ -521,6 +613,7 @@ export function installCabin(app) {
             }
 
             const STUMP_G = new THREE.CylinderGeometry(0.24, 0.3, 0.55, 9);
+            ctx.STUMP_G = STUMP_G;
             for (const [sx, sz] of STUMPS) addStatic(STUMP_G, sx, 0.26, sz, 0, outdoorRng() * Math.PI, 0, 1, 1, 1);
             for (const [px, pz] of [[0, 5.55], [0.34, 6.15], [-0.18, 6.75], [0.22, 7.32]]) {
                 addStatic(new THREE.BoxGeometry(0.62, 0.05, 0.46), px, 0.028, pz, 0, (outdoorRng() - 0.5) * 0.35, 0, 1, 1, 1);
@@ -544,8 +637,11 @@ export function installCabin(app) {
             }
 
             const flowerMats = [];
+            ctx.flowerMats = flowerMats;
             const PETAL_G = new THREE.ConeGeometry(0.055, 0.09, 6);
+            ctx.PETAL_G = PETAL_G;
             const FLOWER_COLORS = [0xd95763, 0xe8b64c, 0x9a6fd0, 0xe07fa8];
+            ctx.FLOWER_COLORS = FLOWER_COLORS;
             {
                 let fN = 0, guard = 0;
                 while (fN < 12 && guard++ < 800) {
@@ -558,8 +654,8 @@ export function installCabin(app) {
                     flowerMats.push({ mat, base: new THREE.Color(hex) });
                     const head = new THREE.Group();
                     head.add(new THREE.Mesh(PETAL_G, mat));
-                    head.add(new THREE.LineSegments(new THREE.EdgesGeometry(PETAL_G), MAT));
-                    put(head, x, 0.295, z, 0, outdoorRng() * Math.PI, 0);
+                    head.add(new THREE.LineSegments(new THREE.EdgesGeometry(PETAL_G), ctx.MAT));
+                    ctx.put(head, x, 0.295, z, 0, outdoorRng() * Math.PI, 0);
                     fN++;
                 }
             }
@@ -582,7 +678,7 @@ export function installCabin(app) {
                 fillGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
                 fillGeo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
                 fillGeo.setIndex(new THREE.BufferAttribute(idx, 1));
-                scene.add(new THREE.Mesh(fillGeo, FILL));
+                ctx.scene.add(new THREE.Mesh(fillGeo, ctx.FILL));
                 let eTotal = 0;
                 for (const g of staticEdgeGeoms) eTotal += g.attributes.position.count;
                 const epos = new Float32Array(eTotal * 3);
@@ -590,11 +686,13 @@ export function installCabin(app) {
                 for (const g of staticEdgeGeoms) { epos.set(g.attributes.position.array, eo * 3); eo += g.attributes.position.count; }
                 const edgeGeo = new THREE.BufferGeometry();
                 edgeGeo.setAttribute('position', new THREE.BufferAttribute(epos, 3));
-                scene.add(new THREE.LineSegments(edgeGeo, MAT));
+                ctx.scene.add(new THREE.LineSegments(edgeGeo, ctx.MAT));
             })();
 
             const FF_N = 26;
+            ctx.FF_N = FF_N;
             const fireflies = [];
+            ctx.fireflies = fireflies;
             for (let i = 0; i < FF_N; i++) {
                 let x = 0, z = 0, ok = false, guard = 0;
                 while (!ok && guard++ < 200) {
@@ -605,12 +703,16 @@ export function installCabin(app) {
                 fireflies.push({ bx: x, by: 0.35 + outdoorRng() * 1.25, bz: z, ph: outdoorRng() * 7, sp: 0.45 + outdoorRng() * 0.7, amp: 0.5 + outdoorRng() * 0.9 });
             }
             const ffPos = new Float32Array(FF_N * 3);
+            ctx.ffPos = ffPos;
             const ffPhase = new Float32Array(FF_N);
+            ctx.ffPhase = ffPhase;
             for (let i = 0; i < FF_N; i++) { ffPos[i * 3] = fireflies[i].bx; ffPos[i * 3 + 1] = fireflies[i].by; ffPos[i * 3 + 2] = fireflies[i].bz; ffPhase[i] = outdoorRng(); }
             const ffGeo = new THREE.BufferGeometry();
+            ctx.ffGeo = ffGeo;
             ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
             ffGeo.setAttribute('aPhase', new THREE.BufferAttribute(ffPhase, 1));
             const ffUniforms = { uTime: { value: 0 }, uOpacity: { value: 0 } };
+            ctx.ffUniforms = ffUniforms;
             const ffMat = new THREE.ShaderMaterial({
                 uniforms: ffUniforms,
                 vertexShader: `
@@ -636,29 +738,40 @@ export function installCabin(app) {
         }`,
                 transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
             });
-            const fireflyPts = new THREE.Points(ffGeo, ffMat); fireflyPts.frustumCulled = false; scene.add(fireflyPts);
-            let ffOpacity = 0;
+            ctx.ffMat = ffMat;
+            const fireflyPts = new THREE.Points(ffGeo, ffMat);
+            ctx.fireflyPts = fireflyPts; fireflyPts.frustumCulled = false; ctx.scene.add(fireflyPts);
+            ctx.ffOpacity = 0;
 
             /* ========================================================== */
             /* ============ 室内陈设专用：圆角几何与材质工具 ============ */
             /* ========================================================== */
             // J2.1：圆角几何已提取到 cabin/core/geometry/roundBox.js（实现零改动）
-            const { roundBoxGeo, rbox } = createRoundBox({ edge });
+            /* ==================== [J4:seg propsTools] ==================== */
+            const { roundBoxGeo, rbox } = createRoundBox({ edge: ctx.edge });
+            ctx.roundBoxGeo = roundBoxGeo; ctx.rbox = rbox;
 
             /* —— 一楼陈设专用：材质与工具 —— */
 
             const HITMAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
-            const DARK = LITMAT(0x2b2b2b);
-            const PINK = LITMAT(0xd98a94);
+            ctx.HITMAT = HITMAT;
+            const DARK = ctx.LITMAT(0x2b2b2b);
+            ctx.DARK = DARK;
+            const PINK = ctx.LITMAT(0xd98a94);
+            ctx.PINK = PINK;
 
-            const CATMAT = LITMAT(0xece6da);
-            const CATMAT2 = LITMAT(0xe2dbcd);
+            const CATMAT = ctx.LITMAT(0xece6da);
+            ctx.CATMAT = CATMAT;
+            const CATMAT2 = ctx.LITMAT(0xe2dbcd);
+            ctx.CATMAT2 = CATMAT2;
             // J2.1：lloop / solid / solidCyl 已提取到 cabin/core/geometry/solid.js。
             // 默认实体材质（原实现里硬编码的 CATMAT）改为**注入** —— core/ 里只留中性名（不变量 N1）。
             const { lloop, solid, solidCyl } = createSolid({
-                V, geo, scene, lineMaterial: MAT, defaultSolidMaterial: CATMAT,
+                V: ctx.V, geo: ctx.geo, scene: ctx.scene, lineMaterial: ctx.MAT, defaultSolidMaterial: CATMAT,
             });
+            ctx.lloop = lloop; ctx.solid = solid; ctx.solidCyl = solidCyl;
             const sm01 = t => t * t * (3 - 2 * t);
+            ctx.sm01 = sm01;
 
             /* ========================================================== */
             /* ============ J3：物件装配器（`defineProp` 的唯一入口） ============ */
@@ -674,39 +787,42 @@ export function installCabin(app) {
             //   （`smooth` 在 18.8 段、`cbox`/`crboxCol` 在 18.10 段、`colEdge` 在 18.12 段）。
             //   写成对象字面量会在这里立刻撞上它们的 TDZ，于是每一件搬到二楼的小物件
             //   都只能"把工具函数复制一份"—— 那正是模块化的反面。
+            /* ==================== [J4:seg installer] ==================== */
             const propCtx = {};
+            ctx.propCtx = propCtx;
             const propTool = (name, get) => Object.defineProperty(propCtx, name, { get, enumerable: true, configurable: true });
-            propTool('scene', () => scene);
-            propTool('L', () => L);
+            ctx.propTool = propTool;
+            propTool('scene', () => ctx.scene);
+            propTool('L', () => ctx.L);
             propTool('rng', () => ({
                 outdoor: outdoorRng, floor1: floor1Rng, floor2: floor2Rng,
                 sky: skyRng, texture: textureRng, slime: slimeRng, runtime: runtimeRng,
             }));
             // 几何 DSL（J2.1 / J2.2 提取，标识符名与原实现一致）
-            propTool('V', () => V); propTool('geo', () => geo); propTool('line', () => line);
-            propTool('iline', () => iline); propTool('dline', () => dline); propTool('edge', () => edge);
-            propTool('box', () => box); propTool('log', () => log); propTool('put', () => put);
-            propTool('logBetween', () => logBetween); propTool('lloop', () => lloop);
-            propTool('solid', () => solid); propTool('solidCyl', () => solidCyl);
-            propTool('roundBoxGeo', () => roundBoxGeo); propTool('rbox', () => rbox);
+            propTool('V', () => ctx.V); propTool('geo', () => ctx.geo); propTool('line', () => ctx.line);
+            propTool('iline', () => ctx.iline); propTool('dline', () => ctx.dline); propTool('edge', () => ctx.edge);
+            propTool('box', () => ctx.box); propTool('log', () => ctx.log); propTool('put', () => ctx.put);
+            propTool('logBetween', () => ctx.logBetween); propTool('lloop', () => ctx.lloop);
+            propTool('solid', () => ctx.solid); propTool('solidCyl', () => ctx.solidCyl);
+            propTool('roundBoxGeo', () => ctx.roundBoxGeo); propTool('rbox', () => ctx.rbox);
             // 共享几何工具（原先只在所属分区内部可见 —— 有了它们，搬物件才不必复制实现）
-            propTool('cbox', () => cbox); propTool('crboxCol', () => crboxCol);
-            propTool('colEdge', () => colEdge); propTool('crumpleBall', () => crumpleBall);
-            propTool('arcPos', () => arcPos); propTool('jitterGeo', () => jitterGeo);
-            propTool('hash01', () => hash01); propTool('smooth', () => smooth);
+            propTool('cbox', () => ctx.cbox); propTool('crboxCol', () => ctx.crboxCol);
+            propTool('colEdge', () => ctx.colEdge); propTool('crumpleBall', () => ctx.crumpleBall);
+            propTool('arcPos', () => ctx.arcPos); propTool('jitterGeo', () => ctx.jitterGeo);
+            propTool('hash01', () => ctx.hash01); propTool('smooth', () => ctx.smooth);
             // 弹簧 / 铰链 / 摆动（L283 的 createSpringSystem 产物 —— 抽屉、柜门、小凳靠它们登记）
-            propTool('regSlide', () => regSlide); propTool('registerHinge', () => registerHinge);
-            propTool('regWobble', () => regWobble);
+            propTool('regSlide', () => ctx.regSlide); propTool('registerHinge', () => ctx.registerHinge);
+            propTool('regWobble', () => ctx.regWobble);
             // 火焰工具（炉火 / 坩埚 / 蜡烛 / 吊灯共用）
-            propTool('makeWavyFlame', () => makeWavyFlame); propTool('updateWavyFlame', () => updateWavyFlame);
+            propTool('makeWavyFlame', () => ctx.makeWavyFlame); propTool('updateWavyFlame', () => ctx.updateWavyFlame);
             // 材质（共享 uniform：物件只能"用"，不能改 shader）
-            propTool('MAT', () => MAT); propTool('DASHMAT', () => DASHMAT); propTool('IN_MAT', () => IN_MAT);
-            propTool('FILL', () => FILL); propTool('LITMAT', () => LITMAT); propTool('HITMAT', () => HITMAT);
-            propTool('DARK', () => DARK); propTool('PINK', () => PINK);
-            propTool('CATMAT', () => CATMAT); propTool('CATMAT2', () => CATMAT2);
-            propTool('WIN_GLASS', () => WIN_GLASS); propTool('WIN_GLASS_UP', () => WIN_GLASS_UP);
+            propTool('MAT', () => ctx.MAT); propTool('DASHMAT', () => ctx.DASHMAT); propTool('IN_MAT', () => ctx.IN_MAT);
+            propTool('FILL', () => ctx.FILL); propTool('LITMAT', () => ctx.LITMAT); propTool('HITMAT', () => ctx.HITMAT);
+            propTool('DARK', () => ctx.DARK); propTool('PINK', () => ctx.PINK);
+            propTool('CATMAT', () => ctx.CATMAT); propTool('CATMAT2', () => ctx.CATMAT2);
+            propTool('WIN_GLASS', () => ctx.WIN_GLASS); propTool('WIN_GLASS_UP', () => ctx.WIN_GLASS_UP);
             // 音效（交互的 `sfx` 由物件声明）
-            propTool('SND', () => SND);
+            propTool('SND', () => ctx.SND);
 
             const { install: installProp, stats: propStats } = createPropInstaller({
                 registry,
@@ -714,6 +830,7 @@ export function installCabin(app) {
                 mounts: app.mounts,
                 ctx: propCtx,
             });
+            ctx.installProp = installProp; ctx.propStats = propStats;
 
             /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
@@ -721,114 +838,140 @@ export function installCabin(app) {
 
             // ---- 12.1 原木餐桌 ----
             // J3（B3）：几何已搬入 src/cabin/world/floor1/diningTable.js，此处只留装配调用。
-            installProp(diningTable);
+            /* ==================== [J4:seg floor1] ==================== */
+            // ↓ J4 段导出（floor1）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.makeCup = makeCup; ctx.makeChair = makeChair; ctx.startQuill = startQuill; ctx.makeCushion = makeCushion;
+            ctx.installProp(diningTable);
             // ---- 12.2 星象仪 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
-            const orreryApi = installProp(orrery);
+            const orreryApi = ctx.installProp(orrery);
+            ctx.orreryApi = orreryApi;
             // ---- 12.3 魔法药剂瓶 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/potionBottle.js，此处只留装配调用。
-            const potionBottleApi = installProp(potionBottle);
+            const potionBottleApi = ctx.installProp(potionBottle);
+            ctx.potionBottleApi = potionBottleApi;
             // ---- 12.4 魔法书 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/diningBook.js，此处只留装配调用。
-            const diningBookApi = installProp(diningBook);
+            const diningBookApi = ctx.installProp(diningBook);
+            ctx.diningBookApi = diningBookApi;
             // ---- 12.5 三脚圆凳 ----
             // J3（B2）：几何已搬入 src/cabin/world/floor1/stools.js，此处只留装配调用。
-            const stoolsApi = installProp(stools);
+            const stoolsApi = ctx.installProp(stools);
+            ctx.stoolsApi = stoolsApi;
             // ---- 12.6 桌下椭圆地毯 ----
             // J3（B1）：几何已搬入 cabin/world/floor1/rugUnderTable.js，此处只留装配调用。
-            installProp(rugUnderTable);
+            ctx.installProp(rugUnderTable);
 
             // ---- 12.7 吊挂木灯 ----
-            let lanternLit = true;
+            ctx.lanternLit = true;
             const lanternPivot = new THREE.Group();
-            lanternPivot.position.set(MTX, 2.88, MTZ);
-            scene.add(lanternPivot);
-            put(line([[0, 0, 0], [0, -0.26, 0]]), 0, 0, 0, 0, 0, 0, lanternPivot);
+            ctx.lanternPivot = lanternPivot;
+            lanternPivot.position.set(ctx.MTX, 2.88, ctx.MTZ);
+            ctx.scene.add(lanternPivot);
+            ctx.put(ctx.line([[0, 0, 0], [0, -0.26, 0]]), 0, 0, 0, 0, 0, 0, lanternPivot);
             const lantG = new THREE.Group();
+            ctx.lantG = lantG;
             lantG.position.y = -0.44;
             lanternPivot.add(lantG);
-            put(edge(new THREE.ConeGeometry(0.09, 0.07, 4)), 0, 0.13, 0, 0, 0, 0, lantG);
-            put(box(0.16, 0.2, 0.16), 0, 0, 0, 0, 0, 0, lantG);
+            ctx.put(ctx.edge(new THREE.ConeGeometry(0.09, 0.07, 4)), 0, 0.13, 0, 0, 0, 0, lantG);
+            ctx.put(ctx.box(0.16, 0.2, 0.16), 0, 0, 0, 0, 0, 0, lantG);
             for (const s of [[0, 0.085], [0, -0.085], [0.085, 0], [-0.085, 0]])
-                put(line([[s[0], 0.1, s[1]], [s[0], -0.1, s[1]]]), 0, 0, 0, 0, 0, 0, lantG);
+                ctx.put(ctx.line([[s[0], 0.1, s[1]], [s[0], -0.1, s[1]]]), 0, 0, 0, 0, 0, 0, lantG);
             const lanternFlame = new THREE.Group();
-            put(line([[0, -0.06, 0], [0.014, -0.02, 0], [0.014, 0.015, 0], [0, 0.06, 0]]), 0, 0, 0, 0, 0, 0, lanternFlame);
+            ctx.lanternFlame = lanternFlame;
+            ctx.put(ctx.line([[0, -0.06, 0], [0.014, -0.02, 0], [0.014, 0.015, 0], [0, 0.06, 0]]), 0, 0, 0, 0, 0, 0, lanternFlame);
             lantG.add(lanternFlame);
 
             const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd88f, transparent: true, opacity: 0.14, depthWrite: false });
+            ctx.haloMat = haloMat;
             const halo = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), haloMat);
+            ctx.halo = halo;
             halo.userData.noHit = true;
-            put(halo, 0, 0, 0, 0, 0, 0, lantG);
+            ctx.put(halo, 0, 0, 0, 0, 0, 0, lantG);
 
             const beamMat = new THREE.MeshBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0.09, depthWrite: false, side: THREE.DoubleSide });
+            ctx.beamMat = beamMat;
             const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.85, 2.35, 24, 1, true), beamMat);
+            ctx.beam = beam;
             beam.userData.noHit = true;
-            put(beam, 0, -1.52, 0, 0, 0, 0, lanternPivot);
+            ctx.put(beam, 0, -1.52, 0, 0, 0, 0, lanternPivot);
 
             const glowMatA = new THREE.MeshBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0.09, depthWrite: false, side: THREE.DoubleSide });
+            ctx.glowMatA = glowMatA;
             const glowMatB = new THREE.MeshBasicMaterial({ color: 0xffd88f, transparent: true, opacity: 0.075, depthWrite: false, side: THREE.DoubleSide });
+            ctx.glowMatB = glowMatB;
             const floorPool = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), glowMatA);
+            ctx.floorPool = floorPool;
             floorPool.userData.noHit = true;
-            put(floorPool, MTX, 0.012, MTZ, -Math.PI / 2, 0, 0);
+            ctx.put(floorPool, ctx.MTX, 0.012, ctx.MTZ, -Math.PI / 2, 0, 0);
             const floorPool2 = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), glowMatB);
+            ctx.floorPool2 = floorPool2;
             floorPool2.userData.noHit = true;
-            put(floorPool2, MTX, 0.014, MTZ, -Math.PI / 2, 0, 0);
+            ctx.put(floorPool2, ctx.MTX, 0.014, ctx.MTZ, -Math.PI / 2, 0, 0);
             const tablePool = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24), glowMatB);
+            ctx.tablePool = tablePool;
             tablePool.userData.noHit = true;
-            put(tablePool, MTX, 0.795, MTZ, -Math.PI / 2, 0, 0);
-            regMagic(lanternPivot, () => { lanternLit = !lanternLit; });
+            ctx.put(tablePool, ctx.MTX, 0.795, ctx.MTZ, -Math.PI / 2, 0, 0);
+            ctx.regMagic(lanternPivot, () => { ctx.lanternLit = !ctx.lanternLit; });
 
             /* ---- 12.8 壁炉旁的猫 ---- */
-            let catAwake = false, catP = 0;
+            ctx.catAwake = false, ctx.catP = 0;
             const catG = new THREE.Group();
+            ctx.catG = catG;
             catG.position.set(-1.85, 0, 1.45);
             catG.rotation.y = Math.PI;
-            scene.add(catG);
+            ctx.scene.add(catG);
             const catBody = new THREE.Group();
+            ctx.catBody = catBody;
             catG.add(catBody);
             {
-                const bodyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.175, 16, 12), CATMAT);
+                const bodyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.175, 16, 12), ctx.CATMAT);
                 bodyMesh.scale.set(1.28, 0.74, 0.95);
-                put(bodyMesh, 0, 0.125, 0, 0, 0, 0, catBody);
+                ctx.put(bodyMesh, 0, 0.125, 0, 0, 0, 0, catBody);
 
                 for (const s of [1, -1]) {
-                    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), CATMAT2);
+                    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), ctx.CATMAT2);
                     paw.scale.set(0.9, 0.55, 1.15);
-                    put(paw, 0.20, 0.072, s * 0.082, 0, 0, s * 0.18, catBody);
+                    ctx.put(paw, 0.20, 0.072, s * 0.082, 0, 0, s * 0.18, catBody);
                 }
             }
             const catHead = new THREE.Group();
+            ctx.catHead = catHead;
             catHead.position.set(0.215, 0.265, 0.02);
             catBody.add(catHead);
-            put(new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 12), CATMAT), 0, 0, 0, 0, 0, 0, catHead);
+            ctx.put(new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 12), ctx.CATMAT), 0, 0, 0, 0, 0, 0, catHead);
             const earLG = new THREE.Group();
+            ctx.earLG = earLG;
             earLG.position.set(-0.052, 0.078, 0.012);
             catHead.add(earLG);
-            put(new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.092, 8), CATMAT), 0, 0.034, 0, 0, Math.PI / 4, -0.20, earLG);
-            put(new THREE.Mesh(new THREE.ConeGeometry(0.023, 0.058, 6), PINK), 0, 0.030, 0.011, 0, Math.PI / 4, -0.20, earLG);
+            ctx.put(new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.092, 8), ctx.CATMAT), 0, 0.034, 0, 0, Math.PI / 4, -0.20, earLG);
+            ctx.put(new THREE.Mesh(new THREE.ConeGeometry(0.023, 0.058, 6), ctx.PINK), 0, 0.030, 0.011, 0, Math.PI / 4, -0.20, earLG);
             const earRG = new THREE.Group();
+            ctx.earRG = earRG;
             earRG.position.set(0.046, 0.080, 0.014);
             catHead.add(earRG);
-            put(new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.092, 8), CATMAT), 0, 0.034, 0, 0, Math.PI / 4, 0.20, earRG);
-            put(new THREE.Mesh(new THREE.ConeGeometry(0.023, 0.058, 6), PINK), 0, 0.030, 0.011, 0, Math.PI / 4, 0.20, earRG);
+            ctx.put(new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.092, 8), ctx.CATMAT), 0, 0.034, 0, 0, Math.PI / 4, 0.20, earRG);
+            ctx.put(new THREE.Mesh(new THREE.ConeGeometry(0.023, 0.058, 6), ctx.PINK), 0, 0.030, 0.011, 0, Math.PI / 4, 0.20, earRG);
             const eyesOpen = new THREE.Group();
+            ctx.eyesOpen = eyesOpen;
             catHead.add(eyesOpen);
             for (const ex of [-0.038, 0.034]) {
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.013, 8, 6), DARK), ex, 0.008, 0.088, 0, 0, 0, eyesOpen);
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.0042, 6, 4),
-                    LITMAT(0xffffff)), ex + 0.005, 0.014, 0.096, 0, 0, 0, eyesOpen);
+                ctx.put(new THREE.Mesh(new THREE.SphereGeometry(0.013, 8, 6), ctx.DARK), ex, 0.008, 0.088, 0, 0, 0, eyesOpen);
+                ctx.put(new THREE.Mesh(new THREE.SphereGeometry(0.0042, 6, 4),
+                    ctx.LITMAT(0xffffff)), ex + 0.005, 0.014, 0.096, 0, 0, 0, eyesOpen);
             }
             /* 闭眼：= 号（每眼两条短横线） */
             const eyesClosed = new THREE.Group();
+            ctx.eyesClosed = eyesClosed;
             eyesClosed.visible = false;
             catHead.add(eyesClosed);
             for (const ex of [-0.038, 0.034]) {
-                put(line([[ex - 0.016, 0.012, 0.091], [ex + 0.016, 0.012, 0.091]]), 0, 0, 0, 0, 0, 0, eyesClosed);
-                put(line([[ex - 0.016, -0.002, 0.091], [ex + 0.016, -0.002, 0.091]]), 0, 0, 0, 0, 0, 0, eyesClosed);
+                ctx.put(ctx.line([[ex - 0.016, 0.012, 0.091], [ex + 0.016, 0.012, 0.091]]), 0, 0, 0, 0, 0, 0, eyesClosed);
+                ctx.put(ctx.line([[ex - 0.016, -0.002, 0.091], [ex + 0.016, -0.002, 0.091]]), 0, 0, 0, 0, 0, 0, eyesClosed);
             }
-            put(new THREE.Mesh(new THREE.OctahedronGeometry(0.011), PINK), 0, -0.014, 0.100, 0, 0, 0, catHead);
-            put(line([[0, -0.019, 0.100], [0, -0.026, 0.098]]), 0, 0, 0, 0, 0, 0, catHead);
-            put(line([
+            ctx.put(new THREE.Mesh(new THREE.OctahedronGeometry(0.011), ctx.PINK), 0, -0.014, 0.100, 0, 0, 0, catHead);
+            ctx.put(ctx.line([[0, -0.019, 0.100], [0, -0.026, 0.098]]), 0, 0, 0, 0, 0, 0, catHead);
+            ctx.put(ctx.line([
                 [-0.017, -0.024, 0.096],
                 [-0.014, -0.034, 0.098],
                 [-0.006, -0.038, 0.100],
@@ -838,75 +981,81 @@ export function installCabin(app) {
                 [0.017, -0.024, 0.096]
             ]), 0, 0, 0, 0, 0, 0, catHead);
             for (const s of [-1, 1])
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6),
+                ctx.put(new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6),
                     new THREE.MeshBasicMaterial({ color: 0xf2b0b6, transparent: true, opacity: 0.55 })),
                     s * 0.063, -0.012, 0.075, 0, 0, 0, catHead);
             for (const s of [-1, 1]) {
-                put(line([[s * 0.070, 0.008, 0.075], [s * 0.142, 0.016, 0.081]]), 0, 0, 0, 0, 0, 0, catHead);
-                put(line([[s * 0.070, -0.006, 0.075], [s * 0.142, -0.012, 0.081]]), 0, 0, 0, 0, 0, 0, catHead);
+                ctx.put(ctx.line([[s * 0.070, 0.008, 0.075], [s * 0.142, 0.016, 0.081]]), 0, 0, 0, 0, 0, 0, catHead);
+                ctx.put(ctx.line([[s * 0.070, -0.006, 0.075], [s * 0.142, -0.012, 0.081]]), 0, 0, 0, 0, 0, 0, catHead);
             }
             const tailSegs = [];
+            ctx.tailSegs = tailSegs;
             {
                 const seg1 = new THREE.Group();
                 seg1.position.set(-0.20, 0.10, 0.11);
                 catBody.add(seg1);
-                solidCyl([0, 0, 0], [0.06, 0.00, 0.15], 0.023, seg1);
+                ctx.solidCyl([0, 0, 0], [0.06, 0.00, 0.15], 0.023, seg1);
                 const seg2 = new THREE.Group();
                 seg2.position.set(0.06, 0.00, 0.15);
                 seg1.add(seg2);
-                solidCyl([0, 0, 0], [0.17, -0.01, 0.03], 0.021, seg2);
+                ctx.solidCyl([0, 0, 0], [0.17, -0.01, 0.03], 0.021, seg2);
                 const seg3 = new THREE.Group();
                 seg3.position.set(0.17, -0.01, 0.03);
                 seg2.add(seg3);
-                solidCyl([0, 0, 0], [0.14, -0.02, -0.06], 0.019, seg3);
-                put(new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), CATMAT2), 0.14, -0.02, -0.06, 0, 0, 0, seg3);
+                ctx.solidCyl([0, 0, 0], [0.14, -0.02, -0.06], 0.019, seg3);
+                ctx.put(new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), ctx.CATMAT2), 0.14, -0.02, -0.06, 0, 0, 0, seg3);
                 tailSegs.push(seg1, seg2, seg3);
             }
-            const catHit = new THREE.Mesh(new THREE.SphereGeometry(0.20, 8, 6), HITMAT);
+            const catHit = new THREE.Mesh(new THREE.SphereGeometry(0.20, 8, 6), ctx.HITMAT);
+            ctx.catHit = catHit;
             catHit.position.set(0, 0.12, 0);
             catG.add(catHit);
-            regMagic(catG, () => { catAwake = !catAwake; });
+            ctx.regMagic(catG, () => { ctx.catAwake = !ctx.catAwake; });
             catG.userData.sfx = 'cat';
 
             /* ---- 猫旁边：毛线球 ---- */
             const yarnG = new THREE.Group();
+            ctx.yarnG = yarnG;
             yarnG.position.set(-1.28, 0, 1.02);
-            scene.add(yarnG);
+            ctx.scene.add(yarnG);
             const yarnBall = new THREE.Group();
+            ctx.yarnBall = yarnBall;
             yarnG.add(yarnBall);
             {
-                put(edge(new THREE.SphereGeometry(0.085, 12, 9)), 0, 0.085, 0, 0, 0, 0, yarnBall);
+                ctx.put(ctx.edge(new THREE.SphereGeometry(0.085, 12, 9)), 0, 0.085, 0, 0, 0, 0, yarnBall);
                 for (const [rx, ry] of [[Math.PI / 2, 0], [Math.PI / 2, 0.9], [Math.PI / 2, -0.7], [0.5, 0.3], [-0.6, 1.2]]) {
                     const pts = [];
                     for (let i = 0; i <= 20; i++) { const a = i / 20 * Math.PI * 2; pts.push([Math.cos(a) * 0.086, Math.sin(a) * 0.086, 0]); }
-                    put(new THREE.LineLoop(geo(pts), MAT), 0, 0.085, 0, rx, ry, 0, yarnBall);
+                    ctx.put(new THREE.LineLoop(ctx.geo(pts), ctx.MAT), 0, 0.085, 0, rx, ry, 0, yarnBall);
                 }
-                put(line([[0.06, 0.115, 0.05], [0.14, 0.096, 0.09], [0.22, 0.091, 0.04], [0.28, 0.091, -0.05]]), 0, 0, 0, 0, 0, 0, yarnBall);
+                ctx.put(ctx.line([[0.06, 0.115, 0.05], [0.14, 0.096, 0.09], [0.22, 0.091, 0.04], [0.28, 0.091, -0.05]]), 0, 0, 0, 0, 0, 0, yarnBall);
             }
             yarnG.userData = { vy: 0, y: 0, spinV: 0 };
-            regMagic(yarnG, () => {
+            ctx.regMagic(yarnG, () => {
                 yarnG.userData.vy = 2.4;
                 yarnG.userData.spinV = (floor1Rng() - 0.5) * 12;
             });
 
             /* ---- 12.9 左墙书架 + 可抽拉的书 ---- */
             const shelfBooks = [];
+            ctx.shelfBooks = shelfBooks;
             const SFX = -3.72, SFZ = -2.85, SFW = 1.3;
+            ctx.SFX = SFX; ctx.SFZ = SFZ; ctx.SFW = SFW;
             {
-                put(box(0.3, 1.86, 0.05), SFX, 1.05, SFZ - SFW / 2);
-                put(box(0.3, 1.86, 0.05), SFX, 1.05, SFZ + SFW / 2);
-                put(box(0.02, 1.86, 1.3), SFX - 0.15, 1.05, SFZ);
-                for (const sy of [0.18, 0.78, 1.38, 1.95]) put(box(0.3, 0.05, 1.3), SFX, sy, SFZ);
+                ctx.put(ctx.box(0.3, 1.86, 0.05), SFX, 1.05, SFZ - SFW / 2);
+                ctx.put(ctx.box(0.3, 1.86, 0.05), SFX, 1.05, SFZ + SFW / 2);
+                ctx.put(ctx.box(0.02, 1.86, 1.3), SFX - 0.15, 1.05, SFZ);
+                for (const sy of [0.18, 0.78, 1.38, 1.95]) ctx.put(ctx.box(0.3, 0.05, 1.3), SFX, sy, SFZ);
 
                 function addBook(z, yBase, h, th) {
                     const g = new THREE.Group();
-                    put(box(0.18, h, th), 0, h / 2, 0, 0, 0, 0, g);
-                    put(line([[0.092, h * 0.55, -th * 0.3], [0.092, h * 0.55, th * 0.3]]), 0, 0, 0, 0, 0, 0, g);
+                    ctx.put(ctx.box(0.18, h, th), 0, h / 2, 0, 0, 0, 0, g);
+                    ctx.put(ctx.line([[0.092, h * 0.55, -th * 0.3], [0.092, h * 0.55, th * 0.3]]), 0, 0, 0, 0, 0, 0, g);
                     g.position.set(SFX + 0.02, yBase, z);
                     g.userData = { out: false, cur: 0, vel: 0, bx: SFX + 0.02 };
-                    scene.add(g);
+                    ctx.scene.add(g);
                     shelfBooks.push(g);
-                    regMagic(g, () => { g.userData.out = !g.userData.out; });
+                    ctx.regMagic(g, () => { g.userData.out = !g.userData.out; });
                 }
                 const HS = [0.36, 0.30, 0.40, 0.33, 0.27, 0.38, 0.31, 0.35, 0.29, 0.37, 0.34, 0.28];
                 const TS = [0.07, 0.06, 0.075, 0.065, 0.07, 0.062, 0.072];
@@ -926,55 +1075,61 @@ export function installCabin(app) {
 
             /* ---- 12.9a 左窗下魔法书堆 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/bookPile.js，此处只留装配调用。
-            const bookPileApi = installProp(bookPile);
+            const bookPileApi = ctx.installProp(bookPile);
+            ctx.bookPileApi = bookPileApi;
             /* ---- 12.9b 沙漏 ---- */
             // J3（B2）：几何已搬入 src/cabin/world/floor1/hourglass.js，此处只留装配调用。
-            const hourglassApi = installProp(hourglass);
+            const hourglassApi = ctx.installProp(hourglass);
+            ctx.hourglassApi = hourglassApi;
             /* ---- 12.9c 宝箱 ---- */
             // J3（B2）：几何已搬入 src/cabin/world/floor1/chest.js，此处只留装配调用。
-            const chestApi = installProp(chest);
+            const chestApi = ctx.installProp(chest);
+            ctx.chestApi = chestApi;
             /* ---- 12.9d 旋转星铃 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/starBell.js，此处只留装配调用。
-            const starBellApi = installProp(starBell);
+            const starBellApi = ctx.installProp(starBell);
+            ctx.starBellApi = starBellApi;
             /* ---- 12.9e 大魔女坩埚 ---- */
             // J3（B4）：几何已搬入 src/cabin/world/floor1/cauldron.js，此处只留装配调用。
-            const cauldronApi = installProp(cauldron);
+            const cauldronApi = ctx.installProp(cauldron);
+            ctx.cauldronApi = cauldronApi;
             /* ---- 灶台旁：固定木台 ---- */
             // J3（B1）：几何已搬入 cabin/world/floor1/stovePlatform.js，此处只留装配调用。
-            installProp(stovePlatform);
+            ctx.installProp(stovePlatform);
 
             /* ---- 左墙试剂药水架 ---- */
             const reagents = [];
+            ctx.reagents = reagents;
             {
                 const SHX = -3.85, SHZ = -0.1;
                 for (const sy of [1.42, 1.74])
-                    put(box(0.07, 0.035, 1.15), SHX, sy, SHZ);
+                    ctx.put(ctx.box(0.07, 0.035, 1.15), SHX, sy, SHZ);
                 for (const sz of [-0.55, -0.1, 0.35])
                     for (const sy of [1.40, 1.72])
-                        put(line([[SHX - 0.12, sy - 0.14, sz], [SHX + 0.035, sy, sz]]), 0, 0, 0);
+                        ctx.put(ctx.line([[SHX - 0.12, sy - 0.14, sz], [SHX + 0.035, sy, sz]]), 0, 0, 0);
                 const reGlassMat = new THREE.MeshBasicMaterial({
                     color: 0xeaf4f0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide
                 });
-                const corkMat = LITMAT(0xc9a877);
+                const corkMat = ctx.LITMAT(0xc9a877);
                 function makeReagent(z, baseY, col, r, bh) {
                     const g = new THREE.Group();
-                    put(solid(new THREE.CylinderGeometry(r, r * 0.92, bh, 10), reGlassMat), 0, bh / 2, 0, 0, 0, 0, g);
+                    ctx.put(ctx.solid(new THREE.CylinderGeometry(r, r * 0.92, bh, 10), reGlassMat), 0, bh / 2, 0, 0, 0, 0, g);
                     const lh = bh * 0.62;
                     const liqMat = new THREE.MeshBasicMaterial({
                         color: col, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide
                     });
-                    put(solid(new THREE.CylinderGeometry(r * 0.8, r * 0.75, lh, 10), liqMat), 0, lh / 2 + 0.005, 0, 0, 0, 0, g);
+                    ctx.put(ctx.solid(new THREE.CylinderGeometry(r * 0.8, r * 0.75, lh, 10), liqMat), 0, lh / 2 + 0.005, 0, 0, 0, 0, g);
                     const surf = [];
                     for (let k = 0; k <= 14; k++) { const a = k / 14 * Math.PI * 2; surf.push([Math.cos(a) * r * 0.8, lh + 0.006, Math.sin(a) * r * 0.8]); }
-                    put(new THREE.LineLoop(geo(surf), new THREE.LineBasicMaterial({ color: col })), 0, 0, 0, 0, 0, 0, g);
-                    put(solid(new THREE.CylinderGeometry(r * 0.34, r * 0.82, 0.045, 10), reGlassMat), 0, bh + 0.022, 0, 0, 0, 0, g);
-                    put(solid(new THREE.CylinderGeometry(r * 0.34, r * 0.36, 0.05, 10), reGlassMat), 0, bh + 0.069, 0, 0, 0, 0, g);
-                    put(solid(new THREE.CylinderGeometry(r * 0.3, r * 0.35, 0.045, 8), corkMat), 0, bh + 0.116, 0, 0, 0, 0, g);
+                    ctx.put(new THREE.LineLoop(ctx.geo(surf), new THREE.LineBasicMaterial({ color: col })), 0, 0, 0, 0, 0, 0, g);
+                    ctx.put(ctx.solid(new THREE.CylinderGeometry(r * 0.34, r * 0.82, 0.045, 10), reGlassMat), 0, bh + 0.022, 0, 0, 0, 0, g);
+                    ctx.put(ctx.solid(new THREE.CylinderGeometry(r * 0.34, r * 0.36, 0.05, 10), reGlassMat), 0, bh + 0.069, 0, 0, 0, 0, g);
+                    ctx.put(ctx.solid(new THREE.CylinderGeometry(r * 0.3, r * 0.35, 0.045, 8), corkMat), 0, bh + 0.116, 0, 0, 0, 0, g);
                     g.position.set(SHX + 0.02, baseY, z);
                     g.userData = { run: 0, by: baseY };
-                    scene.add(g);
+                    ctx.scene.add(g);
                     reagents.push(g);
-                    regMagic(g, () => { g.userData.run = 1.3; });
+                    ctx.regMagic(g, () => { g.userData.run = 1.3; });
                 }
                 makeReagent(-0.52, 1.4375, 0xc0392b, 0.040, 0.100);
                 makeReagent(-0.25, 1.4375, 0x2980b9, 0.045, 0.115);
@@ -987,11 +1142,15 @@ export function installCabin(app) {
 
             /* ---- 紫色魔法阵 ---- */
             const mcG = new THREE.Group();
-            mcG.position.set(MC_X, 0.015, MC_Z);
-            scene.add(mcG);
+            ctx.mcG = mcG;
+            mcG.position.set(ctx.MC_X, 0.015, ctx.MC_Z);
+            ctx.scene.add(mcG);
             const mcMat = new THREE.LineBasicMaterial({ color: 0x8a4fd6, transparent: true, opacity: 0.55 });
-            const mcLoop = (pts, parent, mat) => { const l = new THREE.LineLoop(geo(pts), mat || mcMat); parent.add(l); return l; };
+            ctx.mcMat = mcMat;
+            const mcLoop = (pts, parent, mat) => { const l = new THREE.LineLoop(ctx.geo(pts), mat || mcMat); parent.add(l); return l; };
+            ctx.mcLoop = mcLoop;
             const mcBase = new THREE.Group();
+            ctx.mcBase = mcBase;
             mcG.add(mcBase);
             {
                 const ring = (r, seg) => { const p = []; for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
@@ -1007,12 +1166,12 @@ export function installCabin(app) {
                 mcLoop(poly(0.50, 3, Math.PI / 2), mcBase);
                 for (let i = 0; i < 12; i++) {
                     const a = i / 12 * Math.PI * 2;
-                    mcBase.add(new THREE.Line(geo([[Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14], [Math.cos(a) * 0.36, 0, Math.sin(a) * 0.36]]), mcMat));
+                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14], [Math.cos(a) * 0.36, 0, Math.sin(a) * 0.36]]), mcMat));
                 }
                 for (let i = 0; i < 24; i++) {
                     const a = i / 24 * Math.PI * 2;
-                    mcBase.add(new THREE.Line(geo([[Math.cos(a - 0.02) * 0.68, 0, Math.sin(a - 0.02) * 0.68], [Math.cos(a + 0.02) * 0.68, 0, Math.sin(a + 0.02) * 0.68]]), mcMat));
-                    mcBase.add(new THREE.Line(geo([[Math.cos(a) * 0.68, 0, Math.sin(a) * 0.68], [Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72]]), mcMat));
+                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a - 0.02) * 0.68, 0, Math.sin(a - 0.02) * 0.68], [Math.cos(a + 0.02) * 0.68, 0, Math.sin(a + 0.02) * 0.68]]), mcMat));
+                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.68, 0, Math.sin(a) * 0.68], [Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72]]), mcMat));
                 }
                 for (let i = 0; i < 6; i++) {
                     const a = i / 6 * Math.PI * 2;
@@ -1020,6 +1179,7 @@ export function installCabin(app) {
                 }
             }
             const mcFloats = [];
+            ctx.mcFloats = mcFloats;
             {
                 const mkMat = c => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0 });
                 const ring = (r, seg) => { const p = []; for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
@@ -1037,7 +1197,7 @@ export function installCabin(app) {
                     mcLoop(poly(0.16, 6, Math.PI / 6), g, m);
                     for (let i = 0; i < 6; i++) {
                         const a = i / 6 * Math.PI * 2;
-                        g.add(new THREE.Line(geo([[Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16], [Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]]), m));
+                        g.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16], [Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]]), m));
                     }
                     mcFloats.push({ g, m, ty: 1.25, spd: -1.1, ph: 1 });
                 }
@@ -1047,7 +1207,7 @@ export function installCabin(app) {
                     mcLoop(ring(0.18, 28), g, m);
                     for (let i = 0; i < 8; i++) {
                         const a = i / 8 * Math.PI * 2;
-                        g.add(new THREE.Line(geo([[Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08], [Math.cos(a) * 0.26, 0, Math.sin(a) * 0.26]]), m));
+                        g.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08], [Math.cos(a) * 0.26, 0, Math.sin(a) * 0.26]]), m));
                     }
                     mcFloats.push({ g, m, ty: 1.70, spd: 1.9, ph: 2 });
                 }
@@ -1076,146 +1236,167 @@ export function installCabin(app) {
                 for (const f of mcFloats) { f.g.visible = false; mcG.add(f.g); }
             }
             const mcParts = [];
+            ctx.mcParts = mcParts;
             {
                 const cols = [0xd84fd0, 0x4f9bd8, 0xd8a84f, 0x8a4fd6, 0x4fd88a, 0x4fd8d8, 0x9b4fd8];
                 for (let i = 0; i < 24; i++) {
                     const m = new THREE.LineBasicMaterial({ color: cols[i % cols.length] });
-                    const p = edge(new THREE.OctahedronGeometry(0.016), 1, m);
+                    const p = ctx.edge(new THREE.OctahedronGeometry(0.016), 1, m);
                     p.visible = false;
-                    scene.add(p);
+                    ctx.scene.add(p);
                     mcParts.push({
                         p, a: floor1Rng() * Math.PI * 2, r: 0.15 + floor1Rng() * 0.55,
                         ph: floor1Rng(), spd: 0.6 + floor1Rng() * 0.8
                     });
                 }
             }
-            const mcHit = new THREE.Mesh(new THREE.CircleGeometry(0.75, 28), HITMAT);
+            const mcHit = new THREE.Mesh(new THREE.CircleGeometry(0.75, 28), ctx.HITMAT);
+            ctx.mcHit = mcHit;
             mcHit.rotation.x = -Math.PI / 2;
             mcHit.position.y = 0.002;
             mcG.add(mcHit);
-            let mcRun = 0;
-            regMagic(mcG, () => { if (mcRun <= 0) mcRun = 8.0; });
+            ctx.mcRun = 0;
+            ctx.regMagic(mcG, () => { if (ctx.mcRun <= 0) ctx.mcRun = 8.0; });
             mcG.userData.sfx = 'magic';
 
             /* ---- 12.9f 长餐桌 ---- */
             // J3（B4）：几何已搬入 src/cabin/world/floor1/longTable.js，此处只留装配调用。
-            const longTableApi = installProp(longTable);
+            const longTableApi = ctx.installProp(longTable);
+            ctx.longTableApi = longTableApi;
             /* 茶杯（餐桌/暖桌通用） */
             const cups = [];
+            ctx.cups = cups;
             function makeCup(x, z, baseY, parent) {
-                const by = (baseY === undefined) ? DTOP : baseY;
+                const by = (baseY === undefined) ? ctx.DTOP : baseY;
                 const g = new THREE.Group();
-                put(edge(new THREE.CylinderGeometry(0.045, 0.038, 0.09, 12)), 0, 0.045, 0, 0, 0, 0, g);
-                put(edge(new THREE.TorusGeometry(0.03, 0.008, 6, 12)), 0.052, 0.045, 0, 0, 0, 0, g);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.045, 0.038, 0.09, 12)), 0, 0.045, 0, 0, 0, 0, g);
+                ctx.put(ctx.edge(new THREE.TorusGeometry(0.03, 0.008, 6, 12)), 0.052, 0.045, 0, 0, 0, 0, g);
                 const steam = new THREE.Group();
                 for (const off of [-0.015, 0, 0.015])
-                    put(line([[off, 0, 0], [off + 0.012, 0.035, 0.003], [off - 0.01, 0.07, -0.003], [off + 0.008, 0.105, 0.002]]),
+                    ctx.put(ctx.line([[off, 0, 0], [off + 0.012, 0.035, 0.003], [off - 0.01, 0.07, -0.003], [off + 0.008, 0.105, 0.002]]),
                         0, 0, 0, 0, 0, 0, steam);
                 steam.position.y = 0.10;
                 steam.visible = false;
                 g.add(steam);
                 g.position.set(x, by, z);
-                (parent || scene).add(g);
+                (parent || ctx.scene).add(g);
                 g.userData = { run: 0, lift: 0, steam, baseY: by };
                 cups.push(g);
-                regMagic(g, () => { g.userData.run = 2.6; });
+                ctx.regMagic(g, () => { g.userData.run = 2.6; });
             }
-            makeCup(DT_X - 0.85, DT_Z + 0.20);
-            makeCup(DT_X + 0.85, DT_Z + 0.20);
-            makeCup(DT_X, DT_Z + 0.20);
+            makeCup(ctx.DT_X - 0.85, ctx.DT_Z + 0.20);
+            makeCup(ctx.DT_X + 0.85, ctx.DT_Z + 0.20);
+            makeCup(ctx.DT_X, ctx.DT_Z + 0.20);
 
             /* ---- 提梁茶壶 ---- */
-            const POT_BX = DT_X + 0.42, POT_BZ = DT_Z + 0.02;
+            const POT_BX = ctx.DT_X + 0.42, POT_BZ = ctx.DT_Z + 0.02;
+            ctx.POT_BX = POT_BX; ctx.POT_BZ = POT_BZ;
             const CUP_T = cups[2];
+            ctx.CUP_T = CUP_T;
             const POT_RY = Math.atan2(CUP_T.position.x - POT_BX, CUP_T.position.z - POT_BZ);
+            ctx.POT_RY = POT_RY;
             const POT_TILT = 0.65;
+            ctx.POT_TILT = POT_TILT;
             const POT_TIP_FWD = 0.20 * Math.cos(POT_TILT) + 0.175 * Math.sin(POT_TILT);
+            ctx.POT_TIP_FWD = POT_TIP_FWD;
             const teapotPos = new THREE.Group();
-            teapotPos.position.set(POT_BX, DTOP, POT_BZ);
+            ctx.teapotPos = teapotPos;
+            teapotPos.position.set(POT_BX, ctx.DTOP, POT_BZ);
             teapotPos.rotation.y = POT_RY;
-            scene.add(teapotPos);
+            ctx.scene.add(teapotPos);
             const teapot = new THREE.Group();
+            ctx.teapot = teapot;
             teapotPos.add(teapot);
-            let potHalo, potHaloMat;
+            ctx.potHalo, ctx.potHaloMat;
             {
-                const body = put(edge(new THREE.SphereGeometry(0.105, 14, 11)), 0, 0.10, 0, 0, 0, 0, teapot);
+                const body = ctx.put(ctx.edge(new THREE.SphereGeometry(0.105, 14, 11)), 0, 0.10, 0, 0, 0, 0, teapot);
                 body.scale.set(1, 0.82, 1);
-                put(edge(new THREE.CylinderGeometry(0.07, 0.095, 0.03, 12)), 0, 0.015, 0, 0, 0, 0, teapot);
-                put(edge(new THREE.CylinderGeometry(0.055, 0.068, 0.03, 12)), 0, 0.185, 0, 0, 0, 0, teapot);
-                put(edge(new THREE.SphereGeometry(0.02, 8, 6)), 0, 0.21, 0, 0, 0, 0, teapot);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.07, 0.095, 0.03, 12)), 0, 0.015, 0, 0, 0, 0, teapot);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.068, 0.03, 12)), 0, 0.185, 0, 0, 0, 0, teapot);
+                ctx.put(ctx.edge(new THREE.SphereGeometry(0.02, 8, 6)), 0, 0.21, 0, 0, 0, 0, teapot);
                 const arcPts = [];
                 for (let i = 0; i <= 10; i++) {
-                    const a = (20 + i * 14) * D2R;
+                    const a = (20 + i * 14) * ctx.D2R;
                     arcPts.push([Math.cos(a) * 0.115, 0.115 + Math.sin(a) * 0.115, 0]);
                 }
                 for (let i = 0; i < arcPts.length - 1; i++)
-                    logBetween(arcPts[i], arcPts[i + 1], 0.011, teapot);
-                logBetween([0, 0.07, 0.085], [0, 0.13, 0.145], 0.017, teapot);
-                logBetween([0, 0.13, 0.145], [0, 0.175, 0.20], 0.013, teapot);
-                potHaloMat = new THREE.MeshBasicMaterial({
+                    ctx.logBetween(arcPts[i], arcPts[i + 1], 0.011, teapot);
+                ctx.logBetween([0, 0.07, 0.085], [0, 0.13, 0.145], 0.017, teapot);
+                ctx.logBetween([0, 0.13, 0.145], [0, 0.175, 0.20], 0.013, teapot);
+                ctx.potHaloMat = new THREE.MeshBasicMaterial({
                     color: 0xbfe3ff, transparent: true, opacity: 0.12, depthWrite: false
                 });
-                potHalo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), potHaloMat);
-                potHalo.userData.noHit = true;
-                put(potHalo, 0, 0.10, 0, 0, 0, 0, teapot);
-                potHalo.visible = false;
+                ctx.potHalo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), ctx.potHaloMat);
+                ctx.potHalo.userData.noHit = true;
+                ctx.put(ctx.potHalo, 0, 0.10, 0, 0, 0, 0, teapot);
+                ctx.potHalo.visible = false;
             }
             const potSpoutTip = new THREE.Object3D();
+            ctx.potSpoutTip = potSpoutTip;
             potSpoutTip.position.set(0, 0.175, 0.20);
             teapot.add(potSpoutTip);
             const potStreamMat = new THREE.LineBasicMaterial({ color: 0x7db8dd });
+            ctx.potStreamMat = potStreamMat;
             const potStreamGeom = new THREE.BufferGeometry();
+            ctx.potStreamGeom = potStreamGeom;
             potStreamGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(10 * 3), 3));
             const potStream = new THREE.Line(potStreamGeom, potStreamMat);
+            ctx.potStream = potStream;
             potStream.frustumCulled = false;
             potStream.visible = false;
-            scene.add(potStream);
+            ctx.scene.add(potStream);
             const POT_T = 3.6;
-            let potRun = 0;
+            ctx.POT_T = POT_T;
+            ctx.potRun = 0;
             const _tv = new THREE.Vector3();
-            regMagic(teapotPos, () => { potRun = POT_T; });
+            ctx._tv = _tv;
+            ctx.regMagic(teapotPos, () => { ctx.potRun = POT_T; });
 
             /* ---- 桌面散放餐具 ---- */
             // J3（B4）：几何已搬入 src/cabin/world/floor1/tableware.js，此处只留装配调用。
-            const tablewareApi = installProp(tableware);
+            const tablewareApi = ctx.installProp(tableware);
+            ctx.tablewareApi = tablewareApi;
             const chairs = [];
+            ctx.chairs = chairs;
             function makeChair(x, z, ry, ax, az) {
                 const g = new THREE.Group();
-                put(box(0.42, 0.05, 0.42), 0, 0.45, 0, 0, 0, 0, g);
-                put(box(0.42, 0.52, 0.05), 0, 0.73, -0.185, 0, 0, 0, g);
-                put(box(0.36, 0.04, 0.03), 0, 0.90, -0.185, 0, 0, 0, g);
-                put(box(0.36, 0.04, 0.03), 0, 0.62, -0.185, 0, 0, 0, g);
+                ctx.put(ctx.box(0.42, 0.05, 0.42), 0, 0.45, 0, 0, 0, 0, g);
+                ctx.put(ctx.box(0.42, 0.52, 0.05), 0, 0.73, -0.185, 0, 0, 0, g);
+                ctx.put(ctx.box(0.36, 0.04, 0.03), 0, 0.90, -0.185, 0, 0, 0, g);
+                ctx.put(ctx.box(0.36, 0.04, 0.03), 0, 0.62, -0.185, 0, 0, 0, g);
                 for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    put(edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), sx * 0.17, 0.22, sz * 0.17, 0, 0, 0, g);
+                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), sx * 0.17, 0.22, sz * 0.17, 0, 0, 0, g);
                 g.position.set(x, 0, z);
                 g.rotation.y = ry;
                 g.userData = { bx: x, bz: z, ax, az, cur: 0, vel: 0, open: false };
-                scene.add(g);
+                ctx.scene.add(g);
                 chairs.push(g);
-                regMagic(g, () => { g.userData.open = !g.userData.open; });
+                ctx.regMagic(g, () => { g.userData.open = !g.userData.open; });
             }
-            makeChair(DT_X - 0.85, DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(DT_X, DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(DT_X + 0.85, DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(DT_X - 1.42, DT_Z, Math.PI / 2, -1, 0);
-            makeChair(DT_X + 1.42, DT_Z, -Math.PI / 2, 1, 0);
+            makeChair(ctx.DT_X - 0.85, ctx.DT_Z + 0.85, Math.PI, 0, 1);
+            makeChair(ctx.DT_X, ctx.DT_Z + 0.85, Math.PI, 0, 1);
+            makeChair(ctx.DT_X + 0.85, ctx.DT_Z + 0.85, Math.PI, 0, 1);
+            makeChair(ctx.DT_X - 1.42, ctx.DT_Z, Math.PI / 2, -1, 0);
+            makeChair(ctx.DT_X + 1.42, ctx.DT_Z, -Math.PI / 2, 1, 0);
 
             /* ---- 12.10 魔法扫帚 ---- */
             // J3（B3）：几何 + 状态 + 交互 + 每帧分支全部搬入 cabin/world/floor1/broom.js。
             // 返回的记录带 `tick` 句柄 —— 每帧逻辑仍由 tickOnce() 在**原位置**调用（顺序不变）。
-            const broomApi = installProp(broom);
+            const broomApi = ctx.installProp(broom);
+            ctx.broomApi = broomApi;
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
             const orbStandG = new THREE.Group();
-            orbStandG.position.set(CBX, 0, CBZ);
-            scene.add(orbStandG);
+            ctx.orbStandG = orbStandG;
+            orbStandG.position.set(ctx.CBX, 0, ctx.CBZ);
+            ctx.scene.add(orbStandG);
             for (let i = 0; i < 3; i++) {
                 const a = i * Math.PI * 2 / 3 + 0.5;
-                logBetween([Math.cos(a) * 0.15, 0.62, Math.sin(a) * 0.15],
+                ctx.logBetween([Math.cos(a) * 0.15, 0.62, Math.sin(a) * 0.15],
                     [Math.cos(a) * 0.26, 0.02, Math.sin(a) * 0.26], 0.028, orbStandG);
             }
-            put(edge(new THREE.TorusGeometry(0.17, 0.02, 6, 20)), 0, 0.40, 0, Math.PI / 2, 0, 0, orbStandG);
-            put(edge(new THREE.CylinderGeometry(0.13, 0.17, 0.06, 12)), 0, 0.62, 0, 0, 0, 0, orbStandG);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.17, 0.02, 6, 20)), 0, 0.40, 0, Math.PI / 2, 0, 0, orbStandG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.13, 0.17, 0.06, 12)), 0, 0.62, 0, 0, 0, 0, orbStandG);
             {
                 const cbGlassMat = new THREE.MeshBasicMaterial({ color: 0xdceef5, transparent: true, opacity: 0.20, depthWrite: false });
                 const cbLineMat = new THREE.LineBasicMaterial({ color: 0x8ab8c8 });
@@ -1224,14 +1405,17 @@ export function installCabin(app) {
                 cbSphere.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(0.24, 12, 8)), cbLineMat));
                 const hc = [];
                 for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2; hc.push([Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]); }
-                cbSphere.add(new THREE.LineLoop(geo(hc), cbLineMat));
-                put(cbSphere, 0, 0.90, 0, 0, 0, 0, orbStandG);
+                cbSphere.add(new THREE.LineLoop(ctx.geo(hc), cbLineMat));
+                ctx.put(cbSphere, 0, 0.90, 0, 0, 0, 0, orbStandG);
             }
             const cbInner = new THREE.Group();
+            ctx.cbInner = cbInner;
             cbInner.position.set(0, 0.90, 0);
             orbStandG.add(cbInner);
             const cbMistMat = new THREE.LineBasicMaterial({ color: 0x9b6fd8, transparent: true, opacity: 0.5 });
+            ctx.cbMistMat = cbMistMat;
             const cbMists = [];
+            ctx.cbMists = cbMists;
             for (let i = 0; i < 3; i++) {
                 const pts = [];
                 const r = 0.08 + i * 0.045;
@@ -1239,128 +1423,144 @@ export function installCabin(app) {
                     const a = k / 24 * Math.PI * 2;
                     pts.push([Math.cos(a) * r, Math.sin(a * 2 + i) * 0.05, Math.sin(a) * r]);
                 }
-                const l = new THREE.Line(geo(pts), cbMistMat);
+                const l = new THREE.Line(ctx.geo(pts), cbMistMat);
                 cbInner.add(l);
                 cbMists.push({ l, ph: i });
             }
             const cbStars = [];
+            ctx.cbStars = cbStars;
             for (let i = 0; i < 5; i++) {
-                const st = solid(new THREE.OctahedronGeometry(0.014),
+                const st = ctx.solid(new THREE.OctahedronGeometry(0.014),
                     new THREE.MeshBasicMaterial({ color: 0xcab4f0 }));
                 st.position.set((i - 2) * 0.075, (i % 2 ? 0.07 : -0.05), (floor1Rng() - 0.5) * 0.1);
                 cbInner.add(st);
                 cbStars.push(st);
             }
             const cbGlowMat = new THREE.MeshBasicMaterial({ color: 0xb49bf0, transparent: true, opacity: 0, depthWrite: false });
+            ctx.cbGlowMat = cbGlowMat;
             const cbGlow = new THREE.Mesh(new THREE.SphereGeometry(0.30, 12, 8), cbGlowMat);
+            ctx.cbGlow = cbGlow;
             cbGlow.userData.noHit = true;
-            put(cbGlow, 0, 0.90, 0, 0, 0, 0, orbStandG);
-            const cbHit = new THREE.Mesh(new THREE.SphereGeometry(0.27, 8, 6), HITMAT);
-            put(cbHit, 0, 0.90, 0, 0, 0, 0, orbStandG);
-            let cbRun = 0;
-            regMagic(orbStandG, () => { cbRun = 5.0; });
+            ctx.put(cbGlow, 0, 0.90, 0, 0, 0, 0, orbStandG);
+            const cbHit = new THREE.Mesh(new THREE.SphereGeometry(0.27, 8, 6), ctx.HITMAT);
+            ctx.cbHit = cbHit;
+            ctx.put(cbHit, 0, 0.90, 0, 0, 0, 0, orbStandG);
+            ctx.cbRun = 0;
+            ctx.regMagic(orbStandG, () => { ctx.cbRun = 5.0; });
             orbStandG.userData.sfx = 'magic';
 
             /* ---- 月光魔法盆栽【门侧前右墙角】 ---- */
             const plantG = new THREE.Group();
-            plantG.position.set(PLX, 0, PLZ);
-            scene.add(plantG);
-            const potMat = LITMAT(0xa9744f);
-            put(solid(new THREE.CylinderGeometry(0.14, 0.10, 0.20, 10), potMat), 0, 0.10, 0, 0, 0, 0, plantG);
-            put(solid(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 10), potMat), 0, 0.215, 0, 0, 0, 0, plantG);
-            put(solid(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 10),
-                LITMAT(0x5a4632)), 0, 0.228, 0, 0, 0, 0, plantG);
+            ctx.plantG = plantG;
+            plantG.position.set(ctx.PLX, 0, ctx.PLZ);
+            ctx.scene.add(plantG);
+            const potMat = ctx.LITMAT(0xa9744f);
+            ctx.potMat = potMat;
+            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.14, 0.10, 0.20, 10), potMat), 0, 0.10, 0, 0, 0, 0, plantG);
+            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 10), potMat), 0, 0.215, 0, 0, 0, 0, plantG);
+            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 10),
+                ctx.LITMAT(0x5a4632)), 0, 0.228, 0, 0, 0, 0, plantG);
             const plantStems = [], plantBerries = [];
+            ctx.plantStems = plantStems; ctx.plantBerries = plantBerries;
             for (let i = 0; i < 5; i++) {
                 const a = i * Math.PI * 2 / 5 + 0.4;
                 const tipX = Math.cos(a) * 0.17, tipZ = Math.sin(a) * 0.17;
                 const stem = new THREE.Group();
                 stem.position.set(0, 0.23, 0);
-                put(line([[0, 0, 0], [tipX * 0.35, 0.13, tipZ * 0.35], [tipX * 0.8, 0.25, tipZ * 0.8], [tipX, 0.35, tipZ]]), 0, 0, 0, 0, 0, 0, stem);
+                ctx.put(ctx.line([[0, 0, 0], [tipX * 0.35, 0.13, tipZ * 0.35], [tipX * 0.8, 0.25, tipZ * 0.8], [tipX, 0.35, tipZ]]), 0, 0, 0, 0, 0, 0, stem);
                 const lp = [];
                 for (let k = 0; k <= 12; k++) { const t = k / 12 * Math.PI * 2; lp.push([Math.cos(t) * 0.045, Math.sin(t) * 0.035, 0]); }
-                put(new THREE.LineLoop(geo(lp), MAT), tipX * 0.45, 0.16, tipZ * 0.45, 0, a, 0, stem);
+                ctx.put(new THREE.LineLoop(ctx.geo(lp), ctx.MAT), tipX * 0.45, 0.16, tipZ * 0.45, 0, a, 0, stem);
                 const bm = new THREE.MeshBasicMaterial({
                     color: i % 2 ? 0x9b6fd8 : 0x4fb0d8, transparent: true, opacity: 0.85
                 });
-                const berry = solid(new THREE.SphereGeometry(0.026, 8, 6), bm);
-                put(berry, tipX, 0.37, tipZ, 0, 0, 0, stem);
+                const berry = ctx.solid(new THREE.SphereGeometry(0.026, 8, 6), bm);
+                ctx.put(berry, tipX, 0.37, tipZ, 0, 0, 0, stem);
                 plantG.add(stem);
                 plantStems.push({ stem, ph: i * 1.3 });
                 plantBerries.push({ obj: berry, m: bm, ph: i });
             }
-            let plantRun = 0;
-            regMagic(plantG, () => { plantRun = 4.0; });
+            ctx.plantRun = 0;
+            ctx.regMagic(plantG, () => { ctx.plantRun = 4.0; });
 
             /* ---- 12.11b 滑轮置物台【魔法餐桌另一侧】：可滑动 + 墨水瓶羽毛笔 + 纸堆 ---- */
-            const CART_P0 = { x: 2.85, z: 2.2 };   // 魔法餐桌右侧边
-            const CART_DIR = { x: 0, z: -1 };      // 【调整】朝被炉方向（-z，向屋内）滑出，不再撞花盆
+            const CART_P0 = { x: 2.85, z: 2.2 };
+            ctx.CART_P0 = CART_P0;   // 魔法餐桌右侧边
+            const CART_DIR = { x: 0, z: -1 };
+            ctx.CART_DIR = CART_DIR;      // 【调整】朝被炉方向（-z，向屋内）滑出，不再撞花盆
             const CART_DIST = 0.55;
-            let cartOut = false, cartP = 0, cartPrevP = 0;
+            ctx.CART_DIST = CART_DIST;
+            ctx.cartOut = false, ctx.cartP = 0, ctx.cartPrevP = 0;
             const cartG = new THREE.Group();
+            ctx.cartG = cartG;
             cartG.position.set(CART_P0.x, 0, CART_P0.z);
             cartG.rotation.y = Math.atan2(CART_DIR.x, CART_DIR.z);
-            scene.add(cartG);
+            ctx.scene.add(cartG);
 
             const cartWheels = [];
+            ctx.cartWheels = cartWheels;
             const cartBody = new THREE.Group();
+            ctx.cartBody = cartBody;
             cartG.add(cartBody);
             {
-                const woodMat = LITMAT(0x9c7a58, { side: THREE.DoubleSide });
-                const darkMat = LITMAT(0x6b543f, { side: THREE.DoubleSide });
+                const woodMat = ctx.LITMAT(0x9c7a58, { side: THREE.DoubleSide });
+                const darkMat = ctx.LITMAT(0x6b543f, { side: THREE.DoubleSide });
                 for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                     const wh = new THREE.Group();
                     wh.rotation.z = Math.PI / 2;
-                    put(edge(new THREE.CylinderGeometry(0.034, 0.034, 0.024, 10)), 0, 0, 0, 0, 0, 0, wh);
-                    put(edge(new THREE.CylinderGeometry(0.011, 0.011, 0.028, 6)), 0, 0, 0, 0, 0, 0, wh);
+                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.034, 0.034, 0.024, 10)), 0, 0, 0, 0, 0, 0, wh);
+                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.028, 6)), 0, 0, 0, 0, 0, 0, wh);
                     wh.position.set(sx * 0.15, 0.034, sz * 0.10);
                     cartG.add(wh);
                     cartWheels.push(wh);
                 }
                 for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    put(edge(new THREE.CylinderGeometry(0.011, 0.011, 0.46, 6)),
+                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.46, 6)),
                         sx * 0.155, 0.26, sz * 0.115, 0, 0, 0, cartBody);
-                put(solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.185, 0, 0, 0, 0, cartBody);
-                put(solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.47, 0, 0, 0, 0, cartBody);
-                put(solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.21, -0.145, 0, 0, 0, cartBody);
-                put(solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.495, -0.145, 0, 0, 0, cartBody);
-                logBetween([-0.14, 0.48, 0.14], [-0.14, 0.78, 0.14], 0.011, cartBody);
-                logBetween([0.14, 0.48, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
-                logBetween([-0.14, 0.78, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.185, 0, 0, 0, 0, cartBody);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.47, 0, 0, 0, 0, cartBody);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.21, -0.145, 0, 0, 0, cartBody);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.495, -0.145, 0, 0, 0, cartBody);
+                ctx.logBetween([-0.14, 0.48, 0.14], [-0.14, 0.78, 0.14], 0.011, cartBody);
+                ctx.logBetween([0.14, 0.48, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
+                ctx.logBetween([-0.14, 0.78, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
             }
 
             /* —— 墨水瓶（上层）—— */
             const inkG = new THREE.Group();
+            ctx.inkG = inkG;
             inkG.position.set(-0.10, 0.482, 0.02);
             cartG.add(inkG);
             {
                 const glassMat = new THREE.MeshBasicMaterial({ color: 0x2a3a6e, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
-                const inkMat = LITMAT(0x1a2a5e);
-                put(solid(new THREE.CylinderGeometry(0.036, 0.042, 0.075, 10), glassMat), 0, 0.0375, 0, 0, 0, 0, inkG);
-                put(solid(new THREE.CylinderGeometry(0.02, 0.028, 0.024, 8), glassMat), 0, 0.086, 0, 0, 0, 0, inkG);
-                put(solid(new THREE.CylinderGeometry(0.031, 0.031, 0.052, 10), inkMat), 0, 0.030, 0, 0, 0, 0, inkG);
+                const inkMat = ctx.LITMAT(0x1a2a5e);
+                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.036, 0.042, 0.075, 10), glassMat), 0, 0.0375, 0, 0, 0, 0, inkG);
+                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.02, 0.028, 0.024, 8), glassMat), 0, 0.086, 0, 0, 0, 0, inkG);
+                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.031, 0.031, 0.052, 10), inkMat), 0, 0.030, 0, 0, 0, 0, inkG);
             }
 
             /* —— 羽毛笔（插在墨水瓶里）—— */
             const quillG = new THREE.Group();
+            ctx.quillG = quillG;
             cartG.add(quillG);
             const QUILL_REST = { pos: [-0.10, 0.505, 0.02], rotX: -0.15, rotZ: 0.30 };
+            ctx.QUILL_REST = QUILL_REST;
             {
-                const featherMat = LITMAT(0xf4f0e6, { side: THREE.DoubleSide });
-                put(solid(new THREE.CylinderGeometry(0.0035, 0.0035, 0.15, 6),
-                    LITMAT(0xd9c9a8)), 0, 0.085, 0, 0, 0, 0, quillG);
-                put(solid(new THREE.ConeGeometry(0.0035, 0.03, 6),
-                    LITMAT(0x4a3b28)), 0, 0.005, 0, 0, 0, Math.PI, quillG);
+                const featherMat = ctx.LITMAT(0xf4f0e6, { side: THREE.DoubleSide });
+                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.0035, 0.0035, 0.15, 6),
+                    ctx.LITMAT(0xd9c9a8)), 0, 0.085, 0, 0, 0, 0, quillG);
+                ctx.put(ctx.solid(new THREE.ConeGeometry(0.0035, 0.03, 6),
+                    ctx.LITMAT(0x4a3b28)), 0, 0.005, 0, 0, 0, Math.PI, quillG);
                 const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), featherMat);
                 f.scale.set(0.32, 1.5, 0.55);
                 f.position.set(0.012, 0.155, 0);
                 f.rotation.z = -0.18;
                 quillG.add(f);
-                put(line([[0, 0.09, 0], [0.006, 0.22, 0]]), 0, 0, 0, 0, 0, 0, quillG);
+                ctx.put(ctx.line([[0, 0.09, 0], [0.006, 0.22, 0]]), 0, 0, 0, 0, 0, 0, quillG);
                 for (let k = 0; k < 5; k++) {
                     const yy = 0.11 + k * 0.024;
-                    put(line([[0.002, yy, 0], [0.028 - k * 0.002, yy + 0.014, 0]]), 0, 0, 0, 0, 0, 0, quillG);
-                    put(line([[0.002, yy, 0], [-0.016 + k * 0.001, yy + 0.012, 0]]), 0, 0, 0, 0, 0, 0, quillG);
+                    ctx.put(ctx.line([[0.002, yy, 0], [0.028 - k * 0.002, yy + 0.014, 0]]), 0, 0, 0, 0, 0, 0, quillG);
+                    ctx.put(ctx.line([[0.002, yy, 0], [-0.016 + k * 0.001, yy + 0.012, 0]]), 0, 0, 0, 0, 0, 0, quillG);
                 }
             }
             quillG.position.set(QUILL_REST.pos[0], QUILL_REST.pos[1], QUILL_REST.pos[2]);
@@ -1368,8 +1568,11 @@ export function installCabin(app) {
 
             /* —— 发光魔法符号（Sprite 池：花体/哥特数学字母 + 柔光，无描边）—— */
             const GLYPH_CHARS = ['𝔑', '𝔎', '𝓇', '𝔓', '𝒻', '𝓀', '𝔖', '𝓌'];
+            ctx.GLYPH_CHARS = GLYPH_CHARS;
             const GLYPH_COLORS = ['#d84fd0', '#4f9bd8', '#d8a84f', '#e05555', '#4fd8b0', '#f0e04f', '#9b6fd8', '#e084f0'];
+            ctx.GLYPH_COLORS = GLYPH_COLORS;
             const magicGlyphs = [];
+            ctx.magicGlyphs = magicGlyphs;
             for (let i = 0; i < 8; i++) {
                 const cv = document.createElement('canvas');
                 cv.width = cv.height = 128;
@@ -1389,64 +1592,74 @@ export function installCabin(app) {
                 const sp = new THREE.Sprite(mat);
                 sp.scale.setScalar(0.001);
                 sp.visible = false;
-                scene.add(sp);
+                ctx.scene.add(sp);
                 magicGlyphs.push({ sp, mat, active: false, age: 0, life: 2.4, base: new THREE.Vector3() });
             }
 
             /* 书写路径（世界坐标）：餐桌上方空中（右侧） */
             const QW_A = new THREE.Vector3(2.75, 1.30, 1.75);
+            ctx.QW_A = QW_A;
             const QW_B = new THREE.Vector3(1.65, 1.55, 1.05);
+            ctx.QW_B = QW_B;
             for (let i = 0; i < 8; i++) {
                 magicGlyphs[i].base.lerpVectors(QW_A, QW_B, (i + 0.5) / 8);
                 magicGlyphs[i].base.y += Math.sin(i * 2.2) * 0.05;
             }
 
-            let quillRun = 0;
+            ctx.quillRun = 0;
             const QUILL_T = 7.0;
+            ctx.QUILL_T = QUILL_T;
             function startQuill() {
-                if (quillRun <= 0.4) {
-                    quillRun = QUILL_T;
+                if (ctx.quillRun <= 0.4) {
+                    ctx.quillRun = QUILL_T;
                     for (const g of magicGlyphs) { g.active = false; g.sp.visible = false; g.mat.opacity = 0; }
                 }
             }
 
             /* —— 纸堆（下层）—— */
             const paperG = new THREE.Group();
+            ctx.paperG = paperG;
             cartG.add(paperG);
             const papers = [];
+            ctx.papers = papers;
             for (let i = 0; i < 8; i++) {
                 const pg = new THREE.Group();
-                put(solid(new THREE.BoxGeometry(0.13, 0.0022, 0.18), FILL), 0, 0, 0, 0, 0, 0, pg);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.13, 0.0022, 0.18), ctx.FILL), 0, 0, 0, 0, 0, 0, pg);
                 for (const ly of [-0.03, 0, 0.03])
-                    put(line([[-0.045, 0.0025, ly], [0.045, 0.0025, ly]]), 0, 0, 0, 0, 0, 0, pg);
+                    ctx.put(ctx.line([[-0.045, 0.0025, ly], [0.045, 0.0025, ly]]), 0, 0, 0, 0, 0, 0, pg);
                 const ry0 = (floor1Rng() - 0.5) * 0.3;
                 pg.position.set(0.08 + (i % 3) * 0.003, 0.198 + i * 0.0028, -0.02 + (floor1Rng() - 0.5) * 0.012);
                 pg.rotation.y = ry0;
                 paperG.add(pg);
                 papers.push({ g: pg, home: pg.position.clone(), ry0, a0: 1.0 + i * 0.8, r: 2.1 + (i % 3) * 0.28 });
             }
-            let paperRun = 0;
+            ctx.paperRun = 0;
             const PAPER_T = 8.5;
+            ctx.PAPER_T = PAPER_T;
             const _cw = new THREE.Vector3();
+            ctx._cw = _cw;
 
-            regMagic(cartBody, () => { cartOut = !cartOut; });
-            regMagic(inkG, () => { startQuill(); });
-            regMagic(quillG, () => { startQuill(); });
-            regMagic(paperG, () => { if (paperRun <= 0) paperRun = PAPER_T; });
+            ctx.regMagic(cartBody, () => { ctx.cartOut = !ctx.cartOut; });
+            ctx.regMagic(inkG, () => { startQuill(); });
+            ctx.regMagic(quillG, () => { startQuill(); });
+            ctx.regMagic(paperG, () => { if (ctx.paperRun <= 0) ctx.paperRun = PAPER_T; });
 
             /* ---- 12.12 塔罗牌牌堆 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/tarot.js，此处只留装配调用。
-            const tarotApi = installProp(tarot);
+            const tarotApi = ctx.installProp(tarot);
+            ctx.tarotApi = tarotApi;
             /* ---- 12.13 暖桌（八角桌板 + 等腰梯形垂帘 + 四角倒三角填补）+ 收音机 + 果盆橘子 + 方坐垫 ---- */
-            let kotatsuOn = true;
-            let kotGlowMat = null;
-            let radioNoteRun = 0;
+            ctx.kotatsuOn = true;
+            ctx.kotGlowMat = null;
+            ctx.radioNoteRun = 0;
             const kotatsuG = new THREE.Group();
-            kotatsuG.position.set(KOT_X, 0, KOT_Z);
+            ctx.kotatsuG = kotatsuG;
+            kotatsuG.position.set(ctx.KOT_X, 0, ctx.KOT_Z);
             kotatsuG.rotation.y = 0.22;
-            scene.add(kotatsuG);
+            ctx.scene.add(kotatsuG);
 
             const kotBody = new THREE.Group();
+            ctx.kotBody = kotBody;
             kotatsuG.add(kotBody);
             {
                 const tilt = 0.16;
@@ -1469,12 +1682,12 @@ export function installCabin(app) {
                 topShape.closePath();
                 const topGeo = new THREE.ExtrudeGeometry(topShape, { depth: 0.055, bevelEnabled: false });
                 topGeo.rotateX(-Math.PI / 2);
-                put(edge(topGeo), 0, KTOP - 0.055, 0, 0, 0, 0, kotBody);
+                ctx.put(ctx.edge(topGeo), 0, ctx.KTOP - 0.055, 0, 0, 0, 0, kotBody);
 
                 for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    put(box(0.07, 0.40, 0.07), sx * 0.42, 0.20, sz * 0.42, 0, 0, 0, kotBody);
+                    ctx.put(ctx.box(0.07, 0.40, 0.07), sx * 0.42, 0.20, sz * 0.42, 0, 0, 0, kotBody);
 
-                const quiltMat = LITMAT(0xc4a484, { side: THREE.DoubleSide });
+                const quiltMat = ctx.LITMAT(0xc4a484, { side: THREE.DoubleSide });
                 const trapShape = new THREE.Shape();
                 trapShape.moveTo(-wt / 2, 0);
                 trapShape.lineTo(wt / 2, 0);
@@ -1483,22 +1696,22 @@ export function installCabin(app) {
                 trapShape.closePath();
                 const trapGeo = new THREE.ExtrudeGeometry(trapShape, { depth: 0.03, bevelEnabled: false });
                 function makeCurtain() {
-                    const g = solid(trapGeo, quiltMat);
+                    const g = ctx.solid(trapGeo, quiltMat);
                     for (const s of [-0.22, 0.22])
-                        put(line([[s, -0.035, 0.034], [s, -Lc + 0.05, 0.034]]), 0, 0, 0, 0, 0, 0, g);
+                        ctx.put(ctx.line([[s, -0.035, 0.034], [s, -Lc + 0.05, 0.034]]), 0, 0, 0, 0, 0, 0, g);
                     const hem = [];
                     for (let i = 0; i <= 24; i++) {
                         const t2 = i / 24;
                         hem.push([-wb / 2 + t2 * wb, -Lc + Math.sin(t2 * Math.PI * 5) * 0.012, 0.034]);
                     }
-                    put(line(hem), 0, 0, 0, 0, 0, 0, g);
+                    ctx.put(ctx.line(hem), 0, 0, 0, 0, 0, 0, g);
                     return g;
                 }
                 for (const ry of [0, Math.PI, Math.PI / 2, -Math.PI / 2]) {
                     const w = new THREE.Group();
                     w.rotation.y = ry;
                     kotBody.add(w);
-                    put(makeCurtain(), 0, topY, C, -tilt, 0, 0, w);
+                    ctx.put(makeCurtain(), 0, topY, C, -tilt, 0, 0, w);
                 }
 
                 const yBot = topY - Lc * Math.cos(tilt);
@@ -1513,80 +1726,86 @@ export function installCabin(app) {
                         P3[0], P3[1], P3[2]
                     ]), 3));
                     triGeo.computeVertexNormals();
-                    kotBody.add(solid(triGeo, quiltMat));
+                    kotBody.add(ctx.solid(triGeo, quiltMat));
                 }
 
-                kotGlowMat = new THREE.MeshBasicMaterial({
+                ctx.kotGlowMat = new THREE.MeshBasicMaterial({
                     color: 0xffab5e, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide
                 });
-                const kotGlow = new THREE.Mesh(new THREE.CircleGeometry(0.52, 24), kotGlowMat);
+                const kotGlow = new THREE.Mesh(new THREE.CircleGeometry(0.52, 24), ctx.kotGlowMat);
                 kotGlow.userData.noHit = true;
-                put(kotGlow, 0, 0.015, 0, -Math.PI / 2, 0, 0, kotBody);
+                ctx.put(kotGlow, 0, 0.015, 0, -Math.PI / 2, 0, 0, kotBody);
             }
-            regMagic(kotBody, () => { kotatsuOn = !kotatsuOn; });
+            ctx.regMagic(kotBody, () => { ctx.kotatsuOn = !ctx.kotatsuOn; });
 
             /* —— 收音机（点击播放音符）—— */
             const radioG = new THREE.Group();
-            radioG.position.set(-0.34, KTOP, 0.30);
+            ctx.radioG = radioG;
+            radioG.position.set(-0.34, ctx.KTOP, 0.30);
             radioG.rotation.y = -0.45;
             kotatsuG.add(radioG);
             {
-                const woodMat = LITMAT(0x8f6b4e, { side: THREE.DoubleSide });
-                put(solid(new THREE.BoxGeometry(0.20, 0.115, 0.10), woodMat), 0, 0.0575, 0, 0, 0, 0, radioG);
+                const woodMat = ctx.LITMAT(0x8f6b4e, { side: THREE.DoubleSide });
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.20, 0.115, 0.10), woodMat), 0, 0.0575, 0, 0, 0, 0, radioG);
                 for (let i = 0; i < 4; i++)
-                    put(line([[-0.075, 0.032 + i * 0.018, 0.052], [-0.005, 0.032 + i * 0.018, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                put(line([[-0.078, 0.026, 0.052], [-0.078, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                put(line([[-0.002, 0.026, 0.052], [-0.002, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                put(edge(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 8)),
+                    ctx.put(ctx.line([[-0.075, 0.032 + i * 0.018, 0.052], [-0.005, 0.032 + i * 0.018, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
+                ctx.put(ctx.line([[-0.078, 0.026, 0.052], [-0.078, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
+                ctx.put(ctx.line([[-0.002, 0.026, 0.052], [-0.002, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 8)),
                     0.035, 0.080, 0.052, Math.PI / 2, 0, 0, radioG);
-                put(edge(new THREE.CylinderGeometry(0.011, 0.011, 0.012, 8)),
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.012, 8)),
                     0.070, 0.080, 0.052, Math.PI / 2, 0, 0, radioG);
-                logBetween([0.085, 0.11, 0], [0.150, 0.235, -0.01], 0.005, radioG);
+                ctx.logBetween([0.085, 0.11, 0], [0.150, 0.235, -0.01], 0.005, radioG);
                 const noteSrc = new THREE.Object3D();
                 noteSrc.position.set(0.150, 0.245, -0.01);
                 radioG.add(noteSrc);
                 radioG.userData.noteSrc = noteSrc;
             }
             const noteMat = new THREE.LineBasicMaterial({ color: 0x6b4ea8, transparent: true, opacity: 0 });
+            ctx.noteMat = noteMat;
             const radioNotes = [];
+            ctx.radioNotes = radioNotes;
             for (let i = 0; i < 4; i++) {
                 const g = new THREE.Group();
                 const head = [];
                 for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2; head.push([Math.cos(a) * 0.013, Math.sin(a) * 0.009, 0]); }
-                g.add(new THREE.LineLoop(geo(head), noteMat));
-                g.add(new THREE.Line(geo([[0.011, 0.007, 0], [0.011, 0.052, 0]]), noteMat));
-                g.add(new THREE.Line(geo([[0.011, 0.052, 0], [0.024, 0.044, 0]]), noteMat));
+                g.add(new THREE.LineLoop(ctx.geo(head), noteMat));
+                g.add(new THREE.Line(ctx.geo([[0.011, 0.007, 0], [0.011, 0.052, 0]]), noteMat));
+                g.add(new THREE.Line(ctx.geo([[0.011, 0.052, 0], [0.024, 0.044, 0]]), noteMat));
                 g.visible = false;
-                scene.add(g);
+                ctx.scene.add(g);
                 radioNotes.push({ g, ph: i / 4 });
             }
-            regMagic(radioG, () => { radioNoteRun = 3.2; });
+            ctx.regMagic(radioG, () => { ctx.radioNoteRun = 3.2; });
 
             /* —— 果盆 + 橘子 6 颗 —— */
             const FB_X = -0.24, FB_Z = 0.10;
+            ctx.FB_X = FB_X; ctx.FB_Z = FB_Z;
             {
                 const BP = [[0.055, 0], [0.07, 0.018], [0.10, 0.038], [0.14, 0.058], [0.165, 0.078], [0.155, 0.082]];
-                put(new THREE.Mesh(new THREE.LatheGeometry(BP.map(p => new THREE.Vector2(p[0], p[1])), 18), FILL),
-                    FB_X, KTOP, FB_Z, 0, 0, 0, kotatsuG);
+                ctx.put(new THREE.Mesh(new THREE.LatheGeometry(BP.map(p => new THREE.Vector2(p[0], p[1])), 18), ctx.FILL),
+                    FB_X, ctx.KTOP, FB_Z, 0, 0, 0, kotatsuG);
                 for (const [ry, rr] of [[0.038, 0.10], [0.078, 0.165], [0.082, 0.155]]) {
                     const pts = [];
-                    for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2; pts.push([FB_X + Math.cos(a) * rr, KTOP + ry, FB_Z + Math.sin(a) * rr]); }
-                    lloop(pts, kotatsuG);
+                    for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2; pts.push([FB_X + Math.cos(a) * rr, ctx.KTOP + ry, FB_Z + Math.sin(a) * rr]); }
+                    ctx.lloop(pts, kotatsuG);
                 }
                 for (const ang of [0, 2.1, 4.2]) {
                     const c = Math.cos(ang), s = Math.sin(ang);
-                    put(line(BP.map(([px, py]) => [FB_X + c * px, KTOP + py, FB_Z + s * px])), 0, 0, 0, 0, 0, 0, kotatsuG);
+                    ctx.put(ctx.line(BP.map(([px, py]) => [FB_X + c * px, ctx.KTOP + py, FB_Z + s * px])), 0, 0, 0, 0, 0, 0, kotatsuG);
                 }
             }
             const oranges = [];
-            let orangeState = 'inbowl', orangeT = 0;
+            ctx.oranges = oranges;
+            ctx.orangeState = 'inbowl', ctx.orangeT = 0;
             const OR = 0.033;
+            ctx.OR = OR;
             {
                 const orangeG = new THREE.Group();
-                orangeG.position.set(FB_X, KTOP, FB_Z);
+                orangeG.position.set(FB_X, ctx.KTOP, FB_Z);
                 kotatsuG.add(orangeG);
-                const oMat = LITMAT(0xe8963c);
-                const oMat2 = LITMAT(0xf0a44f);
+                const oMat = ctx.LITMAT(0xe8963c);
+                const oMat2 = ctx.LITMAT(0xf0a44f);
                 const RA = 0.075;
                 const homes = [
                     [RA, 0.000, 0.050],
@@ -1605,7 +1824,7 @@ export function installCabin(app) {
                     [0.55, 0.02]
                 ];
                 for (let i = 0; i < 6; i++) {
-                    const mesh = solid(new THREE.SphereGeometry(OR, 10, 8), i % 2 ? oMat2 : oMat);
+                    const mesh = ctx.solid(new THREE.SphereGeometry(OR, 10, 8), i % 2 ? oMat2 : oMat);
                     const hx = homes[i][0], hy = homes[i][2], hz = homes[i][1];
                     const tx = rolls[i][0], tz = rolls[i][1];
                     mesh.position.set(hx, hy, hz);
@@ -1613,32 +1832,33 @@ export function installCabin(app) {
                     const dx = tx - hx, dz = tz - hz;
                     oranges.push({ mesh, hx, hy, hz, tx, ty: OR, tz, ax: dz / OR, az: -dx / OR });
                 }
-                const stem = solid(new THREE.CylinderGeometry(0.004, 0.004, 0.016, 5),
-                    LITMAT(0x7a5230));
-                put(stem, 0, 0.038, 0, 0, 0, 0, oranges[5].mesh);
-                regMagic(orangeG, () => {
-                    if (orangeState === 'inbowl') { orangeState = 'out'; orangeT = 0; }
-                    else if (orangeState === 'rolled') { orangeState = 'back'; orangeT = 0; }
+                const stem = ctx.solid(new THREE.CylinderGeometry(0.004, 0.004, 0.016, 5),
+                    ctx.LITMAT(0x7a5230));
+                ctx.put(stem, 0, 0.038, 0, 0, 0, 0, oranges[5].mesh);
+                ctx.regMagic(orangeG, () => {
+                    if (ctx.orangeState === 'inbowl') { ctx.orangeState = 'out'; ctx.orangeT = 0; }
+                    else if (ctx.orangeState === 'rolled') { ctx.orangeState = 'back'; ctx.orangeT = 0; }
                 });
             }
 
             /* —— 茶杯 ×2 —— */
-            makeCup(-0.34, -0.34, KTOP, kotatsuG);
-            makeCup(-0.14, -0.44, KTOP, kotatsuG);
+            makeCup(-0.34, -0.34, ctx.KTOP, kotatsuG);
+            makeCup(-0.14, -0.44, ctx.KTOP, kotatsuG);
 
             /* —— 方坐垫 ×2 —— */
             const cushions = [];
+            ctx.cushions = cushions;
             function makeCushion(x, z, ry, col, colBottom) {
                 const g = new THREE.Group();
                 const m = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide });
                 const m2 = new THREE.MeshBasicMaterial({ color: colBottom, side: THREE.DoubleSide });
-                put(solid(new THREE.BoxGeometry(0.44, 0.085, 0.44), m), 0, 0.048, 0, 0, 0, 0, g);
-                put(solid(new THREE.BoxGeometry(0.36, 0.032, 0.36), m), 0, 0.098, 0, 0, 0, 0, g);
-                put(solid(new THREE.BoxGeometry(0.44, 0.014, 0.44), m2), 0, 0.008, 0, 0, 0, 0, g);
-                put(edge(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 8)), 0, 0.118, 0, 0, 0, 0, g);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.44, 0.085, 0.44), m), 0, 0.048, 0, 0, 0, 0, g);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.36, 0.032, 0.36), m), 0, 0.098, 0, 0, 0, 0, g);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(0.44, 0.014, 0.44), m2), 0, 0.008, 0, 0, 0, 0, g);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 8)), 0, 0.118, 0, 0, 0, 0, g);
                 for (let k = 0; k < 4; k++) {
                     const a = k / 4 * Math.PI * 2 + Math.PI / 4;
-                    put(line([[Math.cos(a) * 0.04, 0.115, Math.sin(a) * 0.04],
+                    ctx.put(ctx.line([[Math.cos(a) * 0.04, 0.115, Math.sin(a) * 0.04],
                     [Math.cos(a) * 0.15, 0.102, Math.sin(a) * 0.15]]), 0, 0, 0, 0, 0, 0, g);
                 }
                 g.position.set(x, 0, z);
@@ -1646,7 +1866,7 @@ export function installCabin(app) {
                 kotatsuG.add(g);
                 const c = { g, anim: 0, p: 0, from: 0, to: 0 };
                 cushions.push(c);
-                regMagic(g, () => {
+                ctx.regMagic(g, () => {
                     if (c.anim === 0) {
                         c.from = c.to;
                         c.to = c.to > Math.PI / 2 ? 0 : Math.PI;
@@ -1659,62 +1879,70 @@ export function installCabin(app) {
 
             /* ---- 门铃【墙外侧，与门中间齐平高度】 ---- */
             const doorbellG = new THREE.Group();
+            ctx.doorbellG = doorbellG;
             doorbellG.position.set(1.25, 1.05, 4.17);
-            scene.add(doorbellG);
+            ctx.scene.add(doorbellG);
             const btnG = new THREE.Group();
+            ctx.btnG = btnG;
             {
-                put(box(0.15, 0.20, 0.035), 0, 0, 0, 0, 0, 0, doorbellG);
-                put(edge(new THREE.TorusGeometry(0.045, 0.008, 6, 18)), 0, 0.025, 0.040, 0, 0, 0, btnG);
-                put(edge(new THREE.CylinderGeometry(0.042, 0.042, 0.028, 16)), 0, 0.025, 0.022, Math.PI / 2, 0, 0, btnG);
-                put(solid(new THREE.CylinderGeometry(0.024, 0.024, 0.030, 12),
-                    LITMAT(0xd98a94)), 0, 0.025, 0.024, Math.PI / 2, 0, 0, btnG);
+                ctx.put(ctx.box(0.15, 0.20, 0.035), 0, 0, 0, 0, 0, 0, doorbellG);
+                ctx.put(ctx.edge(new THREE.TorusGeometry(0.045, 0.008, 6, 18)), 0, 0.025, 0.040, 0, 0, 0, btnG);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.042, 0.042, 0.028, 16)), 0, 0.025, 0.022, Math.PI / 2, 0, 0, btnG);
+                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.024, 0.024, 0.030, 12),
+                    ctx.LITMAT(0xd98a94)), 0, 0.025, 0.024, Math.PI / 2, 0, 0, btnG);
                 doorbellG.add(btnG);
-                put(line([[-0.045, -0.050, 0.020], [0.045, -0.050, 0.020]]), 0, 0, 0, 0, 0, 0, doorbellG);
-                put(line([[-0.045, -0.065, 0.020], [0.045, -0.065, 0.020]]), 0, 0, 0, 0, 0, 0, doorbellG);
+                ctx.put(ctx.line([[-0.045, -0.050, 0.020], [0.045, -0.050, 0.020]]), 0, 0, 0, 0, 0, 0, doorbellG);
+                ctx.put(ctx.line([[-0.045, -0.065, 0.020], [0.045, -0.065, 0.020]]), 0, 0, 0, 0, 0, 0, doorbellG);
             }
-            let bellRun = 0, bellRipple = 0;
+            ctx.bellRun = 0, ctx.bellRipple = 0;
             const bellRipples = [];
+            ctx.bellRipples = bellRipples;
             for (let i = 0; i < 3; i++) {
                 const rm = new THREE.LineBasicMaterial({ color: 0x8a7d5a, transparent: true, opacity: 0 });
                 const rp = [];
                 for (let k = 0; k <= 20; k++) { const a = k / 20 * Math.PI * 2; rp.push([Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05]); }
-                const l = new THREE.LineLoop(geo(rp), rm);
+                const l = new THREE.LineLoop(ctx.geo(rp), rm);
                 l.rotation.x = Math.PI / 2;
                 l.position.set(1.25, 1.075, 4.22);
                 l.frustumCulled = false;
-                scene.add(l);
+                ctx.scene.add(l);
                 bellRipples.push({ l, m: rm, ph: i / 3 });
             }
-            regMagic(doorbellG, () => { bellRun = 1.4; bellRipple = 1.1; });
+            ctx.regMagic(doorbellG, () => { ctx.bellRun = 1.4; ctx.bellRipple = 1.1; });
             doorbellG.userData.sfx = 'doorbell';
 
             /* ---- 门口上方挂杆 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/doorHangBar.js，此处只留装配调用。
-            const doorHangBarApi = installProp(doorHangBar);
+            const doorHangBarApi = ctx.installProp(doorHangBar);
+            ctx.doorHangBarApi = doorHangBarApi;
             /* ============ 楼梯下储物箱（点击开盖，内藏彩色矿石） ============ */
-            let storageOpen = false, storageP = 0, storageV = 0;
+            /* ==================== [J4:seg junkBoxes] ==================== */
+            ctx.storageOpen = false, ctx.storageP = 0, ctx.storageV = 0;
             const storageChest = new THREE.Group();
+            ctx.storageChest = storageChest;
             storageChest.position.set(0, 0, -0.78);
             storageChest.rotation.y = Math.PI;
-            scene.add(storageChest);
+            ctx.scene.add(storageChest);
             const storageLid = new THREE.Group();
+            ctx.storageLid = storageLid;
             const oreMeshes = [];
+            ctx.oreMeshes = oreMeshes;
             {
-                const woodMat = LITMAT(0x8a6a4a, { side: THREE.DoubleSide });
-                const darkMat = LITMAT(0x6b4e35, { side: THREE.DoubleSide });
+                const woodMat = ctx.LITMAT(0x8a6a4a, { side: THREE.DoubleSide });
+                const darkMat = ctx.LITMAT(0x6b4e35, { side: THREE.DoubleSide });
                 const W = 0.78, D = 0.52, H = 0.40, T = 0.03;
-                put(solid(new THREE.BoxGeometry(W, T, D), woodMat), 0, T / 2, 0, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(W, H, T), woodMat), 0, T + H / 2, D / 2 - T / 2, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(W, H, T), woodMat), 0, T + H / 2, -D / 2 + T / 2, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(T, H, D - 2 * T), woodMat), W / 2 - T / 2, T + H / 2, 0, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(T, H, D - 2 * T), woodMat), -W / 2 + T / 2, T + H / 2, 0, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(W + 0.04, 0.05, 0.05), darkMat), 0, H + 0.015, D / 2, 0, 0, 0, storageChest);
-                put(solid(new THREE.BoxGeometry(W + 0.04, 0.05, 0.05), darkMat), 0, H + 0.015, -D / 2, 0, 0, 0, storageChest);
-                put(line([[-0.09, H - 0.06, D / 2 + 0.012], [0.09, H - 0.06, D / 2 + 0.012]]), 0, 0, 0, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W, T, D), woodMat), 0, T / 2, 0, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W, H, T), woodMat), 0, T + H / 2, D / 2 - T / 2, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W, H, T), woodMat), 0, T + H / 2, -D / 2 + T / 2, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(T, H, D - 2 * T), woodMat), W / 2 - T / 2, T + H / 2, 0, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(T, H, D - 2 * T), woodMat), -W / 2 + T / 2, T + H / 2, 0, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W + 0.04, 0.05, 0.05), darkMat), 0, H + 0.015, D / 2, 0, 0, 0, storageChest);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W + 0.04, 0.05, 0.05), darkMat), 0, H + 0.015, -D / 2, 0, 0, 0, storageChest);
+                ctx.put(ctx.line([[-0.09, H - 0.06, D / 2 + 0.012], [0.09, H - 0.06, D / 2 + 0.012]]), 0, 0, 0, 0, 0, 0, storageChest);
                 storageLid.position.set(0, H + 0.03, -D / 2);
-                put(solid(new THREE.BoxGeometry(W + 0.04, 0.06, D + 0.04), darkMat), 0, 0.03, D / 2, 0, 0, 0, storageLid);
-                put(line([[-W / 2 - 0.02, 0.06, D / 2], [-W / 2 + 0.06, 0.06, D / 2]]), 0, 0, 0, 0, 0, 0, storageLid);
-                put(line([[W / 2 - 0.06, 0.06, D / 2], [W / 2 + 0.02, 0.06, D / 2]]), 0, 0, 0, 0, 0, 0, storageLid);
+                ctx.put(ctx.solid(new THREE.BoxGeometry(W + 0.04, 0.06, D + 0.04), darkMat), 0, 0.03, D / 2, 0, 0, 0, storageLid);
+                ctx.put(ctx.line([[-W / 2 - 0.02, 0.06, D / 2], [-W / 2 + 0.06, 0.06, D / 2]]), 0, 0, 0, 0, 0, 0, storageLid);
+                ctx.put(ctx.line([[W / 2 - 0.06, 0.06, D / 2], [W / 2 + 0.02, 0.06, D / 2]]), 0, 0, 0, 0, 0, 0, storageLid);
                 storageChest.add(storageLid);
                 const ORES = [
                     [0x9b4fd8, 'oct'], [0x2fbf6f, 'ico'], [0xd84444, 'oct'],
@@ -1726,7 +1954,7 @@ export function installCabin(app) {
                     const g = o[1] === 'oct' ? new THREE.OctahedronGeometry(0.052)
                         : o[1] === 'ico' ? new THREE.IcosahedronGeometry(0.050, 0)
                             : new THREE.DodecahedronGeometry(0.048);
-                    const m = solid(g, new THREE.MeshBasicMaterial({ color: o[0] }), oreEdgeMat);
+                    const m = ctx.solid(g, new THREE.MeshBasicMaterial({ color: o[0] }), oreEdgeMat);
                     const col = i % 4, row = Math.floor(i / 4);
                     m.position.set(-0.27 + col * 0.18, 0.10 + row * 0.045, 0.10 - row * 0.21);
                     m.rotation.y = i * 0.7;
@@ -1735,60 +1963,73 @@ export function installCabin(app) {
                     oreMeshes.push({ g: m, by: m.position.y });
                 });
             }
-            regMagic(storageChest, () => { storageOpen = !storageOpen; });
+            ctx.regMagic(storageChest, () => { ctx.storageOpen = !ctx.storageOpen; });
 
             /* ========================================================== */
             /* ============ 二楼陈设（床·书桌·魔杖·星象仪·挂画等） ============ */
             /* ========================================================== */
 
             /* ---- 18.1 大床 ---- */
+            /* ==================== [J4:seg floor2] ==================== */
+            // ↓ J4 段导出（floor2）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.makeCandleGlow = makeCandleGlow; ctx.getGlyphTex = getGlyphTex; ctx.spawnGlyphs = spawnGlyphs; ctx.updateGlyphs = updateGlyphs; ctx.updateBook = updateBook; ctx.glowBall = glowBall;
+            ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
+            ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
+            ctx.spiralPts2 = spiralPts2; ctx.buildMagicCircle = buildMagicCircle; ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo; ctx.makeSolidFlame = makeSolidFlame; ctx.buildCreation = buildCreation;
+            ctx.clearCast = clearCast; ctx.updateWand2 = updateWand2; ctx.cbox = cbox; ctx.crboxCol = crboxCol; ctx.crumpleBall = crumpleBall; ctx.arcPos = arcPos;
+            ctx.regWobble = regWobble; ctx.updateWobblers = updateWobblers; ctx.colEdge = colEdge; ctx.clockHand = clockHand; ctx.drawClock = drawClock; ctx.updateNewDecor = updateNewDecor;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                put(edge(new THREE.CylinderGeometry(0.045, 0.035, 0.32, 8)), BEDX + sxsz[0] * 0.56, FY + 0.16, BEDZ + sxsz[1] * 1.02, 0, 0, 0);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.045, 0.035, 0.32, 8)), ctx.BEDX + sxsz[0] * 0.56, ctx.FY + 0.16, ctx.BEDZ + sxsz[1] * 1.02, 0, 0, 0);
             }
-            put(box(1.32, 0.22, 2.24), BEDX, FY + 0.42, BEDZ);
-            put(rbox(1.36, 0.80, 0.10, 0.06), BEDX, FY + 0.78, BEDZ - 1.14);
-            put(rbox(1.32, 0.32, 2.24, 0.10), BEDX, FY + 0.69, BEDZ);
-            let pillowOpen = false, pillowT = 0;
+            ctx.put(ctx.box(1.32, 0.22, 2.24), ctx.BEDX, ctx.FY + 0.42, ctx.BEDZ);
+            ctx.put(ctx.rbox(1.36, 0.80, 0.10, 0.06), ctx.BEDX, ctx.FY + 0.78, ctx.BEDZ - 1.14);
+            ctx.put(ctx.rbox(1.32, 0.32, 2.24, 0.10), ctx.BEDX, ctx.FY + 0.69, ctx.BEDZ);
+            ctx.pillowOpen = false, ctx.pillowT = 0;
             const pillowG = new THREE.Group();
-            pillowG.position.set(BEDX, FY + 0.94, BEDZ - 0.76);
-            scene.add(pillowG);
-            pillowG.add(rbox(0.66, 0.22, 0.44, 0.08));
-            regMagic(pillowG, () => { pillowOpen = !pillowOpen; });
+            ctx.pillowG = pillowG;
+            pillowG.position.set(ctx.BEDX, ctx.FY + 0.94, ctx.BEDZ - 0.76);
+            ctx.scene.add(pillowG);
+            pillowG.add(ctx.rbox(0.66, 0.22, 0.44, 0.08));
+            ctx.regMagic(pillowG, () => { ctx.pillowOpen = !ctx.pillowOpen; });
             {
-                const bl = rbox(1.24, 0.20, 1.46, 0.08);
-                bl.position.set(BEDX, FY + 0.85, BEDZ + 0.40);
-                scene.add(bl);
+                const bl = ctx.rbox(1.24, 0.20, 1.46, 0.08);
+                bl.position.set(ctx.BEDX, ctx.FY + 0.85, ctx.BEDZ + 0.40);
+                ctx.scene.add(bl);
                 for (const bx of [-0.18, 0.18]) {
-                    put(iline([[BEDX + bx, FY + 0.955, BEDZ - 0.28], [BEDX + bx, FY + 0.955, BEDZ + 1.08]]), 0, 0, 0);
+                    ctx.put(ctx.iline([[ctx.BEDX + bx, ctx.FY + 0.955, ctx.BEDZ - 0.28], [ctx.BEDX + bx, ctx.FY + 0.955, ctx.BEDZ + 1.08]]), 0, 0, 0);
                 }
             }
 
             /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */
             // J3（B2）：几何已搬入 src/cabin/world/floor2/nightstand.js，此处只留装配调用。
-            installProp(nightstand);
+            ctx.installProp(nightstand);
             /* ---- 18.3 蜡烛 ---- */
-            let candleLit = true, candleP = 1;
+            ctx.candleLit = true, ctx.candleP = 1;
             const candleG = new THREE.Group();
-            candleG.position.set(NSX, FY + 0.60, NSZ);
-            scene.add(candleG);
-            put(edge(new THREE.CylinderGeometry(0.055, 0.075, 0.05, 10)), 0, 0.025, 0, 0, 0, 0, candleG);
-            put(edge(new THREE.CylinderGeometry(0.016, 0.016, 0.09, 8)), 0, 0.09, 0, 0, 0, 0, candleG);
-            put(edge(new THREE.CylinderGeometry(0.05, 0.06, 0.035, 10)), 0, 0.155, 0, 0, 0, 0, candleG);
-            const candleBody = edge(new THREE.CylinderGeometry(0.035, 0.038, 0.20, 10));
+            ctx.candleG = candleG;
+            candleG.position.set(ctx.NSX, ctx.FY + 0.60, ctx.NSZ);
+            ctx.scene.add(candleG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.075, 0.05, 10)), 0, 0.025, 0, 0, 0, 0, candleG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.016, 0.016, 0.09, 8)), 0, 0.09, 0, 0, 0, 0, candleG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.05, 0.06, 0.035, 10)), 0, 0.155, 0, 0, 0, 0, candleG);
+            const candleBody = ctx.edge(new THREE.CylinderGeometry(0.035, 0.038, 0.20, 10));
+            ctx.candleBody = candleBody;
             candleBody.position.set(0, 0.27, 0);
             candleG.add(candleBody);
-            put(edge(new THREE.CylinderGeometry(0.006, 0.006, 0.035, 6)), 0, 0.385, 0, 0, 0, 0, candleG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.006, 0.006, 0.035, 6)), 0, 0.385, 0, 0, 0, 0, candleG);
             const candleWavy = [];
-            makeWavyFlame(NSX, NSZ, FY + 1.00, 0.12, 0.034, fireMid, 0.0, 3.2, candleWavy);
-            makeWavyFlame(NSX, NSZ, FY + 1.02, 0.07, 0.016, fireIn, 2.0, 3.8, candleWavy);
-            regMagic(candleG, () => { candleLit = !candleLit; });
+            ctx.candleWavy = candleWavy;
+            ctx.makeWavyFlame(ctx.NSX, ctx.NSZ, ctx.FY + 1.00, 0.12, 0.034, ctx.fireMid, 0.0, 3.2, candleWavy);
+            ctx.makeWavyFlame(ctx.NSX, ctx.NSZ, ctx.FY + 1.02, 0.07, 0.016, ctx.fireIn, 2.0, 3.8, candleWavy);
+            ctx.regMagic(candleG, () => { ctx.candleLit = !ctx.candleLit; });
             const candleGlows = [];
+            ctx.candleGlows = candleGlows;
 
             function makeCandleGlow(r, op, col) {
                 const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-                m.position.set(NSX, FY + 1.02, NSZ);
+                m.position.set(ctx.NSX, ctx.FY + 1.02, ctx.NSZ);
                 m.renderOrder = 8;
-                scene.add(m);
+                ctx.scene.add(m);
                 candleGlows.push({ m: m, maxOp: op });
             }
             makeCandleGlow(0.045, 0.55, 0xfff0c0);
@@ -1797,63 +2038,81 @@ export function installCabin(app) {
 
             /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/desk.js，此处只留装配调用。
-            installProp(desk);
+            ctx.installProp(desk);
             /* —— 椅子 —— */
             const CHAIR_IN = -3.20;
+            ctx.CHAIR_IN = CHAIR_IN;
             const CHAIR_OUT = -3.60;
+            ctx.CHAIR_OUT = CHAIR_OUT;
             const chairG = new THREE.Group();
-            chairG.position.set(2.6, FY, CHAIR_IN);
-            scene.add(chairG);
+            ctx.chairG = chairG;
+            chairG.position.set(2.6, ctx.FY, CHAIR_IN);
+            ctx.scene.add(chairG);
             for (const szx of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                put(edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), szx[0] * 0.18, 0.22, szx[1] * 0.18, 0, 0, 0, chairG);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), szx[0] * 0.18, 0.22, szx[1] * 0.18, 0, 0, 0, chairG);
             }
-            put(box(0.44, 0.05, 0.44), 0, 0.465, 0, 0, 0, 0, chairG);
-            put(box(0.44, 0.52, 0.045), 0, 0.72, -0.198, 0, 0, 0, chairG);
-            let chairOpen = false, chairT = 0;
-            regMagic(chairG, () => { chairOpen = !chairOpen; });
+            ctx.put(ctx.box(0.44, 0.05, 0.44), 0, 0.465, 0, 0, 0, 0, chairG);
+            ctx.put(ctx.box(0.44, 0.52, 0.045), 0, 0.72, -0.198, 0, 0, 0, chairG);
+            ctx.chairOpen = false, ctx.chairT = 0;
+            ctx.regMagic(chairG, () => { ctx.chairOpen = !ctx.chairOpen; });
 
             /* —— 魔方 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/rubik.js，此处只留装配调用。
-            const rubikApi = installProp(rubik);
+            const rubikApi = ctx.installProp(rubik);
+            ctx.rubikApi = rubikApi;
             /* —— 通用倒塌/恢复 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/coinTowers.js，此处只留装配调用。
-            const coinTowersApi = installProp(coinTowers);
+            const coinTowersApi = ctx.installProp(coinTowers);
+            ctx.coinTowersApi = coinTowersApi;
             /* —— 扑克牌堆 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/cardDeck.js，此处只留装配调用。
-            const cardDeckApi = installProp(cardDeck);
+            const cardDeckApi = ctx.installProp(cardDeck);
+            ctx.cardDeckApi = cardDeckApi;
             /* —— 玻璃雪景球 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/snowGlobe.js，此处只留装配调用。
-            const snowGlobeApi = installProp(snowGlobe);
+            const snowGlobeApi = ctx.installProp(snowGlobe);
+            ctx.snowGlobeApi = snowGlobeApi;
             /* —— 沙漏 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/deskHourglass.js，此处只留装配调用。
-            const deskHourglassApi = installProp(deskHourglass);
+            const deskHourglassApi = ctx.installProp(deskHourglass);
+            ctx.deskHourglassApi = deskHourglassApi;
             /* —— 台历（转轴位于背板面顶端：未翻页贴板前面、翻过页贴板背面， */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/calendar.js，此处只留装配调用。
-            const calendarApi = installProp(calendar);
+            const calendarApi = ctx.installProp(calendar);
+            ctx.calendarApi = calendarApi;
             /* —— 魔法书本 —— */
             /* ========================================================== */
             const bookG = new THREE.Group();
-            bookG.position.set(2.58, TBL_TOP + 0.001, -2.80);
+            ctx.bookG = bookG;
+            bookG.position.set(2.58, ctx.TBL_TOP + 0.001, -2.80);
             bookG.rotation.y = -0.35;
-            scene.add(bookG);
-            let coverPivot;
-            let spineG;
+            ctx.scene.add(bookG);
+            ctx.coverPivot;
+            ctx.spineG;
             const flipperPivots = [];
+            ctx.flipperPivots = flipperPivots;
             const fanPivots = [];
+            ctx.fanPivots = fanPivots;
             const FAN_FIN = [0.40, 0.80, 1.20, 1.60, 2.00, 2.40, 2.80];
+            ctx.FAN_FIN = FAN_FIN;
             const COVER_FIN = Math.PI;
+            ctx.COVER_FIN = COVER_FIN;
             const COVER_Y0 = 0.039;
+            ctx.COVER_Y0 = COVER_Y0;
             const COVER_Y1 = 0.006;
+            ctx.COVER_Y1 = COVER_Y1;
             const FLIP_CLOSED_Y = [];
+            ctx.FLIP_CLOSED_Y = FLIP_CLOSED_Y;
             const FLIP_OPEN_Y = [];
+            ctx.FLIP_OPEN_Y = FLIP_OPEN_Y;
             for (let i = 0; i < 6; i++) {
                 FLIP_CLOSED_Y.push(0.0222 + i * 0.0019);
                 FLIP_OPEN_Y.push(0.0128 + i * 0.0019);
             }
             {
-                const covMat = LITMAT(0x7a4638, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+                const covMat = ctx.LITMAT(0x7a4638, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
                 const covEdge = new THREE.LineBasicMaterial({ color: 0x4a2820 });
-                const pgMat = LITMAT(0xf3ecd8, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+                const pgMat = ctx.LITMAT(0xf3ecd8, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
                 const pgEdge = new THREE.LineBasicMaterial({ color: 0xb8ad8e });
 
                 function plate(w, t, d, mat, emat) {
@@ -1897,22 +2156,23 @@ export function installCabin(app) {
                     bookG.add(pg);
                     fanPivots.push(pg);
                 }
-                coverPivot = plate(0.20, 0.012, 0.26, covMat, covEdge);
-                coverPivot.position.set(0, COVER_Y0, 0);
-                bookG.add(coverPivot);
+                ctx.coverPivot = plate(0.20, 0.012, 0.26, covMat, covEdge);
+                ctx.coverPivot.position.set(0, COVER_Y0, 0);
+                bookG.add(ctx.coverPivot);
                 const SPINE_R = 0.0225;
                 const spineGeo = new THREE.CylinderGeometry(SPINE_R, SPINE_R, 0.27, 12, 1, false, 0, Math.PI);
                 spineGeo.rotateX(Math.PI / 2);
-                const spineMat = LITMAT(0x7a4638, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                spineG = new THREE.Group();
-                spineG.position.set(0, SPINE_R, 0);
-                spineG.rotation.z = Math.PI;
-                spineG.add(new THREE.Mesh(spineGeo, spineMat));
-                spineG.add(new THREE.LineSegments(new THREE.EdgesGeometry(spineGeo, 10), covEdge));
-                bookG.add(spineG);
+                const spineMat = ctx.LITMAT(0x7a4638, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+                ctx.spineG = new THREE.Group();
+                ctx.spineG.position.set(0, SPINE_R, 0);
+                ctx.spineG.rotation.z = Math.PI;
+                ctx.spineG.add(new THREE.Mesh(spineGeo, spineMat));
+                ctx.spineG.add(new THREE.LineSegments(new THREE.EdgesGeometry(spineGeo, 10), covEdge));
+                bookG.add(ctx.spineG);
             }
             const bookState = { phase: 'closed', t0: 0 };
-            regMagic(bookG, () => {
+            ctx.bookState = bookState;
+            ctx.regMagic(bookG, () => {
                 const s = bookState;
                 if (s.phase === 'closed') {
                     s.phase = 'opening';
@@ -1923,8 +2183,11 @@ export function installCabin(app) {
                 }
             });
             const GLYPH_SYMS = ['✦', '☾', '✧', '∴', '⟡', '✱', '☽', '✸', '❖', '✺', '✜', '✻'];
+            ctx.GLYPH_SYMS = GLYPH_SYMS;
             const GLYPH_COLS = ['#ff6a4a', '#ffd94a', '#6affd9', '#6aa8ff', '#c86aff', '#ff6ad5', '#fff2b0'];
+            ctx.GLYPH_COLS = GLYPH_COLS;
             const glyphTexCache = {};
+            ctx.glyphTexCache = glyphTexCache;
 
             function getGlyphTex(sym, col) {
                 const key = sym + col;
@@ -1948,7 +2211,9 @@ export function installCabin(app) {
                 return tex;
             }
             const glyphObjs = [];
+            ctx.glyphObjs = glyphObjs;
             const glyphGeoShared = new THREE.PlaneGeometry(0.05, 0.05);
+            ctx.glyphGeoShared = glyphGeoShared;
 
             function spawnGlyphs(n) {
                 for (let i = 0; i < n; i++) {
@@ -1964,10 +2229,10 @@ export function installCabin(app) {
                         bookG.position.y + 0.10 + runtimeRng() * 0.03,
                         bookG.position.z + (runtimeRng() - 0.5) * 0.10
                     );
-                    scene.add(m);
+                    ctx.scene.add(m);
                     glyphObjs.push({
                         m: m,
-                        v: V((runtimeRng() - 0.5) * 0.06, 0.10 + runtimeRng() * 0.07, (runtimeRng() - 0.5) * 0.06),
+                        v: ctx.V((runtimeRng() - 0.5) * 0.06, 0.10 + runtimeRng() * 0.07, (runtimeRng() - 0.5) * 0.06),
                         life: 1.8 + runtimeRng() * 1.0,
                         t: 0,
                         ph: runtimeRng() * 6.28,
@@ -1981,7 +2246,7 @@ export function installCabin(app) {
                     const g = glyphObjs[i];
                     g.t += dt;
                     if (g.t >= g.life) {
-                        scene.remove(g.m);
+                        ctx.scene.remove(g.m);
                         g.m.material.dispose();
                         glyphObjs.splice(i, 1);
                         continue;
@@ -1993,28 +2258,28 @@ export function installCabin(app) {
                     g.m.material.opacity = Math.min(1, g.t / 0.25) * (1 - smooth(Math.max(0, Math.min(1, fade))));
                     const sc = 0.8 + 0.3 * Math.abs(Math.sin(time * 4 + g.ph));
                     g.m.scale.set(sc, sc, sc);
-                    g.m.quaternion.copy(camera.quaternion);
+                    g.m.quaternion.copy(ctx.camera.quaternion);
                     g.m.rotation.z += g.rs * dt;
                 }
             }
-            let bookGlyphT = 0;
+            ctx.bookGlyphT = 0;
 
             function updateBook(time, dt) {
                 const s = bookState;
                 const e = time - s.t0;
-                const ck = Math.max(0, Math.min(1, coverPivot.rotation.z / Math.PI));
-                spineG.rotation.z = Math.PI + (Math.PI / 2) * ck;
-                spineG.position.y = 0.0225 + (0.008 - 0.0225) * ck;
+                const ck = Math.max(0, Math.min(1, ctx.coverPivot.rotation.z / Math.PI));
+                ctx.spineG.rotation.z = Math.PI + (Math.PI / 2) * ck;
+                ctx.spineG.position.y = 0.0225 + (0.008 - 0.0225) * ck;
                 const ss = 1 - 0.3 * ck;
-                spineG.scale.set(ss, ss, 1);
+                ctx.spineG.scale.set(ss, ss, 1);
                 if (s.phase === 'opening') {
                     const CO = 0.55, W = 0.18;
                     const k = smooth(Math.min(e / CO, 1));
-                    coverPivot.rotation.z = COVER_FIN * k;
-                    coverPivot.position.y = COVER_Y0 + (COVER_Y1 - COVER_Y0) * k;
+                    ctx.coverPivot.rotation.z = COVER_FIN * k;
+                    ctx.coverPivot.position.y = COVER_Y0 + (COVER_Y1 - COVER_Y0) * k;
                     if (e >= CO + W) {
-                        coverPivot.rotation.z = COVER_FIN;
-                        coverPivot.position.y = COVER_Y1;
+                        ctx.coverPivot.rotation.z = COVER_FIN;
+                        ctx.coverPivot.position.y = COVER_Y1;
                         s.phase = 'flipping';
                         s.t0 = time;
                     }
@@ -2039,13 +2304,13 @@ export function installCabin(app) {
                     if (e >= F) {
                         s.phase = 'open';
                         spawnGlyphs(8);
-                        bookGlyphT = 0.45;
+                        ctx.bookGlyphT = 0.45;
                     }
                 } else if (s.phase === 'open') {
-                    bookGlyphT -= dt;
-                    if (bookGlyphT <= 0 && glyphObjs.length < 16) {
+                    ctx.bookGlyphT -= dt;
+                    if (ctx.bookGlyphT <= 0 && glyphObjs.length < 16) {
                         spawnGlyphs(1);
-                        bookGlyphT = 0.45;
+                        ctx.bookGlyphT = 0.45;
                     }
                 } else if (s.phase === 'closing') {
                     const FAN = 0.35, W1 = 0.15;
@@ -2074,12 +2339,12 @@ export function installCabin(app) {
                     }
                     if (e >= tCoverStart) {
                         const k2 = smooth(Math.min((e - tCoverStart) / CO, 1));
-                        coverPivot.rotation.z = COVER_FIN * (1 - k2);
-                        coverPivot.position.y = COVER_Y1 + (COVER_Y0 - COVER_Y1) * k2;
+                        ctx.coverPivot.rotation.z = COVER_FIN * (1 - k2);
+                        ctx.coverPivot.position.y = COVER_Y1 + (COVER_Y0 - COVER_Y1) * k2;
                     }
                     if (e >= tEnd) {
-                        coverPivot.rotation.z = 0;
-                        coverPivot.position.y = COVER_Y0;
+                        ctx.coverPivot.rotation.z = 0;
+                        ctx.coverPivot.position.y = COVER_Y0;
                         for (let i = 0; i < 6; i++) {
                             flipperPivots[i].rotation.z = 0;
                             flipperPivots[i].position.y = FLIP_CLOSED_Y[i];
@@ -2092,30 +2357,36 @@ export function installCabin(app) {
             /* ========================================================== */
             /* 18.5 星象仪 */
             /* ========================================================== */
-            let magicOn = false, magicP = 0;
+            ctx.magicOn = false, ctx.magicP = 0;
             const GOLD = new THREE.LineBasicMaterial({ color: 0xc9a227 });
+            ctx.GOLD = GOLD;
             const GOLDL = new THREE.LineBasicMaterial({ color: 0xb8912a });
+            ctx.GOLDL = GOLDL;
             const astro = new THREE.Group();
-            astro.position.set(1.75, TBL_TOP, -2.72);
-            scene.add(astro);
-            put(edge(new THREE.CylinderGeometry(0.15, 0.19, 0.09, 10)), 0, 0.045, 0, 0, 0, 0, astro);
-            put(edge(new THREE.CylinderGeometry(0.055, 0.085, 0.16, 8)), 0, 0.17, 0, 0, 0, 0, astro);
-            put(edge(new THREE.SphereGeometry(0.04, 8, 6)), 0, 0.265, 0, 0, 0, 0, astro);
+            ctx.astro = astro;
+            astro.position.set(1.75, ctx.TBL_TOP, -2.72);
+            ctx.scene.add(astro);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.15, 0.19, 0.09, 10)), 0, 0.045, 0, 0, 0, 0, astro);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.085, 0.16, 8)), 0, 0.17, 0, 0, 0, 0, astro);
+            ctx.put(ctx.edge(new THREE.SphereGeometry(0.04, 8, 6)), 0, 0.265, 0, 0, 0, 0, astro);
             const tiltG = new THREE.Group();
+            ctx.tiltG = tiltG;
             tiltG.position.y = 0.30;
             tiltG.rotation.z = 0.41;
             astro.add(tiltG);
             const spinG = new THREE.Group();
+            ctx.spinG = spinG;
             spinG.position.y = 0.16;
             tiltG.add(spinG);
-            put(edge(new THREE.CylinderGeometry(0.011, 0.011, 0.60, 6)), 0, 0, 0, 0, 0, 0, spinG);
-            put(edge(new THREE.SphereGeometry(0.062, 10, 8), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
-            put(edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, Math.PI / 2, spinG);
-            put(edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.60, 6)), 0, 0, 0, 0, 0, 0, spinG);
+            ctx.put(ctx.edge(new THREE.SphereGeometry(0.062, 10, 8), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, Math.PI / 2, spinG);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
             const innerG = new THREE.Group();
+            ctx.innerG = innerG;
             spinG.add(innerG);
-            put(edge(new THREE.TorusGeometry(0.21, 0.009, 6, 28), 1, GOLDL), 0, 0, 0, Math.PI / 3, 0, Math.PI / 4, innerG);
-            put(edge(new THREE.TorusGeometry(0.15, 0.008, 6, 24), 1, GOLDL), 0, 0, 0, Math.PI / 2, 0.8, 0, innerG);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.21, 0.009, 6, 28), 1, GOLDL), 0, 0, 0, Math.PI / 3, 0, Math.PI / 4, innerG);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.15, 0.008, 6, 24), 1, GOLDL), 0, 0, 0, Math.PI / 2, 0.8, 0, innerG);
 
             function glowBall(r, op) {
                 const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -2125,12 +2396,14 @@ export function installCabin(app) {
                 return m;
             }
             const glows = [glowBall(0.10, 0.55), glowBall(0.20, 0.28), glowBall(0.34, 0.12)];
-            regMagic(astro, () => { magicOn = !magicOn; });
+            ctx.glows = glows;
+            ctx.regMagic(astro, () => { ctx.magicOn = !ctx.magicOn; });
 
             /* ========================================================== */
             /* 18.6 二楼夜幕 */
             /* ========================================================== */
             const veilShape = new THREE.Shape();
+            ctx.veilShape = veilShape;
             veilShape.moveTo(-3.8, 0);
             veilShape.lineTo(3.8, 0);
             veilShape.lineTo(3.8, 1.35);
@@ -2138,18 +2411,23 @@ export function installCabin(app) {
             veilShape.lineTo(-3.8, 1.35);
             veilShape.closePath();
             const veilGeo = new THREE.ExtrudeGeometry(veilShape, { depth: 7.6, bevelEnabled: false });
+            ctx.veilGeo = veilGeo;
             veilGeo.translate(0, 0, -3.8);
-            veilGeo.translate(0, FLOOR_TOP, 0);
+            veilGeo.translate(0, ctx.FLOOR_TOP, 0);
             const veil = new THREE.Mesh(veilGeo, new THREE.MeshBasicMaterial({ color: 0x5f5480, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+            ctx.veil = veil;
             veil.renderOrder = 4;
-            scene.add(veil);
+            ctx.scene.add(veil);
 
             /* ========================================================== */
             /* 18.7 宇宙星空粒子系统 */
             /* ========================================================== */
             const STAR_COLORS = [0xffffff, 0xbfd8ff, 0xffe9b0, 0xd9c1ff, 0x9fd8ff, 0xc9a2ff, 0x9ffce8, 0xffd166];
+            ctx.STAR_COLORS = STAR_COLORS;
             const VIVID_COLORS = [0xff2255, 0x22ee66, 0x00b4ff, 0xffee00, 0xff00cc, 0x00ffe0];
+            ctx.VIVID_COLORS = VIVID_COLORS;
             const magicParts = [];
+            ctx.magicParts = magicParts;
 
             function addHalo(parent, color, r, opIn, opOut) {
                 const h1 = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -2176,13 +2454,13 @@ export function installCabin(app) {
                         g.userData.halo = addHalo(g, cl, 0.026, 0.35, 0.12);
                         g.userData.sharp = true;
                     } else if (typ === 1) {
-                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), LITMAT(0xffffff)));
+                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), ctx.LITMAT(0xffffff)));
                         const spikeMat = new THREE.LineBasicMaterial({ color: cl, transparent: true, opacity: 0 });
                         const spikeLen = 0.075;
                         g.add(new THREE.LineSegments(
                             new THREE.BufferGeometry().setFromPoints([
-                                V(-spikeLen, 0, 0), V(spikeLen, 0, 0),
-                                V(0, -spikeLen * 0.7, 0), V(0, spikeLen * 0.7, 0)
+                                ctx.V(-spikeLen, 0, 0), ctx.V(spikeLen, 0, 0),
+                                ctx.V(0, -spikeLen * 0.7, 0), ctx.V(0, spikeLen * 0.7, 0)
                             ]), spikeMat
                         ));
                         g.userData.spikes = spikeMat;
@@ -2195,7 +2473,7 @@ export function installCabin(app) {
                         g.userData.halo = addHalo(g, cl, 0.070, 0.30, 0.22);
                         g.userData.nebula = true;
                     } else if (typ === 3) {
-                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), LITMAT(0xffffff)));
+                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), ctx.LITMAT(0xffffff)));
                         g.userData.tails = [];
                         for (let s = 1; s <= 4; s++) {
                             const tp = new THREE.Mesh(
@@ -2223,13 +2501,13 @@ export function installCabin(app) {
                 g.userData.p = {
                     cx: Math.cos(th) * orbR * 0.85,
                     cz: Math.sin(th) * orbR,
-                    y0: FY + 0.40 + floor2Rng() * 2.5,
+                    y0: ctx.FY + 0.40 + floor2Rng() * 2.5,
                     ph: floor2Rng() * 6.28,
                     sp: 0.10 + floor2Rng() * 0.28,
                     bob: 0.06 + floor2Rng() * 0.10,
                     rs: (floor2Rng() - 0.5) * 0.012
                 };
-                scene.add(g);
+                ctx.scene.add(g);
                 magicParts.push(g);
             }
 
@@ -2237,16 +2515,20 @@ export function installCabin(app) {
             /* 18.8 小魔女计划板 */
             /* ========================================================== */
             const boardG = new THREE.Group();
-            boardG.position.set(-2.9, FY, 2.8);
+            ctx.boardG = boardG;
+            boardG.position.set(-2.9, ctx.FY, 2.8);
             boardG.rotation.y = 2.33;
-            scene.add(boardG);
+            ctx.scene.add(boardG);
             const boardTilt = new THREE.Group();
+            ctx.boardTilt = boardTilt;
             boardTilt.rotation.x = -0.09;
             boardG.add(boardTilt);
             const boardCanvas = document.createElement('canvas');
+            ctx.boardCanvas = boardCanvas;
             boardCanvas.width = 512;
             boardCanvas.height = 392;
             const bctx = boardCanvas.getContext('2d');
+            ctx.bctx = bctx;
 
             function drawBoardFace() {
                 bctx.fillStyle = '#2f4136';
@@ -2333,30 +2615,32 @@ export function installCabin(app) {
                 boardTex.needsUpdate = true;
             }
             const boardTex = new THREE.CanvasTexture(boardCanvas);
+            ctx.boardTex = boardTex;
             drawBoardFace();
-            put(log(1.55, 0.035), -0.56, 0.77, 0.04, 0.05, 0, 0.05, boardTilt);
-            put(log(1.55, 0.035), 0.56, 0.77, 0.04, 0.05, 0, -0.05, boardTilt);
-            put(log(1.40, 0.035), 0.00, 0.70, -0.32, 0.30, 0, 0, boardTilt);
-            put(log(1.10, 0.025), 0.00, 0.45, 0.06, 0, 0, Math.PI / 2, boardTilt);
-            put(log(1.10, 0.025), 0.00, 1.30, 0.02, 0, 0, Math.PI / 2, boardTilt);
-            put(box(1.27, 1.00, 0.06), 0, 1.00, 0, 0, 0, 0, boardTilt);
+            ctx.put(ctx.log(1.55, 0.035), -0.56, 0.77, 0.04, 0.05, 0, 0.05, boardTilt);
+            ctx.put(ctx.log(1.55, 0.035), 0.56, 0.77, 0.04, 0.05, 0, -0.05, boardTilt);
+            ctx.put(ctx.log(1.40, 0.035), 0.00, 0.70, -0.32, 0.30, 0, 0, boardTilt);
+            ctx.put(ctx.log(1.10, 0.025), 0.00, 0.45, 0.06, 0, 0, Math.PI / 2, boardTilt);
+            ctx.put(ctx.log(1.10, 0.025), 0.00, 1.30, 0.02, 0, 0, Math.PI / 2, boardTilt);
+            ctx.put(ctx.box(1.27, 1.00, 0.06), 0, 1.00, 0, 0, 0, 0, boardTilt);
             {
-                const woodSide = LITMAT(0xe8e2d0);
+                const woodSide = ctx.LITMAT(0xe8e2d0);
                 const faceMat = new THREE.MeshBasicMaterial({ map: boardTex });
                 const faceMesh = new THREE.Mesh(new THREE.BoxGeometry(1.13, 0.86, 0.03), [woodSide, woodSide, woodSide, woodSide, faceMat, woodSide]);
                 faceMesh.position.set(0, 1.00, 0.032);
                 boardTilt.add(faceMesh);
-                const eLines = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.13, 0.86, 0.03)), MAT);
+                const eLines = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.13, 0.86, 0.03)), ctx.MAT);
                 eLines.position.set(0, 1.00, 0.032);
                 boardTilt.add(eLines);
             }
-            put(box(1.20, 0.04, 0.14), 0, 0.54, 0.09, 0, 0, 0, boardTilt);
+            ctx.put(ctx.box(1.20, 0.04, 0.14), 0, 0.54, 0.09, 0, 0, 0, boardTilt);
             const notes = [
                 { col: '#ffe66d', txt: '采月光草', rz: 0.12, px: -0.40, py: 1.26 },
                 { col: '#ffb3c6', txt: '归还魔法书', rz: -0.08, px: -0.05, py: 1.14 },
                 { col: '#aecdff', txt: '作者：YIBI2333', rz: 0.18, px: 0.36, py: 0.84 }
             ];
-            let noteEditing = 0;
+            ctx.notes = notes;
+            ctx.noteEditing = 0;
             for (let i = 0; i < notes.length; i++) {
                 const n = notes[i];
                 n.canvas = document.createElement('canvas');
@@ -2366,14 +2650,14 @@ export function installCabin(app) {
                 n.tex = new THREE.CanvasTexture(n.canvas);
                 drawNote(i);
                 const g = new THREE.Group();
-                const sideMat = LITMAT(0xffffff);
+                const sideMat = ctx.LITMAT(0xffffff);
                 const faceMat = new THREE.MeshBasicMaterial({ map: n.tex });
                 g.add(new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.17, 0.008), [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]));
-                g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.17, 0.17, 0.008)), MAT));
+                g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.17, 0.17, 0.008)), ctx.MAT));
                 g.position.set(n.px, n.py, 0.052);
                 g.rotation.z = n.rz;
                 boardTilt.add(g);
-                regMagic(g, () => openNoteEditor(i));
+                ctx.regMagic(g, () => openNoteEditor(i));
             }
 
             function drawNote(i) {
@@ -2396,7 +2680,7 @@ export function installCabin(app) {
             }
 
             function openNoteEditor(i) {
-                noteEditing = i;
+                ctx.noteEditing = i;
                 const ed = document.getElementById('noteEditor');
                 const inp = document.getElementById('noteInput');
                 inp.value = notes[i].txt;
@@ -2404,22 +2688,30 @@ export function installCabin(app) {
                 inp.focus();
                 inp.select();
             }
-            let eraserOpen = false, eraserT = 0;
+            ctx.eraserOpen = false, ctx.eraserT = 0;
             const eraserG = new THREE.Group();
+            ctx.eraserG = eraserG;
             eraserG.position.set(-0.30, 0.585, 0.09);
             boardTilt.add(eraserG);
-            put(box(0.18, 0.05, 0.08), 0, 0, 0, 0, 0, 0, eraserG);
-            put(iline([[-0.08, 0.028, -0.035], [-0.08, 0.028, 0.035]]), 0, 0, 0, 0, 0, 0, eraserG);
-            regMagic(eraserG, () => { eraserOpen = !eraserOpen; });
+            ctx.put(ctx.box(0.18, 0.05, 0.08), 0, 0, 0, 0, 0, 0, eraserG);
+            ctx.put(ctx.iline([[-0.08, 0.028, -0.035], [-0.08, 0.028, 0.035]]), 0, 0, 0, 0, 0, 0, eraserG);
+            ctx.regMagic(eraserG, () => { ctx.eraserOpen = !ctx.eraserOpen; });
             const GLYPHS = ['✦', '☾', '✧', '∴', '⟡', '✱', '☽', '✸'];
+            ctx.GLYPHS = GLYPHS;
             const GLYPH_WARM = ['#fff3c9', '#ffd97a'];
+            ctx.GLYPH_WARM = GLYPH_WARM;
             const GLYPH_COOL = ['#d9fbff', '#8ff3ff'];
+            ctx.GLYPH_COOL = GLYPH_COOL;
             const glyphCanvas = document.createElement('canvas');
+            ctx.glyphCanvas = glyphCanvas;
             glyphCanvas.width = 512;
             glyphCanvas.height = 200;
             const gctx = glyphCanvas.getContext('2d');
+            ctx.gctx = gctx;
             const glyphTex = new THREE.CanvasTexture(glyphCanvas);
+            ctx.glyphTex = glyphTex;
             const glyphPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.4), new THREE.MeshBasicMaterial({ map: glyphTex, transparent: true, opacity: 0, depthWrite: false }));
+            ctx.glyphPlane = glyphPlane;
             glyphPlane.position.set(0, 0.95, 0.056);
             glyphPlane.renderOrder = 10;
             boardTilt.add(glyphPlane);
@@ -2460,16 +2752,22 @@ export function installCabin(app) {
             }
             drawGlyphSet(0, 0);
             const chalkG = new THREE.Group();
-            const CHALK_HOME = V(0.18, 0.578, 0.09);
+            ctx.chalkG = chalkG;
+            const CHALK_HOME = ctx.V(0.18, 0.578, 0.09);
+            ctx.CHALK_HOME = CHALK_HOME;
             chalkG.position.copy(CHALK_HOME);
             boardTilt.add(chalkG);
-            put(edge(new THREE.CylinderGeometry(0.013, 0.013, 0.11, 8)), 0, 0, 0, 0, 0, Math.PI / 2, chalkG);
-            put(edge(new THREE.CircleGeometry(0.011, 8)), 0.056, 0, 0, 0, Math.PI / 2, 0, chalkG);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.013, 0.013, 0.11, 8)), 0, 0, 0, 0, 0, Math.PI / 2, chalkG);
+            ctx.put(ctx.edge(new THREE.CircleGeometry(0.011, 8)), 0.056, 0, 0, 0, Math.PI / 2, 0, chalkG);
             const chalkState = { active: false, start: 0 };
+            ctx.chalkState = chalkState;
             const glyphLocalX = i => ((40 + i * 62) / 512 - 0.5) * 1.0;
+            ctx.glyphLocalX = glyphLocalX;
             const glyphLocalY = i => 0.95 - (Math.sin(i * 1.3) * 14) / 200 * 0.4;
+            ctx.glyphLocalY = glyphLocalY;
             const smooth = k => k * k * (3 - 2 * k);
-            regMagic(chalkG, () => {
+            ctx.smooth = smooth;
+            ctx.regMagic(chalkG, () => {
                 if (!chalkState.active) {
                     chalkState.active = true;
                     chalkState.start = clock.now;
@@ -2488,7 +2786,7 @@ export function installCabin(app) {
                 if (e < RISE) {
                     const k = smooth(e / RISE);
                     const i = 0;
-                    chalkG.position.lerpVectors(CHALK_HOME, V(glyphLocalX(i) + 0.06, glyphLocalY(i) + 0.05, 0.10), k);
+                    chalkG.position.lerpVectors(CHALK_HOME, ctx.V(glyphLocalX(i) + 0.06, glyphLocalY(i) + 0.05, 0.10), k);
                     chalkG.position.y += Math.sin(e * 10) * 0.02 * k;
                     glyphPlane.material.opacity = 0;
                 } else if (e < tWrite) {
@@ -2514,7 +2812,7 @@ export function installCabin(app) {
                 } else if (e < tEnd) {
                     const k = smooth((e - tFade) / FALL);
                     glyphPlane.material.opacity = 0;
-                    chalkG.position.lerpVectors(V(glyphLocalX(N - 1) + 0.06, glyphLocalY(N - 1) + 0.05, 0.10), CHALK_HOME, k);
+                    chalkG.position.lerpVectors(ctx.V(glyphLocalX(N - 1) + 0.06, glyphLocalY(N - 1) + 0.05, 0.10), CHALK_HOME, k);
                 } else {
                     chalkState.active = false;
                     glyphPlane.material.opacity = 0;
@@ -2523,43 +2821,53 @@ export function installCabin(app) {
                 }
             }
             const SCROLL_R = 0.055;
+            ctx.SCROLL_R = SCROLL_R;
 
             function scrollRoll(x, z, ry, y) {
                 const s = new THREE.Group();
-                const body = edge(new THREE.CylinderGeometry(SCROLL_R, SCROLL_R, 0.52, 10));
+                const body = ctx.edge(new THREE.CylinderGeometry(SCROLL_R, SCROLL_R, 0.52, 10));
                 body.rotation.z = Math.PI / 2;
                 s.add(body);
                 for (const ex of [-0.26, 0.26]) {
-                    const c = edge(new THREE.CircleGeometry(SCROLL_R * 0.9, 10), 1, IN_MAT);
+                    const c = ctx.edge(new THREE.CircleGeometry(SCROLL_R * 0.9, 10), 1, ctx.IN_MAT);
                     c.position.x = ex;
                     c.rotation.y = Math.sign(ex) * Math.PI / 2;
                     s.add(c);
                 }
-                const band = edge(new THREE.TorusGeometry(SCROLL_R + 0.003, 0.012, 6, 16));
+                const band = ctx.edge(new THREE.TorusGeometry(SCROLL_R + 0.003, 0.012, 6, 16));
                 band.rotation.y = Math.PI / 2;
                 band.position.x = 0.10;
                 s.add(band);
-                s.position.set(x, y !== undefined ? y : FY + SCROLL_R, z);
+                s.position.set(x, y !== undefined ? y : ctx.FY + SCROLL_R, z);
                 s.rotation.y = ry;
-                scene.add(s);
+                ctx.scene.add(s);
             }
             scrollRoll(-3.42, 3.28, 0.42);
             scrollRoll(-3.44, 3.50, 0.42);
-            scrollRoll(-3.43, 3.39, 0.42, FY + SCROLL_R * (1 + Math.sqrt(3)));
+            scrollRoll(-3.43, 3.39, 0.42, ctx.FY + SCROLL_R * (1 + Math.sqrt(3)));
             scrollRoll(-3.72, 3.02, 1.05);
 
             /* ========================================================== */
             /* 18.9 左墙中央的魔法杖 */
             /* ========================================================== */
-            const WAND_Y = FY + 1.18;
+            const WAND_Y = ctx.FY + 1.18;
+            ctx.WAND_Y = WAND_Y;
             const WAND_Z = 0;
+            ctx.WAND_Z = WAND_Z;
             const HOOK_X = -3.72;
-            const WAND_REST = V(HOOK_X, WAND_Y - 0.012, WAND_Z);
-            const WAND_HOVER = V(-2.95, FY + 1.60, -0.10);
-            const CAST_POS = V(-0.60, FY + 1.50, 0.15);
-            const wandWoodMat = LITMAT(0xcaa273, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-            const wandDarkMat = LITMAT(0x8a6238, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+            ctx.HOOK_X = HOOK_X;
+            const WAND_REST = ctx.V(HOOK_X, WAND_Y - 0.012, WAND_Z);
+            ctx.WAND_REST = WAND_REST;
+            const WAND_HOVER = ctx.V(-2.95, ctx.FY + 1.60, -0.10);
+            ctx.WAND_HOVER = WAND_HOVER;
+            const CAST_POS = ctx.V(-0.60, ctx.FY + 1.50, 0.15);
+            ctx.CAST_POS = CAST_POS;
+            const wandWoodMat = ctx.LITMAT(0xcaa273, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+            ctx.wandWoodMat = wandWoodMat;
+            const wandDarkMat = ctx.LITMAT(0x8a6238, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+            ctx.wandDarkMat = wandDarkMat;
             const wandEdgeMat = new THREE.LineBasicMaterial({ color: 0x5a4128 });
+            ctx.wandEdgeMat = wandEdgeMat;
 
             function woodPart(g, mat) {
                 const grp = new THREE.Group();
@@ -2568,24 +2876,26 @@ export function installCabin(app) {
                 return grp;
             }
             const hookArcPts = [];
+            ctx.hookArcPts = hookArcPts;
             for (let k = 0; k <= 22; k++) {
                 const a = Math.PI * 0.75 + k / 22 * Math.PI * 1.5;
-                hookArcPts.push(V(Math.cos(a) * 0.058, Math.sin(a) * 0.058, 0));
+                hookArcPts.push(ctx.V(Math.cos(a) * 0.058, Math.sin(a) * 0.058, 0));
             }
             for (const hz of [WAND_Z - 0.30, WAND_Z + 0.30]) {
-                put(box(0.03, 0.18, 0.08), -3.865, WAND_Y, hz);
-                put(log(0.15, 0.013), -3.79, WAND_Y, hz, 0, 0, Math.PI / 2);
+                ctx.put(ctx.box(0.03, 0.18, 0.08), -3.865, WAND_Y, hz);
+                ctx.put(ctx.log(0.15, 0.013), -3.79, WAND_Y, hz, 0, 0, Math.PI / 2);
                 const hook = woodPart(new THREE.TorusGeometry(0.058, 0.011, 6, 16, Math.PI * 1.5), wandDarkMat);
                 hook.position.set(HOOK_X, WAND_Y, hz);
                 hook.rotation.z = Math.PI * 0.75;
-                scene.add(hook);
+                ctx.scene.add(hook);
                 const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(hookArcPts), wandEdgeMat);
                 outline.position.set(HOOK_X, WAND_Y, hz);
-                scene.add(outline);
+                ctx.scene.add(outline);
             }
             const wandG = new THREE.Group();
+            ctx.wandG = wandG;
             wandG.position.copy(WAND_REST);
-            scene.add(wandG);
+            ctx.scene.add(wandG);
             {
                 const main = woodPart(new THREE.CylinderGeometry(0.014, 0.022, 0.72, 10));
                 main.rotation.x = Math.PI / 2;
@@ -2603,14 +2913,18 @@ export function installCabin(app) {
                 wandG.add(guard);
             }
             const crystalG = new THREE.Group();
+            ctx.crystalG = crystalG;
             crystalG.position.set(0, 0, 0.78);
             wandG.add(crystalG);
             const cryGeo = new THREE.OctahedronGeometry(0.055);
+            ctx.cryGeo = cryGeo;
             cryGeo.scale(0.8, 0.8, 1.9);
             const crystalMat = new THREE.MeshBasicMaterial({ color: 0xd8dce0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+            ctx.crystalMat = crystalMat;
             crystalG.add(new THREE.Mesh(cryGeo, crystalMat));
             crystalG.add(new THREE.LineSegments(new THREE.EdgesGeometry(cryGeo, 1), new THREE.LineBasicMaterial({ color: 0x8a9096 })));
             const cryCore = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+            ctx.cryCore = cryCore;
             crystalG.add(cryCore);
 
             function wandGlowSphere(r, op) {
@@ -2621,7 +2935,9 @@ export function installCabin(app) {
                 return m;
             }
             const wGlow1 = wandGlowSphere(0.070, 0.15);
+            ctx.wGlow1 = wGlow1;
             const wGlow2 = wandGlowSphere(0.13, 0.05);
+            ctx.wGlow2 = wGlow2;
             const ELEMENTS = [
                 { nm: 'fire', col: 0xff5a2a, glow: 0xff9a4a },
                 { nm: 'water', col: 0x3c8aff, glow: 0x8fd4ff },
@@ -2630,14 +2946,17 @@ export function installCabin(app) {
                 { nm: 'bolt', col: 0xffe94a, glow: 0xfff8a0 },
                 { nm: 'wind', col: 0x7dffb8, glow: 0xd0ffe4 }
             ];
+            ctx.ELEMENTS = ELEMENTS;
             const loopLine = (pts, m) => new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), m);
+            ctx.loopLine = loopLine;
             const openLine = (pts, m) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), m);
+            ctx.openLine = openLine;
 
             function ringPts2(r, n) {
                 const a = [];
                 for (let i = 0; i < n; i++) {
                     const t = i / n * Math.PI * 2;
-                    a.push(V(Math.cos(t) * r, Math.sin(t) * r, 0));
+                    a.push(ctx.V(Math.cos(t) * r, Math.sin(t) * r, 0));
                 }
                 return a;
             }
@@ -2646,7 +2965,7 @@ export function installCabin(app) {
                 const a = [];
                 for (let i = 0; i < k; i++) {
                     const t = rot + i / k * Math.PI * 2;
-                    a.push(V(Math.cos(t) * r, Math.sin(t) * r, 0));
+                    a.push(ctx.V(Math.cos(t) * r, Math.sin(t) * r, 0));
                 }
                 return a;
             }
@@ -2656,7 +2975,7 @@ export function installCabin(app) {
                 for (let i = 0; i < k * 2; i++) {
                     const t = rot + i / (k * 2) * Math.PI * 2;
                     const r = i % 2 === 0 ? rO : rI;
-                    a.push(V(Math.cos(t) * r, Math.sin(t) * r, 0));
+                    a.push(ctx.V(Math.cos(t) * r, Math.sin(t) * r, 0));
                 }
                 return a;
             }
@@ -2666,7 +2985,7 @@ export function installCabin(app) {
                 for (let i = 0; i <= n; i++) {
                     const t = i / n;
                     const ang = rot + t * turns * Math.PI * 2;
-                    a.push(V(Math.cos(ang) * t * rMax, Math.sin(ang) * t * rMax, 0));
+                    a.push(ctx.V(Math.cos(ang) * t * rMax, Math.sin(ang) * t * rMax, 0));
                 }
                 return a;
             }
@@ -2684,8 +3003,8 @@ export function installCabin(app) {
                 for (let i = 0; i < 24; i++) {
                     const a = i / 24 * Math.PI * 2;
                     tick.push(
-                        V(Math.cos(a) * 0.44, Math.sin(a) * 0.44, 0),
-                        V(Math.cos(a) * 0.50, Math.sin(a) * 0.50, 0)
+                        ctx.V(Math.cos(a) * 0.44, Math.sin(a) * 0.44, 0),
+                        ctx.V(Math.cos(a) * 0.50, Math.sin(a) * 0.50, 0)
                     );
                 }
                 g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tick), m2));
@@ -2905,7 +3224,7 @@ export function installCabin(app) {
                         }
                     };
                 } else if (idx === 3) {
-                    const rockMat = LITMAT(0x9a6c3c, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+                    const rockMat = ctx.LITMAT(0x9a6c3c, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
                     const rockEdgeMat = new THREE.LineBasicMaterial({ color: 0x5a3c1e, transparent: true, opacity: 0.8 });
 
                     function makeRock(r, amp) {
@@ -2955,7 +3274,7 @@ export function installCabin(app) {
                     function genBolt(pair) {
                         const th = runtimeRng() * Math.PI * 2;
                         const ph = Math.acos(2 * runtimeRng() - 1);
-                        const dir = V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+                        const dir = ctx.V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
                         const len = 0.20 + runtimeRng() * 0.12;
                         const pts = [dir.clone().multiplyScalar(0.05)];
                         const nSeg = 5;
@@ -2997,7 +3316,7 @@ export function installCabin(app) {
                             const t = k / 40;
                             const a = t * Math.PI * 2 * 1.6 + i * 2.09;
                             const r = 0.05 + t * 0.17;
-                            pts.push(V(Math.cos(a) * r, -0.09 + t * 0.18, Math.sin(a) * r));
+                            pts.push(ctx.V(Math.cos(a) * r, -0.09 + t * 0.18, Math.sin(a) * r));
                         }
                         const rb = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.007, 5), A(i % 2 ? 0x7dffb8 : 0xd0ffe4, 0.8));
                         g.add(rb);
@@ -3039,15 +3358,20 @@ export function installCabin(app) {
                 return g;
             }
             const wandState = { phase: 'idle', t0: 0, idx: 0, el: null, circleHolder: null, circleSpin: null, crea: null, dir: new THREE.Vector3(1, 0, 0) };
+            ctx.wandState = wandState;
             const crystalColor = new THREE.Color(0xd8dce0);
+            ctx.crystalColor = crystalColor;
             const crystalTarget = new THREE.Color(0xd8dce0);
+            ctx.crystalTarget = crystalTarget;
             const IDENTITY_Q = new THREE.Quaternion();
+            ctx.IDENTITY_Q = IDENTITY_Q;
             const aimQ = new THREE.Quaternion();
+            ctx.aimQ = aimQ;
             {
-                const m = new THREE.Matrix4().lookAt(CAST_POS, WAND_HOVER, V(0, 1, 0));
+                const m = new THREE.Matrix4().lookAt(CAST_POS, WAND_HOVER, ctx.V(0, 1, 0));
                 aimQ.setFromRotationMatrix(m);
             }
-            regMagic(wandG, () => {
+            ctx.regMagic(wandG, () => {
                 if (wandState.phase !== 'idle') return;
                 wandState.idx = Math.floor(runtimeRng() * ELEMENTS.length);
                 wandState.el = ELEMENTS[wandState.idx];
@@ -3057,12 +3381,12 @@ export function installCabin(app) {
 
             function clearCast() {
                 if (wandState.circleHolder) {
-                    scene.remove(wandState.circleHolder);
+                    ctx.scene.remove(wandState.circleHolder);
                     wandState.circleHolder = null;
                     wandState.circleSpin = null;
                 }
                 if (wandState.crea) {
-                    scene.remove(wandState.crea);
+                    ctx.scene.remove(wandState.crea);
                     wandState.crea = null;
                 }
             }
@@ -3103,11 +3427,11 @@ export function installCabin(app) {
                         s.circleHolder.position.copy(CAST_POS);
                         s.circleHolder.quaternion.copy(aimQ);
                         s.circleHolder.add(s.circleSpin);
-                        scene.add(s.circleHolder);
+                        ctx.scene.add(s.circleHolder);
                         s.crea = buildCreation(s.idx, s.el);
                         s.crea.position.copy(CAST_POS).addScaledVector(s.dir, 0.42);
                         s.crea.scale.setScalar(0.01);
-                        scene.add(s.crea);
+                        ctx.scene.add(s.crea);
                     }
                 } else if (s.phase === 'cast') {
                     const gk = smooth(Math.min(e / GROW, 1));
@@ -3157,23 +3481,23 @@ export function installCabin(app) {
                 const grp = new THREE.Group();
                 const g = new THREE.BoxGeometry(w, h, d);
                 grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), MAT));
+                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), ctx.MAT));
                 return grp;
             }
 
             function crboxCol(w, h, d, r, col) {
                 const grp = new THREE.Group();
-                const g = roundBoxGeo(w, h, d, r);
+                const g = ctx.roundBoxGeo(w, h, d, r);
                 grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 12), MAT));
+                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 12), ctx.MAT));
                 return grp;
             }
 
             function crumpleBall(r) {
                 const grp = new THREE.Group();
                 const g = jitterGeo(new THREE.SphereGeometry(r, 10, 8), r * 0.15);
-                grp.add(new THREE.Mesh(g, LITMAT(0xffffff, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), MAT));
+                grp.add(new THREE.Mesh(g, ctx.LITMAT(0xffffff, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
+                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), ctx.MAT));
                 return grp;
             }
 
@@ -3183,11 +3507,12 @@ export function installCabin(app) {
                 return p;
             }
             const wobblers = [];
+            ctx.wobblers = wobblers;
 
             function regWobble(g) {
                 g.userData.wob = { amp: 0, t: 0 };
                 wobblers.push(g);
-                regMagic(g, function () {
+                ctx.regMagic(g, function () {
                     g.userData.wob.amp = 1;
                     g.userData.wob.t = 0;
                 });
@@ -3209,18 +3534,19 @@ export function installCabin(app) {
             /* ========================================================== */
             /* 衣柜 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/wardrobe.js，此处只留装配调用。
-            installProp(wardrobe);
+            ctx.installProp(wardrobe);
             /* 18.11 墙钩挎包 / 置物箱与魔女帽 / 可推拉小凳子 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/bag.js，此处只留装配调用。
-            installProp(bag);
+            ctx.installProp(bag);
             /* 置物箱（挎包旁边地上）：加宽 + 简化 + 颜色统一 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/crate.js，此处只留装配调用。
-            installProp(crate);
+            ctx.installProp(crate);
             /* 可推拉小凳子（挎包下方、箱子旁的地上，点击拉出/推回） */
             /* ========================================================== */
             const stoolG = new THREE.Group();
-            stoolG.position.set(0.22, FY, 3.50);
-            scene.add(stoolG);
+            ctx.stoolG = stoolG;
+            stoolG.position.set(0.22, ctx.FY, 3.50);
+            ctx.scene.add(stoolG);
             {
                 const ST_COL = 0xa07850;   // 与置物箱统一木色
                 const ST_DARK = 0x8a6238;
@@ -3231,7 +3557,7 @@ export function installCabin(app) {
                 // 四条腿（微微外撇）
                 for (const sx of [-1, 1]) {
                     for (const sz of [-1, 1]) {
-                        const leg = edge(new THREE.CylinderGeometry(0.02, 0.024, 0.25, 8));
+                        const leg = ctx.edge(new THREE.CylinderGeometry(0.02, 0.024, 0.25, 8));
                         leg.position.set(sx * 0.13, 0.135, sz * 0.11);
                         leg.rotation.z = sx * 0.05;
                         leg.rotation.x = -sz * 0.05;
@@ -3239,44 +3565,49 @@ export function installCabin(app) {
                     }
                 }
                 // 侧面横撑
-                put(cbox(0.24, 0.025, 0.025, ST_DARK), 0, 0.10, 0.105, 0, 0, 0, stoolG);
-                put(cbox(0.24, 0.025, 0.025, ST_DARK), 0, 0.10, -0.105, 0, 0, 0, stoolG);
-                put(cbox(0.025, 0.025, 0.19, ST_DARK), 0.125, 0.10, 0, 0, 0, 0, stoolG);
-                put(cbox(0.025, 0.025, 0.19, ST_DARK), -0.125, 0.10, 0, 0, 0, 0, stoolG);
+                ctx.put(cbox(0.24, 0.025, 0.025, ST_DARK), 0, 0.10, 0.105, 0, 0, 0, stoolG);
+                ctx.put(cbox(0.24, 0.025, 0.025, ST_DARK), 0, 0.10, -0.105, 0, 0, 0, stoolG);
+                ctx.put(cbox(0.025, 0.025, 0.19, ST_DARK), 0.125, 0.10, 0, 0, 0, 0, stoolG);
+                ctx.put(cbox(0.025, 0.025, 0.19, ST_DARK), -0.125, 0.10, 0, 0, 0, 0, stoolG);
                 // 凳面小坐垫
                 const cushion = crboxCol(0.26, 0.045, 0.22, 0.02, 0x7a5a8a);
                 cushion.position.y = 0.305;
                 stoolG.add(cushion);
             }
-            regSlide(stoolG, 'z', -0.38);
-            regMagic(stoolG, () => {
+            ctx.regSlide(stoolG, 'z', -0.38);
+            ctx.regMagic(stoolG, () => {
                 stoolG.userData.slide.open = !stoolG.userData.slide.open;
             });
 
             /* ========================================================== */
             /* 魔女帽：更大帽檐 + 低弯折尖，点击飞起撒糖果 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/witchHat.js，此处只留装配调用。
-            const witchHatApi = installProp(witchHat);
+            const witchHatApi = ctx.installProp(witchHat);
+            ctx.witchHatApi = witchHatApi;
             /* 垃圾桶 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/bin.js，此处只留装配调用。
-            installProp(bin);
+            ctx.installProp(bin);
             /* 抽纸盒 */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/tissueBox.js，此处只留装配调用。
-            const tissueBoxApi = installProp(tissueBox);
+            const tissueBoxApi = ctx.installProp(tissueBox);
+            ctx.tissueBoxApi = tissueBoxApi;
             /* 18.12 烟囱墙：魔法时钟（与现实时间同步） */
             /* ========================================================== */
             function colEdge(g, col, th) {
                 const grp = new THREE.Group();
                 grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, th === undefined ? 20 : th), MAT));
+                grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, th === undefined ? 20 : th), ctx.MAT));
                 return grp;
             }
             const clockCanvas = document.createElement('canvas');
+            ctx.clockCanvas = clockCanvas;
             clockCanvas.width = 256;
             clockCanvas.height = 256;
             const cctx = clockCanvas.getContext('2d');
+            ctx.cctx = cctx;
             const clockTex = new THREE.CanvasTexture(clockCanvas);
-            let clockLastKey = '';
+            ctx.clockTex = clockTex;
+            ctx.clockLastKey = '';
             function clockHand(ang, len, w, col) {
                 cctx.strokeStyle = col;
                 cctx.lineWidth = w;
@@ -3289,8 +3620,8 @@ export function installCabin(app) {
             function drawClock() {
                 const now = clock.mode === 'manual' && clock.frozenDateMs !== null ? new Date(clock.frozenDateMs) : new Date();
                 const key = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-                if (key === clockLastKey) return;
-                clockLastKey = key;
+                if (key === ctx.clockLastKey) return;
+                ctx.clockLastKey = key;
                 const c = cctx;
                 c.fillStyle = '#faf4e4';
                 c.beginPath(); c.arc(128, 128, 122, 0, 7); c.fill();
@@ -3328,32 +3659,36 @@ export function installCabin(app) {
             }
             drawClock();
             const clockG = new THREE.Group();
-            clockG.position.set(-2.95, FY + 1.42, CHZ);
+            ctx.clockG = clockG;
+            clockG.position.set(-2.95, ctx.FY + 1.42, ctx.CHZ);
             clockG.rotation.y = Math.PI / 2;
-            scene.add(clockG);
+            ctx.scene.add(clockG);
             {
-                clockG.add(edge(new THREE.TorusGeometry(0.30, 0.042, 8, 30)));
+                clockG.add(ctx.edge(new THREE.TorusGeometry(0.30, 0.042, 8, 30)));
                 const face = new THREE.Mesh(new THREE.CircleGeometry(0.285, 30), new THREE.MeshBasicMaterial({ map: clockTex }));
                 face.position.z = 0.028;
                 clockG.add(face);
-                put(colEdge(new THREE.OctahedronGeometry(0.05), 0xb8912a), 0, 0.40, 0.02, 0, 0, 0, clockG);
-                put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), -0.36, 0, 0.02, 0, 0, 0, clockG);
-                put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), 0.36, 0, 0.02, 0, 0, 0, clockG);
+                ctx.put(colEdge(new THREE.OctahedronGeometry(0.05), 0xb8912a), 0, 0.40, 0.02, 0, 0, 0, clockG);
+                ctx.put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), -0.36, 0, 0.02, 0, 0, 0, clockG);
+                ctx.put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), 0.36, 0, 0.02, 0, 0, 0, clockG);
             }
 
             /* ========================================================== */
             /* 18.13 前墙挂画（镜子旁，点击编辑链接，支持 gif 动图） */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/picture.js，此处只留装配调用。
-            const pictureApi = installProp(picture);
+            const pictureApi = ctx.installProp(picture);
+            ctx.pictureApi = pictureApi;
             /* 18.14 拱形全身镜（点击镜面泛起水波涟漪） */
             // J3（B4）：几何已搬入 src/cabin/world/floor2/mirror.js，此处只留装配调用。
-            const mirrorApi = installProp(mirror);
+            const mirrorApi = ctx.installProp(mirror);
+            ctx.mirrorApi = mirrorApi;
             /* 18.15 毛茸茸大地毯（右前角与书桌之间） */
             // J3（B1）：几何已搬入 src/cabin/world/floor2/rugLarge.js，此处只留装配调用。
-            installProp(rugLarge);
+            ctx.installProp(rugLarge);
             /* 18.16 右前角杂物纸箱（左右两片盖向外翻开） */
             // J3（B3）：几何已搬入 src/cabin/world/floor2/junkBoxes.js，此处只留装配调用。
-            const junkApi = installProp(junkBoxes);
+            const junkApi = ctx.installProp(junkBoxes);
+            ctx.junkApi = junkApi;
             /* 18.17 新增装饰统一刷新（独立动画循环） */
             /* ========================================================== */
             function updateNewDecor(time, dt) {
@@ -3368,8 +3703,8 @@ export function installCabin(app) {
                 // ⚠️ 参数顺序是 (dt, time) —— 而本函数 `updateNewDecor` 自己的形参是 (time, dt)，写反会改变开合速度。
                 junkApi.tick(dt, time);
             }
-            let decorLastT = 0;
-            let mirrorDirtyT = 0;
+            ctx.decorLastT = 0;
+            ctx.mirrorDirtyT = 0;
             // F0.3：装饰循环（时钟 / 镜子涟漪 / 挂画 GIF / 纸箱）
             //   realtime：沿用 performance.now()，行为与改动前完全一致
             //   manual  ：读 clock.now / clock.dt，跟随手动步进（由主循环驱动，见 tickOnce 末尾）
@@ -3377,115 +3712,134 @@ export function installCabin(app) {
                 requestAnimationFrame(decorLoop);
                 if (clock.mode === 'manual') return;   // 手动模式由 tickOnce 负责调用
                 const t = performance.now() * 0.001;
-                const dt = Math.min(0.05, Math.max(0.001, t - decorLastT));
-                decorLastT = t;
+                const dt = Math.min(0.05, Math.max(0.001, t - ctx.decorLastT));
+                ctx.decorLastT = t;
                 updateNewDecor(t, dt);
             })();
             /* ============ 便签编辑器（二楼计划板） ============ */
-            const noteInput = document.getElementById('noteInput');
-            const noteEditor = document.getElementById('noteEditor');
-            function applyNote() {
-                notes[noteEditing].txt = noteInput.value.trim() || '...';
-                drawNote(noteEditing);
-                noteEditor.classList.remove('show');
-                noteInput.blur();
-                SND.play('chim');
-            }
-            document.getElementById('noteOk').addEventListener('click', applyNote);
-            noteInput.addEventListener('keydown', e => {
-                if (e.key === 'Enter') applyNote();
-                if (e.key === 'Escape') {
-                    noteEditor.classList.remove('show');
-                    noteInput.blur();
-                }
-                e.stopPropagation();
-            });
-
-
-            /* ========================================================== */
-            /* ============ 二楼顶中央魔法吊灯 ============ */
-            /* ========================================================== */
-            let lampLit = true; let lampP = 1;
+            /* ==================== [J4:seg noteEditor] ==================== */
+            // J4（noteEditor）：本段已搬入 systems/ui/editors/NoteEditor.js
+            installNoteEditor(ctx, app);
+            /* ==================== [J4:seg chandelier] ==================== */
+            // ↓ J4 段导出（chandelier）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.deformSlime = deformSlime;
+            ctx.lampLit = true; ctx.lampP = 1;
             const LAMP_Y = -0.95;
+            ctx.LAMP_Y = LAMP_Y;
             const chandelier = new THREE.Group();
+            ctx.chandelier = chandelier;
             chandelier.position.set(0, 6.3, 0);
-            scene.add(chandelier);
-            put(edge(new THREE.ConeGeometry(0.06, 0.16, 6)), 0, 0.15, 0, 0, 0, 0, chandelier);
+            ctx.scene.add(chandelier);
+            ctx.put(ctx.edge(new THREE.ConeGeometry(0.06, 0.16, 6)), 0, 0.15, 0, 0, 0, 0, chandelier);
             for (let i = 0; i < 4; i++) {
-                put(edge(new THREE.TorusGeometry(0.045, 0.013, 6, 12)), 0, -0.03 - i * 0.09, 0, 0, (i % 2) * Math.PI / 2, 0, chandelier);
+                ctx.put(ctx.edge(new THREE.TorusGeometry(0.045, 0.013, 6, 12)), 0, -0.03 - i * 0.09, 0, 0, (i % 2) * Math.PI / 2, 0, chandelier);
             }
-            put(edge(new THREE.CylinderGeometry(0.02, 0.026, 0.62, 8)), 0, -0.63, 0, 0, 0, 0, chandelier);
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.02, 0.026, 0.62, 8)), 0, -0.63, 0, 0, 0, 0, chandelier);
             for (let i = 0; i < 3; i++) {
                 const ang = i * Math.PI * 2 / 3 + 0.5;
-                logBetween([0, -0.6, 0], [Math.cos(ang) * 0.55, LAMP_Y, Math.sin(ang) * 0.55], 0.015, chandelier);
+                ctx.logBetween([0, -0.6, 0], [Math.cos(ang) * 0.55, LAMP_Y, Math.sin(ang) * 0.55], 0.015, chandelier);
             }
-            put(edge(new THREE.TorusGeometry(0.55, 0.035, 8, 26)), 0, LAMP_Y, 0, Math.PI / 2, 0, 0, chandelier);
+            ctx.put(ctx.edge(new THREE.TorusGeometry(0.55, 0.035, 8, 26)), 0, LAMP_Y, 0, Math.PI / 2, 0, 0, chandelier);
             for (let i = 0; i < 6; i++) {
                 const ang = i * Math.PI / 3 + 0.26;
                 const cx = Math.cos(ang) * 0.55, cz = Math.sin(ang) * 0.55;
-                put(edge(new THREE.CylinderGeometry(0.014, 0.02, 0.16, 6)), cx, LAMP_Y + 0.08, cz, 0, 0, 0, chandelier);
-                put(edge(new THREE.CylinderGeometry(0.052, 0.036, 0.03, 8)), cx, LAMP_Y + 0.175, cz, 0, 0, 0, chandelier);
-                put(edge(new THREE.CylinderGeometry(0.028, 0.028, 0.17, 8)), cx, LAMP_Y + 0.27, cz, 0, 0, 0, chandelier);
-                put(edge(new THREE.CylinderGeometry(0.006, 0.006, 0.03, 6)), cx, LAMP_Y + 0.365, cz, 0, 0, 0, chandelier);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.014, 0.02, 0.16, 6)), cx, LAMP_Y + 0.08, cz, 0, 0, 0, chandelier);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.052, 0.036, 0.03, 8)), cx, LAMP_Y + 0.175, cz, 0, 0, 0, chandelier);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.028, 0.028, 0.17, 8)), cx, LAMP_Y + 0.27, cz, 0, 0, 0, chandelier);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.006, 0.006, 0.03, 6)), cx, LAMP_Y + 0.365, cz, 0, 0, 0, chandelier);
             }
             const lampCrystalMat = new THREE.MeshBasicMaterial({ color: 0x73737e, transparent: true, opacity: 0.95 });
+            ctx.lampCrystalMat = lampCrystalMat;
             const lampCrystal = new THREE.Group();
-            { const cryG = new THREE.OctahedronGeometry(0.13); lampCrystal.add(new THREE.Mesh(cryG, lampCrystalMat)); lampCrystal.add(new THREE.LineSegments(new THREE.EdgesGeometry(cryG), MAT)); }
-            put(lampCrystal, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
+            ctx.lampCrystal = lampCrystal;
+            { const cryG = new THREE.OctahedronGeometry(0.13); lampCrystal.add(new THREE.Mesh(cryG, lampCrystalMat)); lampCrystal.add(new THREE.LineSegments(new THREE.EdgesGeometry(cryG), ctx.MAT)); }
+            ctx.put(lampCrystal, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
             const pendant = new THREE.Group();
-            { const pG = new THREE.OctahedronGeometry(0.09); pendant.add(new THREE.Mesh(pG, lampCrystalMat)); pendant.add(new THREE.LineSegments(new THREE.EdgesGeometry(pG), MAT)); }
-            put(edge(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6)), 0, LAMP_Y - 0.25, 0, 0, 0, 0, chandelier);
-            put(pendant, 0, LAMP_Y - 0.58, 0, 0, 0, 0, chandelier);
+            ctx.pendant = pendant;
+            { const pG = new THREE.OctahedronGeometry(0.09); pendant.add(new THREE.Mesh(pG, lampCrystalMat)); pendant.add(new THREE.LineSegments(new THREE.EdgesGeometry(pG), ctx.MAT)); }
+            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6)), 0, LAMP_Y - 0.25, 0, 0, 0, 0, chandelier);
+            ctx.put(pendant, 0, LAMP_Y - 0.58, 0, 0, 0, 0, chandelier);
             const lampGlowMatA = new THREE.MeshBasicMaterial({ color: 0xffd9a8, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+            ctx.lampGlowMatA = lampGlowMatA;
             const lampGlowMatB = new THREE.MeshBasicMaterial({ color: 0xe0b4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+            ctx.lampGlowMatB = lampGlowMatB;
             const glowA = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), lampGlowMatA);
+            ctx.glowA = glowA;
             const glowB = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), lampGlowMatB);
+            ctx.glowB = glowB;
             glowA.renderOrder = 7; glowB.renderOrder = 7;
-            put(glowA, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
-            put(glowB, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
+            ctx.put(glowA, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
+            ctx.put(glowB, 0, LAMP_Y + 0.06, 0, 0, 0, 0, chandelier);
             const chandelierFlames = [];
+            ctx.chandelierFlames = chandelierFlames;
             for (let i = 0; i < 6; i++) {
                 const ang = i * Math.PI / 3 + 0.26;
                 const cx = Math.cos(ang) * 0.55, cz = Math.sin(ang) * 0.55;
-                makeWavyFlame(cx, cz, LAMP_Y + 0.375, 0.14, 0.042, fireMid, i * 1.1, 3.3, chandelierFlames);
-                makeWavyFlame(cx, cz, LAMP_Y + 0.395, 0.075, 0.02, fireIn, i * 1.1 + 2.0, 3.8, chandelierFlames);
+                ctx.makeWavyFlame(cx, cz, LAMP_Y + 0.375, 0.14, 0.042, ctx.fireMid, i * 1.1, 3.3, chandelierFlames);
+                ctx.makeWavyFlame(cx, cz, LAMP_Y + 0.395, 0.075, 0.02, ctx.fireIn, i * 1.1 + 2.0, 3.8, chandelierFlames);
             }
             for (const f of chandelierFlames) chandelier.add(f.obj);
             chandelier.userData.aimLabel = '点亮 / 熄灭魔法吊灯';
-            regMagic(chandelier, () => { lampLit = !lampLit; });
+            ctx.regMagic(chandelier, () => { ctx.lampLit = !ctx.lampLit; });
             chandelier.userData.sfx = 'lamp';
 
             const MEMB_MAT = new THREE.MeshBasicMaterial({ color: 0x4fd695, transparent: true, opacity: 0.40, side: THREE.DoubleSide, depthWrite: false });
+            ctx.MEMB_MAT = MEMB_MAT;
             const MID_MAT = new THREE.MeshBasicMaterial({ color: 0x8ce8b6, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false });
+            ctx.MID_MAT = MID_MAT;
             const CORE_MAT = new THREE.MeshBasicMaterial({ color: 0x2fbb7c, transparent: true, opacity: 0.50, side: THREE.DoubleSide, depthWrite: false });
+            ctx.CORE_MAT = CORE_MAT;
             const BUBBLE_MAT = new THREE.MeshBasicMaterial({ color: 0xeafff2, transparent: true, opacity: 0.35, depthWrite: false });
-            const slimeRoot = new THREE.Group(); scene.add(slimeRoot); const slimeBody = new THREE.Group(); slimeRoot.add(slimeBody);
-            const SLIME_R = 0.30; const slimeGeo = new THREE.SphereGeometry(SLIME_R, 26, 18); const slimeOrig = slimeGeo.attributes.position.array.slice();
-            const membrane = new THREE.Mesh(slimeGeo, MEMB_MAT); membrane.renderOrder = 3; slimeBody.add(membrane);
-            const midLayer = new THREE.Mesh(slimeGeo, MID_MAT); midLayer.scale.setScalar(0.86); midLayer.renderOrder = 2; slimeBody.add(midLayer);
-            const core = new THREE.Mesh(new THREE.SphereGeometry(0.145, 18, 14), CORE_MAT); core.renderOrder = 1; slimeBody.add(core);
+            ctx.BUBBLE_MAT = BUBBLE_MAT;
+            const slimeRoot = new THREE.Group();
+            ctx.slimeRoot = slimeRoot; ctx.scene.add(slimeRoot); const slimeBody = new THREE.Group();
+            ctx.slimeBody = slimeBody; slimeRoot.add(slimeBody);
+            const SLIME_R = 0.30;
+            ctx.SLIME_R = SLIME_R; const slimeGeo = new THREE.SphereGeometry(SLIME_R, 26, 18);
+            ctx.slimeGeo = slimeGeo; const slimeOrig = slimeGeo.attributes.position.array.slice();
+            ctx.slimeOrig = slimeOrig;
+            const membrane = new THREE.Mesh(slimeGeo, MEMB_MAT);
+            ctx.membrane = membrane; membrane.renderOrder = 3; slimeBody.add(membrane);
+            const midLayer = new THREE.Mesh(slimeGeo, MID_MAT);
+            ctx.midLayer = midLayer; midLayer.scale.setScalar(0.86); midLayer.renderOrder = 2; slimeBody.add(midLayer);
+            const core = new THREE.Mesh(new THREE.SphereGeometry(0.145, 18, 14), CORE_MAT);
+            ctx.core = core; core.renderOrder = 1; slimeBody.add(core);
             const bubbles = [];
+            ctx.bubbles = bubbles;
             for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.016 + slimeRng() * 0.012, 8, 6), BUBBLE_MAT); b.renderOrder = 1; b.userData = { ph: slimeRng(), ang: slimeRng() * 6.28, rr: 0.03 + slimeRng() * 0.07 }; slimeBody.add(b); bubbles.push(b); }
-            const slimeShadow = new THREE.Mesh(new THREE.CircleGeometry(0.24, 20), new THREE.MeshBasicMaterial({ color: 0x1e5a40, transparent: true, opacity: 0.16, depthWrite: false })); slimeShadow.rotation.x = -Math.PI / 2; slimeShadow.position.y = 0.012; slimeRoot.add(slimeShadow);
-            const SLIME_FLAT = 0.78; const slime = { squash: SLIME_FLAT, squashV: 0, wob: 0, wobV: 0, tilt: 0, tiltV: 0, pulse: 2.0 };
+            const slimeShadow = new THREE.Mesh(new THREE.CircleGeometry(0.24, 20), new THREE.MeshBasicMaterial({ color: 0x1e5a40, transparent: true, opacity: 0.16, depthWrite: false }));
+            ctx.slimeShadow = slimeShadow; slimeShadow.rotation.x = -Math.PI / 2; slimeShadow.position.y = 0.012; slimeRoot.add(slimeShadow);
+            const SLIME_FLAT = 0.78;
+            ctx.SLIME_FLAT = SLIME_FLAT; const slime = { squash: SLIME_FLAT, squashV: 0, wob: 0, wobV: 0, tilt: 0, tiltV: 0, pulse: 2.0 };
+            ctx.slime = slime;
             function deformSlime(time, amp, speed) { const arr = slimeGeo.attributes.position.array; const n = slimeGeo.attributes.position.count; for (let i = 0; i < n; i++) { const x0 = slimeOrig[i * 3], y0 = slimeOrig[i * 3 + 1], z0 = slimeOrig[i * 3 + 2]; const h = y0 / SLIME_R; const spread = 1 + 0.20 * Math.max(0, -h); const ph = h * 3.4 - time * speed; const w = Math.sin(ph) * amp; const w2 = Math.sin(ph + 1.7) * amp * 0.4; arr[i * 3] = x0 * spread - w2; arr[i * 3 + 1] = y0 + Math.sin(ph * 0.8 + 0.6) * amp * 0.25; arr[i * 3 + 2] = z0 * spread + w; } slimeGeo.attributes.position.needsUpdate = true; }
 
             /* ================================================================ */
             /* ============ 超位魔法系统：魔杖 + 超级爆裂魔法 ============ */
             /* ================================================================ */
-            let slotSel = 1;
-            let wandAppear = 0;
-            let camShake = 0;
-            let castDark = 0;
+            /* ==================== [J4:seg magic] ==================== */
+            // ↓ J4 段导出（magic）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.showHintOverride = showHintOverride; ctx.screenFlash = screenFlash; ctx.disposeGroup = disposeGroup; ctx.angDiff = angDiff; ctx.makeCrossStarMat = makeCrossStarMat; ctx.fillStarAttrs = fillStarAttrs;
+            ctx.sat = sat; ctx.buildBlastArray = buildBlastArray; ctx.buildWireSphere = buildWireSphere; ctx.spawnExplosion = spawnExplosion; ctx.getCastTarget = getCastTarget; ctx.tryCast = tryCast;
+            ctx.selectSlot = selectSlot; ctx.updateWand = updateWand; ctx.applyCastDark = applyCastDark; ctx.updateBlast = updateBlast;
+            ctx.slotSel = 1;
+            ctx.wandAppear = 0;
+            ctx.camShake = 0;
+            ctx.castDark = 0;
             // J2.6：临时提示的两个变量（hintOverrideUntil / hintOverrideText）搬进 HintUI ——
             // 调用方不再需要知道"比较 clock.wallNow()"这个细节。
             const _v1 = new THREE.Vector3(), _whiteC = new THREE.Color(0xffffff);
+            ctx._v1 = _v1; ctx._whiteC = _whiteC;
             const wandCrystalBase = new THREE.Color(0x8fd8ff);
+            ctx.wandCrystalBase = wandCrystalBase;
             const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
+            ctx.easeOutCubic = easeOutCubic;
             const easeInCubic = x => x * x * x;
+            ctx.easeInCubic = easeInCubic;
             const STAR_PALETTE = [[1, 0.42, 0.42], [1, 0.75, 0.35], [1, 0.95, 0.5], [0.55, 1, 0.5], [0.4, 0.9, 1], [0.65, 0.55, 1], [0.95, 0.6, 1], [0.9, 0.95, 1]];
+            ctx.STAR_PALETTE = STAR_PALETTE;
             // J2.6：临时消息走 HintUI 的 showOverride（唯一文案出口；2.4 秒后自动让位给交互提示）
-            function showHintOverride(html) { hintUI.showOverride(html); }
+            function showHintOverride(html) { ctx.hintUI.showOverride(html); }
             function screenFlash() {
                 // 双脉冲：白闪 → 短暂回落 → 再闪一次 → 消退
                 const el = document.getElementById('flashOverlay');
@@ -3505,42 +3859,58 @@ export function installCabin(app) {
 
             /* ---- 魔杖模型 ---- */
             const wandRoot = new THREE.Group();
+            ctx.wandRoot = wandRoot;
             wandRoot.position.set(0.17, 0.30, 0.10); wandRoot.rotation.set(-0.55, 0, -0.18);
-            slimeRoot.add(wandRoot);
+            ctx.slimeRoot.add(wandRoot);
             {
-                put(edge(new THREE.CylinderGeometry(0.015, 0.023, 0.46, 7)), 0, 0.20, 0, 0, 0, 0, wandRoot);
-                put(edge(new THREE.TorusGeometry(0.027, 0.006, 5, 10)), 0, 0.055, 0, Math.PI / 2, 0, 0, wandRoot);
-                put(edge(new THREE.TorusGeometry(0.025, 0.006, 5, 10)), 0, 0.095, 0, Math.PI / 2, 0, 0, wandRoot);
-                put(edge(new THREE.ConeGeometry(0.034, 0.07, 6)), 0, 0.445, 0, 0, 0, 0, wandRoot);
+                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.015, 0.023, 0.46, 7)), 0, 0.20, 0, 0, 0, 0, wandRoot);
+                ctx.put(ctx.edge(new THREE.TorusGeometry(0.027, 0.006, 5, 10)), 0, 0.055, 0, Math.PI / 2, 0, 0, wandRoot);
+                ctx.put(ctx.edge(new THREE.TorusGeometry(0.025, 0.006, 5, 10)), 0, 0.095, 0, Math.PI / 2, 0, 0, wandRoot);
+                ctx.put(ctx.edge(new THREE.ConeGeometry(0.034, 0.07, 6)), 0, 0.445, 0, 0, 0, 0, wandRoot);
             }
             const wandCrystalMat = new THREE.MeshBasicMaterial({ color: 0x8fd8ff, transparent: true, opacity: 0.95 });
+            ctx.wandCrystalMat = wandCrystalMat;
             const wandCrystal = new THREE.Group();
-            { const cg = new THREE.OctahedronGeometry(0.052); wandCrystal.add(new THREE.Mesh(cg, wandCrystalMat)); wandCrystal.add(new THREE.LineSegments(new THREE.EdgesGeometry(cg), MAT)); }
-            put(wandCrystal, 0, 0.51, 0, 0, 0, 0, wandRoot);
-            const wandTip = new THREE.Object3D(); put(wandTip, 0, 0.51, 0, 0, 0, 0, wandRoot);
+            ctx.wandCrystal = wandCrystal;
+            { const cg = new THREE.OctahedronGeometry(0.052); wandCrystal.add(new THREE.Mesh(cg, wandCrystalMat)); wandCrystal.add(new THREE.LineSegments(new THREE.EdgesGeometry(cg), ctx.MAT)); }
+            ctx.put(wandCrystal, 0, 0.51, 0, 0, 0, 0, wandRoot);
+            const wandTip = new THREE.Object3D();
+            ctx.wandTip = wandTip; ctx.put(wandTip, 0, 0.51, 0, 0, 0, 0, wandRoot);
             const wandTipGlowMat = new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
+            ctx.wandTipGlowMat = wandTipGlowMat;
             const wandTipGlow = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), wandTipGlowMat);
-            put(wandTipGlow, 0, 0.51, 0, 0, 0, 0, wandRoot);
+            ctx.wandTipGlow = wandTipGlow;
+            ctx.put(wandTipGlow, 0, 0.51, 0, 0, 0, 0, wandRoot);
             wandRoot.visible = false;
 
             /* ---- 杖尖蓄力粒子 ---- */
             const CHARGE_PN = 42;
+            ctx.CHARGE_PN = CHARGE_PN;
             const chargeDir = [];
+            ctx.chargeDir = chargeDir;
             for (let i = 0; i < CHARGE_PN; i++) {
                 const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 2 - 1);
-                chargeDir.push(V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)));
+                chargeDir.push(ctx.V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)));
             }
             const chargePos = new Float32Array(CHARGE_PN * 3);
+            ctx.chargePos = chargePos;
             const chargeGeo = new THREE.BufferGeometry();
+            ctx.chargeGeo = chargeGeo;
             chargeGeo.setAttribute('position', new THREE.BufferAttribute(chargePos, 3));
             const chargeMat = new THREE.PointsMaterial({ color: 0x9fe0ff, size: 0.07, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-            const chargePts = new THREE.Points(chargeGeo, chargeMat); chargePts.frustumCulled = false; scene.add(chargePts);
+            ctx.chargeMat = chargeMat;
+            const chargePts = new THREE.Points(chargeGeo, chargeMat);
+            ctx.chargePts = chargePts; chargePts.frustumCulled = false; ctx.scene.add(chargePts);
 
             /* ---- 空中彩色魔力粒子（向魔法阵中心聚集） ---- */
             const GATHER_N = 170;
+            ctx.GATHER_N = GATHER_N;
             const gatherData = [];
+            ctx.gatherData = gatherData;
             const gatherPos = new Float32Array(GATHER_N * 3);
+            ctx.gatherPos = gatherPos;
             const gatherCol = new Float32Array(GATHER_N * 3);
+            ctx.gatherCol = gatherCol;
             {
                 for (let i = 0; i < GATHER_N; i++) {
                     const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 2 - 1);
@@ -3553,10 +3923,13 @@ export function installCabin(app) {
                 }
             }
             const gatherGeo = new THREE.BufferGeometry();
+            ctx.gatherGeo = gatherGeo;
             gatherGeo.setAttribute('position', new THREE.BufferAttribute(gatherPos, 3));
             gatherGeo.setAttribute('color', new THREE.BufferAttribute(gatherCol, 3));
             const gatherMat = new THREE.PointsMaterial({ vertexColors: true, size: 0.17, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-            const gatherPts = new THREE.Points(gatherGeo, gatherMat); gatherPts.frustumCulled = false; scene.add(gatherPts);
+            ctx.gatherMat = gatherMat;
+            const gatherPts = new THREE.Points(gatherGeo, gatherMat);
+            ctx.gatherPts = gatherPts; gatherPts.frustumCulled = false; ctx.scene.add(gatherPts);
 
             /* ---- 十字/四芒星粒子（修复：属性名 aColor 对齐；加大加亮；可漂浮自转） ---- */
             function makeCrossStarMat() {
@@ -3613,7 +3986,9 @@ export function installCabin(app) {
 
             /* ---- 施法期间：环绕阵塔的十字星 ---- */
             const CAST_STAR_N = 96;
+            ctx.CAST_STAR_N = CAST_STAR_N;
             const castStarGeo = new THREE.BufferGeometry();
+            ctx.castStarGeo = castStarGeo;
             fillStarAttrs(castStarGeo, CAST_STAR_N);
             {
                 const pos = castStarGeo.attributes.position.array;
@@ -3625,12 +4000,16 @@ export function installCabin(app) {
                 }
             }
             const castStarMat = makeCrossStarMat();
+            ctx.castStarMat = castStarMat;
             castStarMat.uniforms.uBob.value = 1;
-            const castStars = new THREE.Points(castStarGeo, castStarMat); castStars.frustumCulled = false; scene.add(castStars);
+            const castStars = new THREE.Points(castStarGeo, castStarMat);
+            ctx.castStars = castStars; castStars.frustumCulled = false; ctx.scene.add(castStars);
 
             /* ---- 施法期间：地面上升光尘 ---- */
             const DUST_N = 60;
+            ctx.DUST_N = DUST_N;
             const dustGeo = new THREE.BufferGeometry();
+            ctx.dustGeo = dustGeo;
             {
                 const pos = new Float32Array(DUST_N * 3), col = new Float32Array(DUST_N * 3);
                 const seed = new Float32Array(DUST_N), spd = new Float32Array(DUST_N);
@@ -3647,6 +4026,7 @@ export function installCabin(app) {
                 dustGeo.setAttribute('aSpeed', new THREE.BufferAttribute(spd, 1));
             }
             const dustUniforms = { uTime: { value: 0 }, uOpacity: { value: 0 } };
+            ctx.dustUniforms = dustUniforms;
             const dustMat = new THREE.ShaderMaterial({
                 uniforms: dustUniforms,
                 vertexShader: `
@@ -3675,13 +4055,16 @@ export function installCabin(app) {
         }`,
                 transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
             });
-            const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.frustumCulled = false; scene.add(dustPts);
+            ctx.dustMat = dustMat;
+            const dustPts = new THREE.Points(dustGeo, dustMat);
+            ctx.dustPts = dustPts; dustPts.frustumCulled = false; ctx.scene.add(dustPts);
 
             /* ---- 魔法阵几何辅助（J2.1：已提取到 cabin/core/geometry/shapes2d.js） ---- */
             // 七个纯点集函数（ringPts / polyPts / starPts / arcPts / spiralPts / wavyRingPts / zigPts）
             // 零依赖、无副作用，由文件顶部 import 直接引入（`tests/unit/` 可直接测）；
             // 下面两个构建器需要 V，故在此注入。
-            const { lineFromPts, segsFromPairs } = createShapes2d({ V });
+            const { lineFromPts, segsFromPairs } = createShapes2d({ V: ctx.V });
+            ctx.lineFromPts = lineFromPts; ctx.segsFromPairs = segsFromPairs;
             // 卫星小阵：kind 0=三角 1=十字 2=五芒星 3=放射 4=方形
             function sat(g, m, cx, cy, r, kind, rot) {
                 g.add(lineFromPts(ringPts(r, Math.max(12, Math.floor(r * 16)), rot || 0).map(p => [p[0] + cx, p[1] + cy]), m, true));
@@ -3695,21 +4078,35 @@ export function installCabin(app) {
                 } else g.add(lineFromPts(polyPts(r * 0.55, 4, (rot || 0) + Math.PI / 8).map(p => [p[0] + cx, p[1] + cy]), m, true));
             }
             const flashDiskGeoShared = new THREE.CircleGeometry(1, 40);
+            ctx.flashDiskGeoShared = flashDiskGeoShared;
 
             /* ---- 施法时间轴 ---- */
             const T_CHARGE = 1.4;
+            ctx.T_CHARGE = T_CHARGE;
             const ARRAY_STEP = 0.45;
+            ctx.ARRAY_STEP = ARRAY_STEP;
             const ARRAY_GROW = 0.55;
+            ctx.ARRAY_GROW = ARRAY_GROW;
             const N_LAYERS = 24;
+            ctx.N_LAYERS = N_LAYERS;
             const T_ARRAY = (N_LAYERS - 1) * ARRAY_STEP + ARRAY_GROW;
+            ctx.T_ARRAY = T_ARRAY;
             const T_COLLAPSE = 0.6;
+            ctx.T_COLLAPSE = T_COLLAPSE;
             const T_WIRE_GROW = 0.85, T_WIRE_SHRINK = 0.5, T_WIRE = T_WIRE_GROW + T_WIRE_SHRINK;
+            ctx.T_WIRE_GROW = T_WIRE_GROW; ctx.T_WIRE_SHRINK = T_WIRE_SHRINK; ctx.T_WIRE = T_WIRE;
             const T_WIRE_START = T_CHARGE + T_ARRAY + T_COLLAPSE;
+            ctx.T_WIRE_START = T_WIRE_START;
             const T_BOOM = T_WIRE_START + T_WIRE;
+            ctx.T_BOOM = T_BOOM;
             const T_END = T_BOOM + 3.4;
+            ctx.T_END = T_END;
             const ARRAY_SCALE = 1.35;
-            const blast = { active: false, t: 0, target: V(0, 7.6, 0), arr: null, wire: null, boom: null };
+            ctx.ARRAY_SCALE = ARRAY_SCALE;
+            const blast = { active: false, t: 0, target: ctx.V(0, 7.6, 0), arr: null, wire: null, boom: null };
+            ctx.blast = blast;
             const residues = [];
+            ctx.residues = residues;
 
             /* ---- 24 层魔法阵定义（颜色 / 样式 / 转速各异） ---- */
             const LAYER_DEFS = [
@@ -3778,7 +4175,7 @@ export function installCabin(app) {
                             const c = palette[i % 7], n = 8, r = 0.22 + (i % 3) * 0.06;
                             for (let k = 0; k < n; k++) {
                                 const t0 = k / n * Math.PI * 2, t1 = (k + 1) / n * Math.PI * 2;
-                                pts.push(V(cx + Math.cos(t0) * r, cy + Math.sin(t0) * r, 0), V(cx + Math.cos(t1) * r, cy + Math.sin(t1) * r, 0));
+                                pts.push(ctx.V(cx + Math.cos(t0) * r, cy + Math.sin(t0) * r, 0), ctx.V(cx + Math.cos(t1) * r, cy + Math.sin(t1) * r, 0));
                                 cols.push(c[0], c[1], c[2], c[0], c[1], c[2]);
                             }
                         }
@@ -3886,7 +4283,7 @@ export function installCabin(app) {
                             tc.setHSL(i / n, 0.85, 0.6);
                             cols.push(tc.r, tc.g, tc.b);
                         }
-                        const ggeo = new THREE.BufferGeometry().setFromPoints(pts.map(p => V(p[0], p[1], p[2])));
+                        const ggeo = new THREE.BufferGeometry().setFromPoints(pts.map(p => ctx.V(p[0], p[1], p[2])));
                         ggeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
                         g.add(new THREE.LineLoop(ggeo, m));
                         const pr = [];
@@ -3991,6 +4388,7 @@ export function installCabin(app) {
                     }
                 }
             ];
+            ctx.LAYER_DEFS = LAYER_DEFS;
 
             /* ---- 构建水平巨型魔法阵塔（从下往上逐层错高） ---- */
             function buildBlastArray(center) {
@@ -4019,13 +4417,13 @@ export function installCabin(app) {
                 const halo = new THREE.Mesh(new THREE.CircleGeometry(10.2, 48), haloMat);
                 halo.renderOrder = 2;
                 root.add(halo);
-                scene.add(root);
+                ctx.scene.add(root);
                 return { root, layers, halo, haloMat };
             }
 
             /* ---- 网状光球（膨胀→缩点→爆） ---- */
             function buildWireSphere(c) {
-                const g = new THREE.Group(); g.position.copy(c); scene.add(g);
+                const g = new THREE.Group(); g.position.copy(c); ctx.scene.add(g);
                 const m1 = new THREE.LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
                 const s1 = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1, 2)), m1);
                 const m2 = new THREE.LineBasicMaterial({ color: 0xffd76e, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -4038,7 +4436,7 @@ export function installCabin(app) {
 
             /* ---- 超级爆炸 ---- */
             function spawnExplosion(c) {
-                const g = new THREE.Group(); scene.add(g);
+                const g = new THREE.Group(); ctx.scene.add(g);
                 const items = [];
                 const add = (obj, update) => { g.add(obj); items.push({ obj, update, alive: true }); };
 
@@ -4075,7 +4473,7 @@ export function installCabin(app) {
                     const pts = [];
                     for (let i = 0; i < 26; i++) {
                         const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 2 - 1);
-                        const d = V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+                        const d = ctx.V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
                         const L = 4 + runtimeRng() * 5;
                         pts.push(d.clone().multiplyScalar(1.2), d.clone().multiplyScalar(1.2 + L));
                     }
@@ -4188,7 +4586,7 @@ export function installCabin(app) {
                     const high = i < 9;
                     const a = runtimeRng() * Math.PI * 2;
                     const sp = 3 + runtimeRng() * 8.5;
-                    const vel = V(Math.cos(a) * sp, high ? 5.5 + runtimeRng() * 8 : 1 + runtimeRng() * 4, Math.sin(a) * sp);
+                    const vel = ctx.V(Math.cos(a) * sp, high ? 5.5 + runtimeRng() * 8 : 1 + runtimeRng() * 4, Math.sin(a) * sp);
                     const r0 = 0.8 + runtimeRng() * 0.8;
                     const life = 1.7 + runtimeRng() * 0.9;
                     const delay = runtimeRng() * 0.2;
@@ -4229,7 +4627,7 @@ export function installCabin(app) {
                     const s = new THREE.Mesh(smokeGeoShared, mat);
                     s.renderOrder = 1;
                     const a = runtimeRng() * Math.PI * 2;
-                    const dir = V(Math.cos(a), 0, Math.sin(a));
+                    const dir = ctx.V(Math.cos(a), 0, Math.sin(a));
                     const dist0 = 2 + runtimeRng() * 1.5;
                     const life = 1.6 + runtimeRng() * 0.6;
                     const delay = 0.1 + runtimeRng() * 0.3;
@@ -4253,8 +4651,8 @@ export function installCabin(app) {
                         const sc = 0.1 + runtimeRng() * 0.24;
                         const a = runtimeRng() * Math.PI * 2, up = 4 + runtimeRng() * 10;
                         const sp = 4 + runtimeRng() * 10;
-                        const vel = V(Math.cos(a) * sp, up, Math.sin(a) * sp);
-                        const rotV = V((runtimeRng() - 0.5) * 12, (runtimeRng() - 0.5) * 12, (runtimeRng() - 0.5) * 12);
+                        const vel = ctx.V(Math.cos(a) * sp, up, Math.sin(a) * sp);
+                        const rotV = ctx.V((runtimeRng() - 0.5) * 12, (runtimeRng() - 0.5) * 12, (runtimeRng() - 0.5) * 12);
                         d.scale.setScalar(sc);
                         d.position.copy(c);
                         add(d, (bt, dt) => {
@@ -4276,7 +4674,7 @@ export function installCabin(app) {
                         pos[i * 3] = c.x; pos[i * 3 + 1] = c.y; pos[i * 3 + 2] = c.z;
                         const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 1.6 - 0.6);
                         const sp = 10 + runtimeRng() * 22;
-                        vels.push(V(Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp * 0.9 + 2, Math.sin(ph) * Math.sin(th) * sp));
+                        vels.push(ctx.V(Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp * 0.9 + 2, Math.sin(ph) * Math.sin(th) * sp));
                     }
                     const sg = new THREE.BufferGeometry();
                     sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -4305,7 +4703,7 @@ export function installCabin(app) {
                         pos[i * 3] = c.x; pos[i * 3 + 1] = c.y; pos[i * 3 + 2] = c.z;
                         const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 1.4 - 0.7);
                         const sp = 4 + runtimeRng() * 7;
-                        vels.push(V(Math.sin(ph) * Math.cos(th) * sp, Math.abs(Math.cos(ph)) * sp * 0.8 + 2.5, Math.sin(ph) * Math.sin(th) * sp));
+                        vels.push(ctx.V(Math.sin(ph) * Math.cos(th) * sp, Math.abs(Math.cos(ph)) * sp * 0.8 + 2.5, Math.sin(ph) * Math.sin(th) * sp));
                         const cc = eCols[i % eCols.length];
                         col[i * 3] = cc[0]; col[i * 3 + 1] = cc[1]; col[i * 3 + 2] = cc[2];
                     }
@@ -4338,7 +4736,7 @@ export function installCabin(app) {
                         pos[i * 3] = c.x; pos[i * 3 + 1] = c.y; pos[i * 3 + 2] = c.z;
                         const th = runtimeRng() * Math.PI * 2, ph = Math.acos(runtimeRng() * 2 - 1);
                         const sp = 9 + runtimeRng() * 17;
-                        vels.push(V(Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp));
+                        vels.push(ctx.V(Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp));
                     }
                     const bMat = makeCrossStarMat();
                     const pts = new THREE.Points(bGeo, bMat); pts.frustumCulled = false;
@@ -4366,7 +4764,7 @@ export function installCabin(app) {
                             const p = (bt - 0.28) / 0.34;
                             holder.scale.setScalar(1.2 + 5.5 * easeOutCubic(p));
                             mat.opacity = 0.85 * (1 - p);
-                            if (!hit) { hit = true; camShake = Math.max(camShake, 0.55); slime.wobV += 1.6; }
+                            if (!hit) { hit = true; ctx.camShake = Math.max(ctx.camShake, 0.55); ctx.slime.wobV += 1.6; }
                             return true;
                         }
                         return bt < 0.62;
@@ -4376,7 +4774,7 @@ export function installCabin(app) {
                 {
                     const dummy = new THREE.Object3D();
                     add(dummy, (bt) => {
-                        if (bt > 0.55 && !dummy.userData.hit) { dummy.userData.hit = true; camShake = Math.max(camShake, 0.5); slime.wobV += 2.4; }
+                        if (bt > 0.55 && !dummy.userData.hit) { dummy.userData.hit = true; ctx.camShake = Math.max(ctx.camShake, 0.5); ctx.slime.wobV += 2.4; }
                         return bt < 0.7;
                     });
                 }
@@ -4385,7 +4783,7 @@ export function installCabin(app) {
                     const mat = new THREE.MeshBasicMaterial({ color: 0x0f0c0a, transparent: true, opacity: 0, depthWrite: false });
                     const mesh = new THREE.Mesh(new THREE.CircleGeometry(12, 48), mat);
                     mesh.rotation.x = -Math.PI / 2; mesh.position.set(c.x, 0.025, c.z);
-                    scene.add(mesh);
+                    ctx.scene.add(mesh);
                     let age = 0;
                     residues.push({
                         update(dt) {
@@ -4393,7 +4791,7 @@ export function installCabin(app) {
                             mat.opacity = age < 0.3 ? (age / 0.3) * 0.55 : 0.55 * Math.max(0, 1 - (age - 0.3) / 8.5);
                             return age < 8.8;
                         },
-                        dispose() { scene.remove(mesh); mesh.geometry.dispose(); mat.dispose(); }
+                        dispose() { ctx.scene.remove(mesh); mesh.geometry.dispose(); mat.dispose(); }
                     });
                     // 龟裂
                     const cg = new THREE.Group();
@@ -4404,13 +4802,13 @@ export function installCabin(app) {
                         const len = 5 + runtimeRng() * 5.5, steps = 7;
                         const pts = [];
                         for (let k = 0; k <= steps; k++) {
-                            pts.push(V(c.x + Math.cos(ang) * r, 0.03, c.z + Math.sin(ang) * r));
+                            pts.push(ctx.V(c.x + Math.cos(ang) * r, 0.03, c.z + Math.sin(ang) * r));
                             r += len / steps;
                             ang += (runtimeRng() - 0.5) * 0.24;
                         }
                         cg.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), cmat));
                     }
-                    scene.add(cg);
+                    ctx.scene.add(cg);
                     let cage = 0;
                     residues.push({
                         update(dt) {
@@ -4418,7 +4816,7 @@ export function installCabin(app) {
                             cmat.opacity = cage < 0.25 ? (cage / 0.25) * 0.8 : Math.max(0, 0.8 * (1 - (cage - 0.25) / 8.5));
                             return cage < 8.8;
                         },
-                        dispose() { scene.remove(cg); disposeGroup(cg); }
+                        dispose() { ctx.scene.remove(cg); disposeGroup(cg); }
                     });
                 }
                 let btAll = 0;
@@ -4430,7 +4828,7 @@ export function installCabin(app) {
                             if (!it.update(btAll, dt)) { it.alive = false; it.obj.visible = false; }
                         }
                     },
-                    dispose() { scene.remove(g); disposeGroup(g); }
+                    dispose() { ctx.scene.remove(g); disposeGroup(g); }
                 };
             }
 
@@ -4438,27 +4836,27 @@ export function installCabin(app) {
             function getCastTarget() {
                 const point = new THREE.Vector3();
                 let dir;
-                if (viewMode === 'fp') {
-                    camera.getWorldDirection(_v1);
+                if (ctx.viewMode === 'fp') {
+                    ctx.camera.getWorldDirection(_v1);
                     const hl = Math.hypot(_v1.x, _v1.z);
                     if (hl > 0.12) {
                         const t = 21 / hl;
-                        point.copy(camera.position).addScaledVector(_v1, t);
+                        point.copy(ctx.camera.position).addScaledVector(_v1, t);
                         point.y = Math.max(4.5, Math.min(12, point.y));
-                        dir = V(_v1.x / hl, 0, _v1.z / hl);
+                        dir = ctx.V(_v1.x / hl, 0, _v1.z / hl);
                     } else {
-                        dir = V(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+                        dir = ctx.V(Math.sin(player.yaw), 0, Math.cos(player.yaw));
                         point.copy(player.pos).addScaledVector(dir, 21); point.y = 7.6;
                     }
                 } else {
-                    dir = V(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+                    dir = ctx.V(Math.sin(player.yaw), 0, Math.cos(player.yaw));
                     point.copy(player.pos).addScaledVector(dir, 21); point.y = 7.6;
                 }
                 return { point, dir };
             }
 
             function tryCast() {
-                if (slotSel !== 2) { showHintOverride('需要先拿起魔杖 · 按 <b>2</b> 或在菜单中选择'); return; }
+                if (ctx.slotSel !== 2) { showHintOverride('需要先拿起魔杖 · 按 <b>2</b> 或在菜单中选择'); return; }
                 if (blast.active) return;
                 const tgt = getCastTarget();
                 blast.target.copy(tgt.point);
@@ -4467,15 +4865,15 @@ export function installCabin(app) {
                 castStars.position.copy(blast.target);
                 dustPts.position.set(blast.target.x, 0, blast.target.z);
                 player.yaw = Math.atan2(tgt.dir.x, tgt.dir.z);
-                slime.squashV += 0.7; slime.wobV += 1.2;
-                SND.play('cast');
+                ctx.slime.squashV += 0.7; ctx.slime.wobV += 1.2;
+                ctx.SND.play('cast');
             }
 
             function selectSlot(n) {
                 if (n !== 1 && n !== 2) return;
-                if (n === slotSel) return;
-                slotSel = n;
-                SND.play('ui');
+                if (n === ctx.slotSel) return;
+                ctx.slotSel = n;
+                ctx.SND.play('ui');
                 document.getElementById('slot1').classList.toggle('on', n === 1);
                 document.getElementById('slot2').classList.toggle('on', n === 2);
                 if (n === 2) showHintOverride('已拿起魔杖 · 按 <b>F</b> 或<b>右键</b>释放爆裂魔法');
@@ -4483,21 +4881,23 @@ export function installCabin(app) {
             }
 
             /* ---- 魔杖：一阶惯性跟随转向（无回正摆动）+ 施法瞄准 ---- */
-            let wandYaw = Math.PI, wandAim = 0;
+            ctx.wandYaw = Math.PI, ctx.wandAim = 0;
             const _qIdle = new THREE.Quaternion(), _qAim = new THREE.Quaternion(), _qMix = new THREE.Quaternion();
+            ctx._qIdle = _qIdle; ctx._qAim = _qAim; ctx._qMix = _qMix;
             const _eTmp = new THREE.Euler();
+            ctx._eTmp = _eTmp;
             function updateWand(dt, time) {
-                const wantVis = slotSel === 2;
-                wandAppear += ((wantVis ? 1 : 0) - wandAppear) * Math.min(1, dt * 9);
-                wandRoot.visible = wandAppear > 0.02;
-                if (!wandRoot.visible) { wandYaw = player.yaw; return; }
+                const wantVis = ctx.slotSel === 2;
+                ctx.wandAppear += ((wantVis ? 1 : 0) - ctx.wandAppear) * Math.min(1, dt * 9);
+                wandRoot.visible = ctx.wandAppear > 0.02;
+                if (!wandRoot.visible) { ctx.wandYaw = player.yaw; return; }
 
-                wandYaw += angDiff(wandYaw, player.yaw) * Math.min(1, dt * 5.5);
-                let lag = angDiff(player.yaw, wandYaw);
+                ctx.wandYaw += angDiff(ctx.wandYaw, player.yaw) * Math.min(1, dt * 5.5);
+                let lag = angDiff(player.yaw, ctx.wandYaw);
                 lag = Math.max(-1.0, Math.min(1.0, lag));
 
                 const casting = blast.active && blast.t < T_BOOM + 0.35;
-                wandAim += ((casting ? 1 : 0) - wandAim) * Math.min(1, dt * 6);
+                ctx.wandAim += ((casting ? 1 : 0) - ctx.wandAim) * Math.min(1, dt * 6);
 
                 const px = casting ? 0.10 : 0.17;
                 const py = casting ? 0.44 : 0.30;
@@ -4506,19 +4906,19 @@ export function installCabin(app) {
                 wandRoot.position.x += (px + lag * 0.06 - wandRoot.position.x) * kk;
                 wandRoot.position.y += (py + Math.sin(time * 2.1) * 0.008 - wandRoot.position.y) * kk;
                 wandRoot.position.z += (pz - wandRoot.position.z) * kk;
-                wandRoot.scale.setScalar(0.35 + 0.65 * wandAppear);
+                wandRoot.scale.setScalar(0.35 + 0.65 * ctx.wandAppear);
 
                 _eTmp.set(casting ? -1.05 : -0.55, lag * 0.6, (casting ? -0.08 : -0.18) + lag * 0.45);
                 _qIdle.setFromEuler(_eTmp);
-                if (blast.active && wandAim > 0.02) {
+                if (blast.active && ctx.wandAim > 0.02) {
                     const dx = blast.target.x - player.pos.x;
                     const dv = blast.target.y - (player.pos.y + 0.5);
                     const dz = blast.target.z - player.pos.z;
                     const cy = Math.cos(player.yaw), sy = Math.sin(player.yaw);
                     const lx = dx * cy - dz * sy, lz = dx * sy + dz * cy;
                     _v1.set(lx, dv, lz).normalize();
-                    _qAim.setFromUnitVectors(V(0, 1, 0), _v1);
-                    _qMix.copy(_qIdle).slerp(_qAim, wandAim);
+                    _qAim.setFromUnitVectors(ctx.V(0, 1, 0), _v1);
+                    _qMix.copy(_qIdle).slerp(_qAim, ctx.wandAim);
                 } else _qMix.copy(_qIdle);
                 wandRoot.quaternion.slerp(_qMix, kk);
 
@@ -4532,11 +4932,11 @@ export function installCabin(app) {
 
             /* ---- 施法压暗 ---- */
             function applyCastDark() {
-                if (castDark < 0.003) return;
-                const f = 1 - castDark * 0.55;
-                FILL.uniforms.uColor.value.multiplyScalar(f);
-                scene.background.multiplyScalar(1 - castDark * 0.62);
-                scene.fog.color.copy(scene.background);
+                if (ctx.castDark < 0.003) return;
+                const f = 1 - ctx.castDark * 0.55;
+                ctx.FILL.uniforms.uColor.value.multiplyScalar(f);
+                ctx.scene.background.multiplyScalar(1 - ctx.castDark * 0.62);
+                ctx.scene.fog.color.copy(ctx.scene.background);
             }
 
             /* ---- 爆裂魔法总调度 ---- */
@@ -4547,7 +4947,7 @@ export function installCabin(app) {
                 }
                 let starTarget = 0, dustTarget = 0;
                 if (!blast.active) {
-                    castDark = Math.max(0, castDark - dt * 2.2);
+                    ctx.castDark = Math.max(0, ctx.castDark - dt * 2.2);
                     gatherMat.opacity = Math.max(0, gatherMat.opacity - dt * 3);
                     chargeMat.opacity = Math.max(0, chargeMat.opacity - dt * 4);
                 } else {
@@ -4568,7 +4968,7 @@ export function installCabin(app) {
                         wandCrystalMat.color.copy(wandCrystalBase).lerp(_whiteC, p * 0.85);
                         wandTipGlowMat.opacity = 0.3 + 0.7 * p;
                         wandTipGlow.scale.setScalar(1 + p * 2.6 + 0.12 * Math.sin(time * 18));
-                        castDark = easeOutCubic(p);
+                        ctx.castDark = easeOutCubic(p);
                         starTarget = Math.max(0, (t - 1.0) / 1.2);
                     } else if (t < T_WIRE_START - T_COLLAPSE) {
                         chargeMat.opacity = Math.max(0, chargeMat.opacity - dt * 4);
@@ -4586,7 +4986,7 @@ export function installCabin(app) {
                         }
                         blast.arr.haloMat.opacity = (doneN / N_LAYERS) * (0.09 + 0.05 * Math.sin(time * 2.2));
                         blast.arr.root.position.y = blast.target.y + Math.sin(time * 1.2) * 0.18;
-                        castDark = 1;
+                        ctx.castDark = 1;
                         starTarget = Math.min(1, (t - 1.0) / 1.2);
                         dustTarget = Math.min(1, Math.max(0, (t - 2.0) / 1.5));
                     } else if (t < T_WIRE_START) {
@@ -4602,10 +5002,10 @@ export function installCabin(app) {
                         blast.arr.haloMat.color.setRGB(0.43 + 0.57 * p, 0.66 + 0.34 * p, 1.0);
                         wandTipGlowMat.opacity = 1;
                         wandTipGlow.scale.setScalar(3.6 + 0.8 * Math.sin(time * 30));
-                        castDark = 1; starTarget = 1; dustTarget = 1;
+                        ctx.castDark = 1; starTarget = 1; dustTarget = 1;
                     } else if (t < T_BOOM) {
                         if (!blast.wire) {
-                            scene.remove(blast.arr.root); disposeGroup(blast.arr.root); blast.arr = null;
+                            ctx.scene.remove(blast.arr.root); disposeGroup(blast.arr.root); blast.arr = null;
                             blast.wire = buildWireSphere(blast.target);
                             chargeMat.opacity = 0;
                         }
@@ -4620,7 +5020,7 @@ export function installCabin(app) {
                             const p = (tw - T_WIRE_GROW) / T_WIRE_SHRINK;
                             R = 0.05 + 10.2 * (1 - easeInCubic(p));
                             op = 1;
-                            camShake = Math.max(camShake, 0.3 * p);
+                            ctx.camShake = Math.max(ctx.camShake, 0.3 * p);
                             wandTipGlow.scale.setScalar(3.6 + 1.2 * Math.sin(time * 40));
                         }
                         W.s1.scale.setScalar(R); W.s2.scale.setScalar(R * 0.82);
@@ -4634,17 +5034,17 @@ export function installCabin(app) {
                         const heat = tw > T_WIRE_GROW ? (tw - T_WIRE_GROW) / T_WIRE_SHRINK : 0;
                         W.glowMat.opacity = (0.25 + 0.65 * heat) * op;
                         W.glowMat.color.setRGB(0.62 + 0.38 * heat, 0.9 + 0.1 * heat, 1.0);
-                        castDark = 1; starTarget = 1; dustTarget = 1;
+                        ctx.castDark = 1; starTarget = 1; dustTarget = 1;
                     } else {
                         if (!blast.boom) {
-                            if (blast.wire) { scene.remove(blast.wire.g); disposeGroup(blast.wire.g); blast.wire = null; }
+                            if (blast.wire) { ctx.scene.remove(blast.wire.g); disposeGroup(blast.wire.g); blast.wire = null; }
                             blast.boom = spawnExplosion(blast.target);
                             screenFlash();
-                            camShake = 1.1;
-                            slime.wobV += 3.0; slime.squashV -= 0.6;
+                            ctx.camShake = 1.1;
+                            ctx.slime.wobV += 3.0; ctx.slime.squashV -= 0.6;
                         }
                         blast.boom.update(dt);
-                        castDark = Math.max(0, 1 - (t - T_BOOM) / 0.7);
+                        ctx.castDark = Math.max(0, 1 - (t - T_BOOM) / 0.7);
                         if (t > T_END) {
                             blast.boom.dispose();
                             blast.boom = null;
@@ -4683,13 +5083,16 @@ export function installCabin(app) {
             }
 
             const player = { pos: new THREE.Vector3(0, 0, 5.2), vy: 0, yaw: Math.PI, moveSpeed: 0, onGround: true, groundT: 0 };
-            let camYaw = Math.PI, camPitch = 0.32, viewDist = 3.2, pendYaw = 0, pendPitch = 0;
-            let viewMode = 'fixed';
-            const FIX_LOOK = V(0, 2.2, 0); let fixYaw = Math.atan2(9.5, 11.5); let fixPitch = Math.asin(5.0 / Math.hypot(9.5, 5.0, 11.5)); let fixDist = Math.hypot(9.5, 5.0, 11.5);
+            ctx.player = player;
+            ctx.camYaw = Math.PI, ctx.camPitch = 0.32, ctx.viewDist = 3.2, ctx.pendYaw = 0, ctx.pendPitch = 0;
+            ctx.viewMode = 'fixed';
+            const FIX_LOOK = ctx.V(0, 2.2, 0);
+            ctx.FIX_LOOK = FIX_LOOK; ctx.fixYaw = Math.atan2(9.5, 11.5); ctx.fixPitch = Math.asin(5.0 / Math.hypot(9.5, 5.0, 11.5)); ctx.fixDist = Math.hypot(9.5, 5.0, 11.5);
             // J2.7：三段相机解算搬进 cabin/core/render/CameraRig.js（**逐字照搬**，行为零差异）。
             // 视角状态（fixYaw / camPitch / viewDist…）仍住在小屋这边，每帧经 state 传进去 ——
             // core/ 不碰具体状态量（不变量 N1）。mode 名与 viewMode 取值一一对应。
-            const cameraRig = createCameraRig({ camera, mode: viewMode });
+            const cameraRig = createCameraRig({ camera: ctx.camera, mode: ctx.viewMode });
+            ctx.cameraRig = cameraRig;
             cameraRig.defineMode('fixed', (s, cam) => { const cp = Math.cos(s.fixPitch), sp = Math.sin(s.fixPitch); cam.position.set(s.look.x + Math.sin(s.fixYaw) * cp * s.fixDist, s.look.y + sp * s.fixDist, s.look.z + Math.cos(s.fixYaw) * cp * s.fixDist); cam.lookAt(s.look); });
             cameraRig.defineMode('fp', (s, cam) => { cam.position.set(s.player.pos.x, s.player.pos.y + 0.30, s.player.pos.z); cam.lookAt(s.player.pos.x + Math.sin(s.camYaw) * Math.cos(s.camPitch) * 10, s.player.pos.y + 0.30 + Math.sin(s.camPitch) * 10, s.player.pos.z + Math.cos(s.camYaw) * Math.cos(s.camPitch) * 10); });
             cameraRig.defineMode('tp', (s, cam) => { const cp = Math.cos(s.camPitch), sp = Math.sin(s.camPitch); const px = s.player.pos.x - Math.sin(s.camYaw) * cp * s.viewDist, py = s.player.pos.y + 0.34 + sp * s.viewDist, pz = s.player.pos.z - Math.cos(s.camYaw) * cp * s.viewDist; cam.position.set(px, Math.max(py, 0.25), pz); cam.lookAt(s.player.pos.x, s.player.pos.y + 0.25, s.player.pos.z); });
@@ -4711,221 +5114,230 @@ export function installCabin(app) {
                 { x1: -60, z1: -60, x2: -19.55, z2: 60 },
                 { x1: 19.55, z1: -60, x2: 60, z2: 60 }
             ];
-            const DOOR_BOX = { x1: -0.85, z1: 3.78, x2: 0.85, z2: 4.22 }; const PLAYER_R = 0.26;
+            ctx.solidBoxes = solidBoxes;
+            const DOOR_BOX = { x1: -0.85, z1: 3.78, x2: 0.85, z2: 4.22 };
+            ctx.DOOR_BOX = DOOR_BOX; const PLAYER_R = 0.26;
+            ctx.PLAYER_R = PLAYER_R;
             /* ===== 家具平台碰撞体：史莱姆可跳跃站上（top 为台面高度） ===== */
+            /* ==================== [J4:seg collision] ==================== */
+            // ↓ J4 段导出（collision）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.refreshPlatforms = refreshPlatforms; ctx.collideXZ = collideXZ; ctx.stairHeightAt = stairHeightAt; ctx.railCollide = railCollide; ctx.groundAt = groundAt;
             const platformBoxes = [
-                { x1: MTX - 0.64, z1: MTZ - 0.46, x2: MTX + 0.64, z2: MTZ + 0.46, top: MTTOP },          // 原木餐桌
-                { x1: DT_X - 1.36, z1: DT_Z - 0.46, x2: DT_X + 1.36, z2: DT_Z + 0.46, top: DTOP },      // 长餐桌
-                { x1: KOT_X - 0.62, z1: KOT_Z - 0.62, x2: KOT_X + 0.62, z2: KOT_Z + 0.62, top: KTOP },  // 暖桌
-                { x1: CBX - 0.28, z1: CBZ - 0.28, x2: CBX + 0.28, z2: CBZ + 0.28, top: 0.65 },         // 水晶球占卜台
+                { x1: ctx.MTX - 0.64, z1: ctx.MTZ - 0.46, x2: ctx.MTX + 0.64, z2: ctx.MTZ + 0.46, top: ctx.MTTOP },          // 原木餐桌
+                { x1: ctx.DT_X - 1.36, z1: ctx.DT_Z - 0.46, x2: ctx.DT_X + 1.36, z2: ctx.DT_Z + 0.46, top: ctx.DTOP },      // 长餐桌
+                { x1: ctx.KOT_X - 0.62, z1: ctx.KOT_Z - 0.62, x2: ctx.KOT_X + 0.62, z2: ctx.KOT_Z + 0.62, top: ctx.KTOP },  // 暖桌
+                { x1: ctx.CBX - 0.28, z1: ctx.CBZ - 0.28, x2: ctx.CBX + 0.28, z2: ctx.CBZ + 0.28, top: 0.65 },         // 水晶球占卜台
                 { x1: -1.84, z1: -1.97, x2: -0.86, z2: -1.03, top: 0.345 },                             // 灶台旁固定木台
-                { x1: SFX - 0.25, z1: SFZ - 0.70, x2: SFX + 0.25, z2: SFZ + 0.70, top: 2.02 },         // 左墙书架（实心阻挡）
-                { x1: CCX - 0.66, z1: CCZ - 0.66, x2: CCX + 0.66, z2: CCZ + 0.66, top: 1.28 },         // 大魔女坩埚（实心阻挡）
+                { x1: ctx.SFX - 0.25, z1: ctx.SFZ - 0.70, x2: ctx.SFX + 0.25, z2: ctx.SFZ + 0.70, top: 2.02 },         // 左墙书架（实心阻挡）
+                { x1: ctx.CCX - 0.66, z1: ctx.CCZ - 0.66, x2: ctx.CCX + 0.66, z2: ctx.CCZ + 0.66, top: 1.28 },         // 大魔女坩埚（实心阻挡）
                 { x1: -0.41, z1: -1.06, x2: 0.41, z2: -0.50, top: 0.49 },                              // 楼梯下储物箱
                 { x1: -0.99, z1: -3.04, x2: -0.51, z2: -2.56, top: 0.48 },                             // 塔罗牌小圆凳
-                { x1: BEDX - 0.68, z1: BEDZ - 1.18, x2: BEDX + 0.68, z2: BEDZ + 1.13, top: FY + 0.85, bot: FY }, // 二楼大床
-                { x1: NSX - 0.29, z1: NSZ - 0.26, x2: NSX + 0.29, z2: NSZ + 0.26, top: FY + 0.60, bot: FY },    // 二楼床头柜
-                { x1: TBLX - 1.22, z1: TBLZ - 0.58, x2: TBLX + 1.22, z2: TBLZ + 0.58, top: FY + 0.80, bot: FY }, // 二楼书桌
-                { x1: -2.03, z1: 3.26, x2: -0.77, z2: 3.84, top: FY + 1.95, bot: FY },                 // 二楼衣柜（实心阻挡）
-                { x1: 2.22, z1: 3.53, x2: 2.88, z2: 3.68, top: FY + 1.85, bot: FY },                   // 二楼拱形全身镜（实心阻挡）
-                { x1: -3.58, z1: 2.28, x2: -2.40, z2: 3.48, top: FY + 2.0, bot: FY },                  // 二楼小黑板画架（实心阻挡）
-                { x1: 0.61, z1: 3.21, x2: 1.29, z2: 3.76, top: FY + 0.41, bot: FY },                  // 二楼置物箱
-                { x1: 1.59, z1: -3.66, x2: 2.11, z2: -3.14, top: FY + 0.60, bot: FY }                 // 二楼垃圾桶
+                { x1: ctx.BEDX - 0.68, z1: ctx.BEDZ - 1.18, x2: ctx.BEDX + 0.68, z2: ctx.BEDZ + 1.13, top: ctx.FY + 0.85, bot: ctx.FY }, // 二楼大床
+                { x1: ctx.NSX - 0.29, z1: ctx.NSZ - 0.26, x2: ctx.NSX + 0.29, z2: ctx.NSZ + 0.26, top: ctx.FY + 0.60, bot: ctx.FY },    // 二楼床头柜
+                { x1: ctx.TBLX - 1.22, z1: ctx.TBLZ - 0.58, x2: ctx.TBLX + 1.22, z2: ctx.TBLZ + 0.58, top: ctx.FY + 0.80, bot: ctx.FY }, // 二楼书桌
+                { x1: -2.03, z1: 3.26, x2: -0.77, z2: 3.84, top: ctx.FY + 1.95, bot: ctx.FY },                 // 二楼衣柜（实心阻挡）
+                { x1: 2.22, z1: 3.53, x2: 2.88, z2: 3.68, top: ctx.FY + 1.85, bot: ctx.FY },                   // 二楼拱形全身镜（实心阻挡）
+                { x1: -3.58, z1: 2.28, x2: -2.40, z2: 3.48, top: ctx.FY + 2.0, bot: ctx.FY },                  // 二楼小黑板画架（实心阻挡）
+                { x1: 0.61, z1: 3.21, x2: 1.29, z2: 3.76, top: ctx.FY + 0.41, bot: ctx.FY },                  // 二楼置物箱
+                { x1: 1.59, z1: -3.66, x2: 2.11, z2: -3.14, top: ctx.FY + 0.60, bot: ctx.FY }                 // 二楼垃圾桶
             ];
+            ctx.platformBoxes = platformBoxes;
             const movingPlatforms = [
                 // J3（B2）：三脚圆凳已搬入 world/floor1/stools.js —— 碰撞平台改用装配记录里的部件
-                { g: stoolsApi.parts.stoolA, hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: stoolsApi.parts.stoolB, hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: cartG, hx: 0.21, hz: 0.16, top: 0.482 },
-                { g: chairG, hx: 0.24, hz: 0.24, top: FY + 0.49, bot: FY },
-                { g: stoolG, hx: 0.17, hz: 0.15, top: FY + 0.33, bot: FY },
-                ...chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))
+                { g: ctx.stoolsApi.parts.stoolA, hx: 0.23, hz: 0.23, top: 0.475 },
+                { g: ctx.stoolsApi.parts.stoolB, hx: 0.23, hz: 0.23, top: 0.475 },
+                { g: ctx.cartG, hx: 0.21, hz: 0.16, top: 0.482 },
+                { g: ctx.chairG, hx: 0.24, hz: 0.24, top: ctx.FY + 0.49, bot: ctx.FY },
+                { g: ctx.stoolG, hx: 0.17, hz: 0.15, top: ctx.FY + 0.33, bot: ctx.FY },
+                ...ctx.chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))
             ];
-            let activePlatforms = platformBoxes;
+            ctx.movingPlatforms = movingPlatforms;
+            ctx.activePlatforms = platformBoxes;
             function refreshPlatforms() {
-                activePlatforms = platformBoxes.slice();
+                ctx.activePlatforms = platformBoxes.slice();
                 for (const m of movingPlatforms) {
                     const px = m.g.position.x, pz = m.g.position.z;
-                    activePlatforms.push({ x1: px - m.hx, z1: pz - m.hz, x2: px + m.hx, z2: pz + m.hz, top: m.top, bot: m.bot || 0 });
+                    ctx.activePlatforms.push({ x1: px - m.hx, z1: pz - m.hz, x2: px + m.hx, z2: pz + m.hz, top: m.top, bot: m.bot || 0 });
                 }
             }
-            function collideXZ(px, pz, y) { const boxes = solidBoxes.slice(); if (y >= 2.35 || !doorGroup.userData.spring.open) boxes.push(DOOR_BOX); for (const p of activePlatforms) { if (y < p.top - 0.42 && y + 0.5 > (p.bot || 0)) boxes.push(p); } for (const b of boxes) { const cx = Math.max(b.x1, Math.min(px, b.x2)); const cz = Math.max(b.z1, Math.min(pz, b.z2)); let dx = px - cx, dz = pz - cz; const d2 = dx * dx + dz * dz; if (d2 < PLAYER_R * PLAYER_R) { if (d2 < 1e-9) { const l = px - b.x1, rr = b.x2 - px; const tt = pz - b.z1, bb = b.z2 - pz; const m = Math.min(l, rr, tt, bb); if (m === l) px = b.x1 - PLAYER_R; else if (m === rr) px = b.x2 + PLAYER_R; else if (m === tt) pz = b.z1 - PLAYER_R; else pz = b.z2 + PLAYER_R; } else { const d = Math.sqrt(d2); px = cx + dx / d * PLAYER_R; pz = cz + dz / d * PLAYER_R; } } } return [px, pz]; }
-            function stairHeightAt(aDeg) { if (aDeg > 30 && aDeg < 300) return ((aDeg - 30) / 270) * FLOOR_TOP; return 0; }
-            function railCollide(px, pz, y, prevX, prevZ) { const r = Math.hypot(px, pz); if (r < 1e-5) return [px, pz]; const a = (Math.atan2(px, pz) * 180 / Math.PI + 360) % 360; const pR = Math.hypot(prevX, prevZ); const pA = (Math.atan2(prevX, prevZ) * 180 / Math.PI + 360) % 360; const inLand = ang => (ang >= 300 || ang <= 60); if (y > FLOOR_TOP - 0.30 && y < FLOOR_TOP + 0.95) { if (a > 60 && a < 300 && pA > 60 && pA < 300) { if (pR < 1.24 && r > 1.24) { const s = 1.21 / r; px *= s; pz *= s; } else if (pR > 1.24 && r < 1.24) { const s = 1.27 / r; px *= s; pz *= s; } } if (Math.min(r, pR) < 1.24 && inLand(a) !== inLand(pA)) { if ((a > 60 && a < 160) || (pA > 60 && pA < 160)) { px = prevX; pz = prevZ; } } } else if (y > 0.45 && y <= FLOOR_TOP - 0.30) { const sh = stairHeightAt(a); if (pR < 1.25 && Math.abs(y - sh) < 0.85) { if (r > 0.98 && r < 1.12) { const s = 0.98 / r; px *= s; pz *= s; } else if (r < 0.30) { const s = 0.30 / r; px *= s; pz *= s; } } } else if (y <= 0.45) { if (pR >= 1.14 && r < 1.14 && !(a > 18 && a < 62)) { const s = 1.14 / r; px *= s; pz *= s; } } return [px, pz]; }
-            function groundAt(x, z, curY) { let g = 0; const r = Math.hypot(x, z); const a = (Math.atan2(x, z) * 180 / Math.PI + 360) % 360; if (r > 0.10 && r < 1.20 && a > 30 && a < 300) { const h = Math.min(((a - 30) / 270) * FLOOR_TOP, FLOOR_TOP); if (curY > h - 0.5) g = Math.max(g, h); } for (const p of activePlatforms) { if (x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2 && curY > p.top - 0.45) g = Math.max(g, p.top); } if (x > -4 && x < 4 && z > -4 && z < 4 && curY > 2.6) { if (r >= 1.20) g = Math.max(g, FLOOR_TOP); else if (a >= 300 || a <= 60) g = Math.max(g, FLOOR_TOP); } return g; }
+            function collideXZ(px, pz, y) { const boxes = ctx.solidBoxes.slice(); if (y >= 2.35 || !ctx.doorGroup.userData.spring.open) boxes.push(ctx.DOOR_BOX); for (const p of ctx.activePlatforms) { if (y < p.top - 0.42 && y + 0.5 > (p.bot || 0)) boxes.push(p); } for (const b of boxes) { const cx = Math.max(b.x1, Math.min(px, b.x2)); const cz = Math.max(b.z1, Math.min(pz, b.z2)); let dx = px - cx, dz = pz - cz; const d2 = dx * dx + dz * dz; if (d2 < ctx.PLAYER_R * ctx.PLAYER_R) { if (d2 < 1e-9) { const l = px - b.x1, rr = b.x2 - px; const tt = pz - b.z1, bb = b.z2 - pz; const m = Math.min(l, rr, tt, bb); if (m === l) px = b.x1 - ctx.PLAYER_R; else if (m === rr) px = b.x2 + ctx.PLAYER_R; else if (m === tt) pz = b.z1 - ctx.PLAYER_R; else pz = b.z2 + ctx.PLAYER_R; } else { const d = Math.sqrt(d2); px = cx + dx / d * ctx.PLAYER_R; pz = cz + dz / d * ctx.PLAYER_R; } } } return [px, pz]; }
+            function stairHeightAt(aDeg) { if (aDeg > 30 && aDeg < 300) return ((aDeg - 30) / 270) * ctx.FLOOR_TOP; return 0; }
+            function railCollide(px, pz, y, prevX, prevZ) { const r = Math.hypot(px, pz); if (r < 1e-5) return [px, pz]; const a = (Math.atan2(px, pz) * 180 / Math.PI + 360) % 360; const pR = Math.hypot(prevX, prevZ); const pA = (Math.atan2(prevX, prevZ) * 180 / Math.PI + 360) % 360; const inLand = ang => (ang >= 300 || ang <= 60); if (y > ctx.FLOOR_TOP - 0.30 && y < ctx.FLOOR_TOP + 0.95) { if (a > 60 && a < 300 && pA > 60 && pA < 300) { if (pR < 1.24 && r > 1.24) { const s = 1.21 / r; px *= s; pz *= s; } else if (pR > 1.24 && r < 1.24) { const s = 1.27 / r; px *= s; pz *= s; } } if (Math.min(r, pR) < 1.24 && inLand(a) !== inLand(pA)) { if ((a > 60 && a < 160) || (pA > 60 && pA < 160)) { px = prevX; pz = prevZ; } } } else if (y > 0.45 && y <= ctx.FLOOR_TOP - 0.30) { const sh = stairHeightAt(a); if (pR < 1.25 && Math.abs(y - sh) < 0.85) { if (r > 0.98 && r < 1.12) { const s = 0.98 / r; px *= s; pz *= s; } else if (r < 0.30) { const s = 0.30 / r; px *= s; pz *= s; } } } else if (y <= 0.45) { if (pR >= 1.14 && r < 1.14 && !(a > 18 && a < 62)) { const s = 1.14 / r; px *= s; pz *= s; } } return [px, pz]; }
+            function groundAt(x, z, curY) { let g = 0; const r = Math.hypot(x, z); const a = (Math.atan2(x, z) * 180 / Math.PI + 360) % 360; if (r > 0.10 && r < 1.20 && a > 30 && a < 300) { const h = Math.min(((a - 30) / 270) * ctx.FLOOR_TOP, ctx.FLOOR_TOP); if (curY > h - 0.5) g = Math.max(g, h); } for (const p of ctx.activePlatforms) { if (x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2 && curY > p.top - 0.45) g = Math.max(g, p.top); } if (x > -4 && x < 4 && z > -4 && z < 4 && curY > 2.6) { if (r >= 1.20) g = Math.max(g, ctx.FLOOR_TOP); else if (a >= 300 || a <= 60) g = Math.max(g, ctx.FLOOR_TOP); } return g; }
 
             /* ---- 音效辅助：门窗弹簧 / 壁炉 / 吊灯 / 魔法物件 ---- */
-            doorGroup.userData.sfx = 'door';
-            for (const w of [winFL, winFR, winL, winR, winB, winG]) w.userData.sfx = 'window';
-            const toggleSpring = g => { if (g.userData.onToggle) { g.userData.onToggle(); return; } g.userData.spring.open = !g.userData.spring.open; SND.play(g.userData.sfx || 'toggle'); };
-            function toggleFire() { fireLit = !fireLit; SND.play('fire'); }
-            function toggleLamp() { lampLit = !lampLit; SND.play('lamp'); }
-            const fireMagic = o => { SND.play(o.userData.sfx || 'toggle'); o.userData.onClick(); };
+            /* ==================== [J4:seg sfxBridge] ==================== */
+            // ↓ J4 段导出（sfxBridge）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.toggleFire = toggleFire; ctx.toggleLamp = toggleLamp; ctx.ancestorVisible = ancestorVisible; ctx.aimRay = aimRay; ctx.doInteract = doInteract; ctx.updateInteractHint = updateInteractHint;
+            ctx.doorGroup.userData.sfx = 'door';
+            for (const w of [ctx.winFL, ctx.winFR, ctx.winL, ctx.winR, ctx.winB, ctx.winG]) w.userData.sfx = 'window';
+            const toggleSpring = g => { if (g.userData.onToggle) { g.userData.onToggle(); return; } g.userData.spring.open = !g.userData.spring.open; ctx.SND.play(g.userData.sfx || 'toggle'); };
+            ctx.toggleSpring = toggleSpring;
+            function toggleFire() { ctx.fireLit = !ctx.fireLit; ctx.SND.play('fire'); }
+            function toggleLamp() { ctx.lampLit = !ctx.lampLit; ctx.SND.play('lamp'); }
+            const fireMagic = o => { ctx.SND.play(o.userData.sfx || 'toggle'); o.userData.onClick(); };
+            ctx.fireMagic = fireMagic;
             // J2.6：9 条近距条目改为**注册式**（统一交互契约）。顺序、半径、锚点逐条照搬 ⇒ 行为零差异；
             // anchor 全部来自 cabin/world/layout.js（不变量 N9），label 是面向用户的语义化文案（不变量 N10）。
             const interaction = createInteractionSystem({ registry, warn: (m) => console.warn(m) });
-            interaction.registerProximity({ id: 'floor1/fireplace', label: '点燃 / 熄灭壁炉', mode: 'proximity', anchor: { x: FX, z: FZ }, radius: 2.0, onActivate: toggleFire });
+            ctx.interaction = interaction;
+            interaction.registerProximity({ id: 'floor1/fireplace', label: '点燃 / 熄灭壁炉', mode: 'proximity', anchor: { x: ctx.FX, z: ctx.FZ }, radius: 2.0, onActivate: toggleFire });
             interaction.registerProximity({ id: 'floor1/chandelier', label: '点亮 / 熄灭魔法吊灯', mode: 'proximity', anchor: { x: 0, z: 0 }, radius: 2.4, onActivate: toggleLamp });
-            interaction.registerProximity({ id: 'house/door', label: '打开 / 关上大门', mode: 'proximity', anchor: { x: 0, z: 4 }, radius: 1.8, onActivate: () => toggleSpring(doorGroup) });
-            interaction.registerProximity({ id: 'house/window-front-left', label: '开 / 关前左窗', mode: 'proximity', anchor: { x: WIN_F_L.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFL) });
-            interaction.registerProximity({ id: 'house/window-front-right', label: '开 / 关前右窗', mode: 'proximity', anchor: { x: WIN_F_R.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(winFR) });
-            interaction.registerProximity({ id: 'house/window-left', label: '开 / 关左侧窗', mode: 'proximity', anchor: { x: -4, z: WIN_LEFT.c }, radius: 1.6, onActivate: () => toggleSpring(winL) });
-            interaction.registerProximity({ id: 'outdoor/signpost', label: '编辑路牌文字', mode: 'proximity', anchor: { x: 3.1, z: 6.3 }, radius: 2.2, onActivate: openSignEditor });
-            interaction.registerProximity({ id: 'house/window-right', label: '开 / 关右侧窗', mode: 'proximity', anchor: { x: 4, z: -1.5 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winR) });
-            interaction.registerProximity({ id: 'house/window-back', label: '开 / 关后窗', mode: 'proximity', anchor: { x: 1.5, z: -4 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(winB) });
+            interaction.registerProximity({ id: 'house/door', label: '打开 / 关上大门', mode: 'proximity', anchor: { x: 0, z: 4 }, radius: 1.8, onActivate: () => toggleSpring(ctx.doorGroup) });
+            interaction.registerProximity({ id: 'house/window-front-left', label: '开 / 关前左窗', mode: 'proximity', anchor: { x: ctx.WIN_F_L.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(ctx.winFL) });
+            interaction.registerProximity({ id: 'house/window-front-right', label: '开 / 关前右窗', mode: 'proximity', anchor: { x: ctx.WIN_F_R.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(ctx.winFR) });
+            interaction.registerProximity({ id: 'house/window-left', label: '开 / 关左侧窗', mode: 'proximity', anchor: { x: -4, z: ctx.WIN_LEFT.c }, radius: 1.6, onActivate: () => toggleSpring(ctx.winL) });
+            interaction.registerProximity({ id: 'outdoor/signpost', label: '编辑路牌文字', mode: 'proximity', anchor: { x: 3.1, z: 6.3 }, radius: 2.2, onActivate: ctx.openSignEditor });
+            interaction.registerProximity({ id: 'house/window-right', label: '开 / 关右侧窗', mode: 'proximity', anchor: { x: 4, z: -1.5 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(ctx.winR) });
+            interaction.registerProximity({ id: 'house/window-back', label: '开 / 关后窗', mode: 'proximity', anchor: { x: 1.5, z: -4 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(ctx.winB) });
             const hintEl = document.getElementById('hint'), crosshairEl = document.getElementById('crosshair'), lockTipEl = document.getElementById('lockTip');
+            ctx.hintEl = hintEl; ctx.crosshairEl = crosshairEl; ctx.lockTipEl = lockTipEl;
             // J2.6：提示文案的唯一出口（原先 #hint 的 innerHTML 被直接写了 4 处，违反不变量 N10）
-            const hintUI = createHintUI({ element: hintEl, clock, isTouch: IS_TOUCH });
-            let nearestInteract = null, aimHit = null; const raycaster = new THREE.Raycaster(); const CENTER = new THREE.Vector2(0, 0); const mouse = new THREE.Vector2();
+            const hintUI = createHintUI({ element: hintEl, clock, isTouch: ctx.IS_TOUCH });
+            ctx.hintUI = hintUI;
+            ctx.nearestInteract = null, ctx.aimHit = null; const raycaster = new THREE.Raycaster();
+            ctx.raycaster = raycaster; const CENTER = new THREE.Vector2(0, 0);
+            ctx.CENTER = CENTER; const mouse = new THREE.Vector2();
+            ctx.mouse = mouse;
             function ancestorVisible(o) { let p = o; while (p) { if (p.visible === false) return false; p = p.parent; } return true; }
             // J2.6：把原先硬编码在 aimRay() 里的「铰链 → 魔法物件 → 壁炉」三段优先，改为按注册顺序的命中源。
             // ★ 注册次序必须与搬迁前的短路次序**完全一致**，否则同一次点击会命中不同的物件。
             //   每个源自己负责"命中的 Mesh → 可执行目标"这一步（label 取自各物件的 aimLabel）。
-            interaction.registerAimSource({ id: 'hinges', meshes: hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
-            interaction.registerAimSource({ id: 'magic', meshes: magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
-            interaction.registerAimSource({ id: 'fire', meshes: fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
-            function aimRay() { raycaster.setFromCamera(CENTER, camera); return interaction.aimTarget(raycaster); }
-            const isLocked = () => document.pointerLockElement === renderer.domElement;
-            function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (nearestInteract) interaction.activate(nearestInteract); }
+            interaction.registerAimSource({ id: 'hinges', meshes: ctx.hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
+            interaction.registerAimSource({ id: 'magic', meshes: ctx.magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
+            interaction.registerAimSource({ id: 'fire', meshes: ctx.fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
+            function aimRay() { raycaster.setFromCamera(CENTER, ctx.camera); return interaction.aimTarget(raycaster); }
+            const isLocked = () => document.pointerLockElement === ctx.renderer.domElement;
+            ctx.isLocked = isLocked;
+            function doInteract() { if (ctx.viewMode === 'fp' && (ctx.aimHit || ctx.IS_TOUCH)) { if (ctx.aimHit) interaction.activate(ctx.aimHit); return; } if (ctx.nearestInteract) interaction.activate(ctx.nearestInteract); }
             function updateInteractHint() {
                 if (hintUI.applyOverride()) return;
-                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { nearestInteract = null; aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
+                if (ctx.viewMode === 'fp' && (isLocked() || ctx.IS_TOUCH)) { ctx.nearestInteract = null; ctx.aimHit = aimRay(); if (ctx.aimHit) hintUI.showAim(ctx.aimHit.label); else hintUI.hide(); return; } ctx.aimHit = null; ctx.nearestInteract = interaction.nearestTarget(ctx.player.pos, { fullHouse: ctx.fullHouse }); if (ctx.nearestInteract) hintUI.showProximity(ctx.nearestInteract.label); else hintUI.hide();
             }
 
-            const keys = {}; const signInput = document.getElementById('signInput'); const signEditor = document.getElementById('signEditor'); const picInput = document.getElementById('picInput');
-            let joyX = 0, joyY = 0, sprintBtnDown = false;
-            function tryJump() { const now = clock.now; if (player.onGround || (now - player.groundT) < 0.15) { player.vy = 7.0; player.onGround = false; player.groundT = -10; slime.squashV += 1.3; slime.wobV += 2.2; } }
+            /* ==================== [J4:seg input] ==================== */
+            // ↓ J4 段导出（input）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.tryJump = tryJump; ctx.setKnob = setKnob; ctx.joyEnd = joyEnd; ctx.sprintEnd = sprintEnd;
+            const keys = {};
+            ctx.keys = keys; const signInput = document.getElementById('signInput');
+            ctx.signInput = signInput; const signEditor = document.getElementById('signEditor');
+            ctx.signEditor = signEditor; const picInput = document.getElementById('picInput');
+            ctx.picInput = picInput;
+            ctx.joyX = 0, ctx.joyY = 0, ctx.sprintBtnDown = false;
+            function tryJump() { const now = clock.now; if (ctx.player.onGround || (now - ctx.player.groundT) < 0.15) { ctx.player.vy = 7.0; ctx.player.onGround = false; ctx.player.groundT = -10; ctx.slime.squashV += 1.3; ctx.slime.wobV += 2.2; } }
             addEventListener('keydown', e => {
-                if (document.activeElement === signInput || document.activeElement === noteInput || document.activeElement === picInput) return;
+                if (document.activeElement === signInput || document.activeElement === ctx.noteInput || document.activeElement === picInput) return;
                 keys[e.code] = true;
-                if (e.code === 'KeyV' && viewMode !== 'fixed') setViewMode(viewMode === 'fp' ? 'tp' : 'fp');
+                if (e.code === 'KeyV' && ctx.viewMode !== 'fixed') ctx.setViewMode(ctx.viewMode === 'fp' ? 'tp' : 'fp');
                 if (e.code === 'Space') { e.preventDefault(); tryJump(); }
                 // J3.1：不再以 `nearestInteract` 为前置 —— 第一人称（准星通路）下它按设计是 null，
                 // 旧写法会让"准星对准 + 按 E"依赖一个陈旧值才能生效。是否真有可激活目标由 doInteract() 判定。
-                if (e.code === 'KeyE') doInteract();
-                if (e.code === 'Digit1' || e.code === 'Numpad1') selectSlot(1);
-                if (e.code === 'Digit2' || e.code === 'Numpad2') selectSlot(2);
-                if (e.code === 'KeyF') tryCast();
+                if (e.code === 'KeyE') ctx.doInteract();
+                if (e.code === 'Digit1' || e.code === 'Numpad1') ctx.selectSlot(1);
+                if (e.code === 'Digit2' || e.code === 'Numpad2') ctx.selectSlot(2);
+                if (e.code === 'KeyF') ctx.tryCast();
             });
-            addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space' && player.vy > 2.6) player.vy = 2.6; });
+            addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space' && ctx.player.vy > 2.6) ctx.player.vy = 2.6; });
             const joyZone = document.getElementById('joyZone'), joyBase = document.getElementById('joyBase'), joyKnob = document.getElementById('joyKnob');
-            const JOY_R = 44; let joyId = null, joyCx = 0, joyCy = 0;
+            ctx.joyZone = joyZone; ctx.joyBase = joyBase; ctx.joyKnob = joyKnob;
+            const JOY_R = 44;
+            ctx.JOY_R = JOY_R; ctx.joyId = null, ctx.joyCx = 0, ctx.joyCy = 0;
             function setKnob(dx, dy) { joyKnob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; }
-            joyZone.addEventListener('pointerdown', e => { if (joyId !== null) return; joyId = e.pointerId; joyCx = e.clientX; joyCy = e.clientY; joyBase.style.display = 'block'; joyBase.style.left = joyCx + 'px'; joyBase.style.top = joyCy + 'px'; setKnob(0, 0); joyZone.setPointerCapture(e.pointerId); e.preventDefault(); });
-            joyZone.addEventListener('pointermove', e => { if (e.pointerId !== joyId) return; let dx = e.clientX - joyCx, dy = e.clientY - joyCy; const m = Math.hypot(dx, dy); if (m > JOY_R) { dx = dx / m * JOY_R; dy = dy / m * JOY_R; } setKnob(dx, dy); joyX = dx / JOY_R; joyY = dy / JOY_R; e.preventDefault(); });
-            function joyEnd(e) { if (e.pointerId !== joyId) return; joyId = null; joyX = 0; joyY = 0; joyBase.style.display = 'none'; setKnob(0, 0); }
+            joyZone.addEventListener('pointerdown', e => { if (ctx.joyId !== null) return; ctx.joyId = e.pointerId; ctx.joyCx = e.clientX; ctx.joyCy = e.clientY; joyBase.style.display = 'block'; joyBase.style.left = ctx.joyCx + 'px'; joyBase.style.top = ctx.joyCy + 'px'; setKnob(0, 0); joyZone.setPointerCapture(e.pointerId); e.preventDefault(); });
+            joyZone.addEventListener('pointermove', e => { if (e.pointerId !== ctx.joyId) return; let dx = e.clientX - ctx.joyCx, dy = e.clientY - ctx.joyCy; const m = Math.hypot(dx, dy); if (m > JOY_R) { dx = dx / m * JOY_R; dy = dy / m * JOY_R; } setKnob(dx, dy); ctx.joyX = dx / JOY_R; ctx.joyY = dy / JOY_R; e.preventDefault(); });
+            function joyEnd(e) { if (e.pointerId !== ctx.joyId) return; ctx.joyId = null; ctx.joyX = 0; ctx.joyY = 0; joyBase.style.display = 'none'; setKnob(0, 0); }
             joyZone.addEventListener('pointerup', joyEnd); joyZone.addEventListener('pointercancel', joyEnd);
             const btnSprint = document.getElementById('btnSprint'), btnJump = document.getElementById('btnJump'), btnAct = document.getElementById('btnAct'), btnCast = document.getElementById('btnCast');
-            btnSprint.addEventListener('pointerdown', e => { sprintBtnDown = true; btnSprint.classList.add('pressed'); e.preventDefault(); });
-            function sprintEnd() { sprintBtnDown = false; btnSprint.classList.remove('pressed'); }
+            ctx.btnSprint = btnSprint; ctx.btnJump = btnJump; ctx.btnAct = btnAct; ctx.btnCast = btnCast;
+            btnSprint.addEventListener('pointerdown', e => { ctx.sprintBtnDown = true; btnSprint.classList.add('pressed'); e.preventDefault(); });
+            function sprintEnd() { ctx.sprintBtnDown = false; btnSprint.classList.remove('pressed'); }
             btnSprint.addEventListener('pointerup', sprintEnd); btnSprint.addEventListener('pointercancel', sprintEnd);
             btnJump.addEventListener('pointerdown', e => { btnJump.classList.add('pressed'); tryJump(); e.preventDefault(); });
-            btnJump.addEventListener('pointerup', () => { btnJump.classList.remove('pressed'); if (player.vy > 2.6) player.vy = 2.6; });
+            btnJump.addEventListener('pointerup', () => { btnJump.classList.remove('pressed'); if (ctx.player.vy > 2.6) ctx.player.vy = 2.6; });
             btnJump.addEventListener('pointercancel', () => btnJump.classList.remove('pressed'));
-            btnAct.addEventListener('pointerdown', e => { btnAct.classList.add('pressed'); doInteract(); e.preventDefault(); });
+            btnAct.addEventListener('pointerdown', e => { btnAct.classList.add('pressed'); ctx.doInteract(); e.preventDefault(); });
             btnAct.addEventListener('pointerup', () => btnAct.classList.remove('pressed')); btnAct.addEventListener('pointercancel', () => btnAct.classList.remove('pressed'));
-            btnCast.addEventListener('pointerdown', e => { btnCast.classList.add('pressed'); tryCast(); e.preventDefault(); });
+            btnCast.addEventListener('pointerdown', e => { btnCast.classList.add('pressed'); ctx.tryCast(); e.preventDefault(); });
             btnCast.addEventListener('pointerup', () => btnCast.classList.remove('pressed')); btnCast.addEventListener('pointercancel', () => btnCast.classList.remove('pressed'));
-            document.getElementById('slot1').addEventListener('click', () => selectSlot(1));
-            document.getElementById('slot2').addEventListener('click', () => selectSlot(2));
-            let dragInfo = null; const ptrs = new Map(); let pinchMode = false, pinchD = 0, didPinch = false;
-            renderer.domElement.addEventListener('pointerdown', e => {
-                if (e.button === 2) { tryCast(); return; }
-                ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); pinchMode = true; didPinch = true; dragInfo = null; } else if (ptrs.size === 1) { dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; didPinch = false; }
+            document.getElementById('slot1').addEventListener('click', () => ctx.selectSlot(1));
+            document.getElementById('slot2').addEventListener('click', () => ctx.selectSlot(2));
+            ctx.dragInfo = null; const ptrs = new Map();
+            ctx.ptrs = ptrs; ctx.pinchMode = false, ctx.pinchD = 0, ctx.didPinch = false;
+            ctx.renderer.domElement.addEventListener('pointerdown', e => {
+                if (e.button === 2) { ctx.tryCast(); return; }
+                ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; ctx.pinchD = Math.hypot(a.x - b.x, a.y - b.y); ctx.pinchMode = true; ctx.didPinch = true; ctx.dragInfo = null; } else if (ptrs.size === 1) { ctx.dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; ctx.didPinch = false; }
             });
-            renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = pinchD - nd; if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + diff * 0.02)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + diff * 0.006)); pinchD = nd; return; } if (!dragInfo) return; if (viewMode === 'fp' && isLocked()) return; const dx = e.clientX - dragInfo.x, dy = e.clientY - dragInfo.y; dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.moved += Math.abs(dx) + Math.abs(dy); pendYaw -= dx * 0.0055; pendPitch += dy * 0.0045 * (viewMode === 'fp' ? -1 : 1); });
-            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
+            ctx.renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ctx.pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = ctx.pinchD - nd; if (ctx.viewMode === 'fixed') ctx.fixDist = Math.max(4, Math.min(40, ctx.fixDist + diff * 0.02)); else ctx.viewDist = Math.max(1.4, Math.min(7.0, ctx.viewDist + diff * 0.006)); ctx.pinchD = nd; return; } if (!ctx.dragInfo) return; if (ctx.viewMode === 'fp' && ctx.isLocked()) return; const dx = e.clientX - ctx.dragInfo.x, dy = e.clientY - ctx.dragInfo.y; ctx.dragInfo.x = e.clientX; ctx.dragInfo.y = e.clientY; ctx.dragInfo.moved += Math.abs(dx) + Math.abs(dy); ctx.pendYaw -= dx * 0.0055; ctx.pendPitch += dy * 0.0045 * (ctx.viewMode === 'fp' ? -1 : 1); });
+            ctx.renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) ctx.pinchMode = false; if (!ctx.dragInfo) return; const wasClick = ctx.dragInfo.moved < 6 && !ctx.didPinch; ctx.dragInfo = null; if (!wasClick) return; if (ctx.viewMode === 'fp' && (ctx.isLocked() || ctx.IS_TOUCH)) { if (ctx.aimHit) ctx.interaction.activate(ctx.aimHit); return; } if (ctx.viewMode === 'fp' && !ctx.IS_TOUCH && !ctx.isLocked()) { ctx.renderer.domElement.requestPointerLock(); return; } ctx.mouse.x = (e.clientX / innerWidth) * 2 - 1; ctx.mouse.y = -(e.clientY / innerHeight) * 2 + 1; ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
                 // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
-                const clickTarget = interaction.aimTarget(raycaster); if (clickTarget) interaction.activate(clickTarget); });
-            renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; dragInfo = null; });
-            document.addEventListener('mousemove', e => { if (isLocked() && viewMode === 'fp') { camYaw -= e.movementX * 0.0026; camPitch -= e.movementY * 0.0022; camPitch = Math.max(-1.2, Math.min(1.2, camPitch)); } });
-            document.addEventListener('pointerlockchange', () => { const locked = isLocked(); crosshairEl.classList.toggle('show', viewMode === 'fp' && (locked || IS_TOUCH)); lockTipEl.classList.toggle('show', viewMode === 'fp' && !locked && !IS_TOUCH); });
-            renderer.domElement.addEventListener('wheel', e => { if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + e.deltaY * 0.012)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + e.deltaY * 0.0025)); }, { passive: true });
-            addEventListener('contextmenu', e => { if (e.target === renderer.domElement || e.target.closest('#joyZone, .touchBtn')) e.preventDefault(); });
+                const clickTarget = ctx.interaction.aimTarget(ctx.raycaster); if (clickTarget) ctx.interaction.activate(clickTarget); });
+            ctx.renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) ctx.pinchMode = false; ctx.dragInfo = null; });
+            document.addEventListener('mousemove', e => { if (ctx.isLocked() && ctx.viewMode === 'fp') { ctx.camYaw -= e.movementX * 0.0026; ctx.camPitch -= e.movementY * 0.0022; ctx.camPitch = Math.max(-1.2, Math.min(1.2, ctx.camPitch)); } });
+            document.addEventListener('pointerlockchange', () => { const locked = ctx.isLocked(); ctx.crosshairEl.classList.toggle('show', ctx.viewMode === 'fp' && (locked || ctx.IS_TOUCH)); ctx.lockTipEl.classList.toggle('show', ctx.viewMode === 'fp' && !locked && !ctx.IS_TOUCH); });
+            ctx.renderer.domElement.addEventListener('wheel', e => { if (ctx.viewMode === 'fixed') ctx.fixDist = Math.max(4, Math.min(40, ctx.fixDist + e.deltaY * 0.012)); else ctx.viewDist = Math.max(1.4, Math.min(7.0, ctx.viewDist + e.deltaY * 0.0025)); }, { passive: true });
+            addEventListener('contextmenu', e => { if (e.target === ctx.renderer.domElement || e.target.closest('#joyZone, .touchBtn')) e.preventDefault(); });
 
             // J2.5：设置类控件（houseToggle / viewXxxBtn / sfxToggle / sfxSlider / wxRandToggle /
             //      speedSlider）已交给 `cabin/systems/ui/SettingsForm.js` 由 schema 生成，
             //      这里**不再持有元素引用** —— 场景只订阅 store 的值（见下面的 applySetting 段）。
-            const menuPanel = document.getElementById('menuPanel'), resetBtn = document.getElementById('resetBtn');
-            document.getElementById('menuDot').addEventListener('click', () => { SND.play('ui'); menuPanel.classList.toggle('open'); });
-            // J2.5：设置面板控件的**点击音**。由面板广播、这里播放 —— 面板在 `systems/ui/`，
-            //      不该认识 `SND`（它住在 3D 实现里）。拖动滑块不发这个事件，与搬迁前的行为一致。
-            bus.on('ui:click', () => SND.play('ui'));
-            /** J2.8：小屋形态的**唯一**应用点 —— 菜单按钮、持久化初始化、测试钩子共用它，
-             *  避免"改了一处忘了另一处"（搬迁前这段逻辑在 3 个地方各写了一遍）。
-             *  J2.5：不再自己 toggle 控件的 class —— 控件的视觉状态归 `SettingsForm`（订阅同一个 store）。 */
-            function applyFullHouse(on) { fullHouse = !!on; fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; }
-            function resetSlime() { player.pos.set(0, 0, 5.2); player.vy = 0; player.yaw = Math.PI; player.moveSpeed = 0; player.onGround = true; camYaw = Math.PI; camPitch = 0.32; pendYaw = 0; pendPitch = 0; slime.squash = SLIME_FLAT; slime.squashV = 0; slime.wob = 0; slime.wobV = 0; }
-            resetBtn.addEventListener('click', () => { SND.play('ui'); resetSlime(); });
-            /** J2.5：视角的**唯一**应用点（同上，控件视觉归 SettingsForm）。
-             *  与 `applyFullHouse` 一样，它只负责"把值变成画面"，不负责存值。 */
-            function applyViewMode(m) { viewMode = m; cameraRig.setMode(m); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
-            /** J2.5：切视角 = 只写 store。应用与控件视觉都由订阅者负责（单向数据流）。 */
-            function setViewMode(m) { store.set('view.mode', m); }
-            // ── ★ J2.5：设置 → 场景 的**唯一通道** ────────────────────────────────
-            //    控件（由 `src/config/settings.config.js` 的 schema 生成）只调 `store.set()`；
-            //    这里订阅 store，把值应用到场景。**单向数据流** ——
-            //    不存在"控件改完值、又自己应用一遍"的双写，加一个设置项只需加一条订阅。
-            //    `store.subscribe` 只在**值真的变化**时触发 ⇒ 首屏那一次显式应用仍由下面两行负责。
-            store.subscribe('house.full', ({ value }) => applyFullHouse(value));
-            store.subscribe('view.mode', ({ value }) => applyViewMode(value));
-            // 音效：打开的那一刻补一声 ui —— 让用户立刻听到音量（搬迁前该按钮单独做过这件事）
-            store.subscribe('audio.enabled', ({ value }) => { SND.setEnabled(value); if (value) SND.play('ui'); });
-            store.subscribe('audio.volume', ({ value }) => SND.setVolume(value));
-            // J2.8：把持久化的设置**应用回场景** —— 刷新后保持上次的选择（风险 R4 的正面）。
-            // `?deterministic=1` 下 store 不持久化，读到的必然是默认值 ⇒ 像素回归与冒烟仍然**环境无关**。
-            // 控件的视觉状态由 `SettingsForm` 在挂载时同步（读的是同一个 store），这里只管场景。
-            applyFullHouse(store.get('house.full'));
-            applyViewMode(store.get('view.mode'));
-            function applySign() { signText = signInput.value.trim() || '魔女小屋'; drawSign(signText); signEditor.classList.remove('show'); signInput.blur(); SND.play('chim'); }
-            document.getElementById('signOk').addEventListener('click', applySign);
-            signInput.addEventListener('keydown', e => { if (e.key === 'Enter') applySign(); if (e.key === 'Escape') { signEditor.classList.remove('show'); signInput.blur(); } e.stopPropagation(); });
-
+            /* ==================== [J4:seg menuUi] ==================== */
+            // J4（menuUi）：本段已搬入 systems/ui/MenuPanel.js
+            installMenuPanel(ctx, app);
+            /* ==================== [J4:seg playerCtrl] ==================== */
+            // ↓ J4 段导出（playerCtrl）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.lerpAngle = lerpAngle; ctx.slimeLand = slimeLand; ctx.updatePlayer = updatePlayer;
             function lerpAngle(a, b, t) { let d = (b - a + Math.PI * 3) % (Math.PI * 2) - Math.PI; return a + d * t; }
-            function slimeLand(time) { if (player.vy < -3.0) { const impact = Math.min(1.5, (-player.vy - 3.0) * 0.30); slime.squashV -= impact; slime.wobV += impact * 2.6; } player.pos.y = groundAt(player.pos.x, player.pos.z, player.pos.y); player.pos.y = Math.max(player.pos.y, 0); player.vy = 0; player.onGround = true; player.groundT = time; }
+            function slimeLand(time) { if (ctx.player.vy < -3.0) { const impact = Math.min(1.5, (-ctx.player.vy - 3.0) * 0.30); ctx.slime.squashV -= impact; ctx.slime.wobV += impact * 2.6; } ctx.player.pos.y = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y); ctx.player.pos.y = Math.max(ctx.player.pos.y, 0); ctx.player.vy = 0; ctx.player.onGround = true; ctx.player.groundT = time; }
             function updatePlayer(dt, time) {
-                refreshPlatforms();
-                if (pendYaw !== 0 || pendPitch !== 0) { const APPLY = 0.6; if (viewMode === 'fixed') { fixYaw += pendYaw * APPLY; fixPitch += pendPitch * APPLY; fixPitch = Math.max(0.05, Math.min(1.45, fixPitch)); } else { camYaw += pendYaw * APPLY; camPitch += pendPitch * APPLY; if (viewMode === 'fp') camPitch = Math.max(-1.2, Math.min(1.2, camPitch)); else camPitch = Math.max(-0.25, Math.min(1.15, camPitch)); } pendYaw *= (1 - APPLY); pendPitch *= (1 - APPLY); if (Math.abs(pendYaw) < 1e-5) pendYaw = 0; if (Math.abs(pendPitch) < 1e-5) pendPitch = 0; }
-                if (viewMode === 'fixed') camYaw = fixYaw + Math.PI;
-                const typing = document.activeElement === signInput || document.activeElement === noteInput || document.activeElement === picInput; let ix = 0, iz = 0;
-                if (!typing) { if (keys['KeyW'] || keys['ArrowUp']) iz += 1; if (keys['KeyS'] || keys['ArrowDown']) iz -= 1; if (keys['KeyA'] || keys['ArrowLeft']) ix -= 1; if (keys['KeyD'] || keys['ArrowRight']) ix += 1; ix += joyX; iz += -joyY; const m = Math.hypot(ix, iz); if (m > 1) { ix /= m; iz /= m; } }
-                const joyFull = Math.hypot(joyX, joyY) > 0.85; const running = !!(keys['ShiftLeft'] || keys['ShiftRight']) || sprintBtnDown || joyFull; const maxSpeed = running ? 3.2 : 1.6;
-                let tx = 0, tz = 0; if (ix !== 0 || iz !== 0) { const fx = Math.sin(camYaw), fz = Math.cos(camYaw); const rx = -Math.cos(camYaw), rz = Math.sin(camYaw); tx = (fx * iz + rx * ix) * maxSpeed; tz = (fz * iz + rz * ix) * maxSpeed; }
-                player.moveSpeed += (Math.hypot(tx, tz) - player.moveSpeed) * Math.min(1, dt * 10); const spd = player.moveSpeed; const moving = spd > 0.12;
-                if (moving) slime.pulse += dt * (2.6 + spd * 1.3);
-                const creep = moving ? 0.45 + 0.55 * Math.max(0, Math.sin(slime.pulse - 0.5)) : 1;
-                const ox = player.pos.x, oz = player.pos.z; let nx = player.pos.x + tx * dt * creep, nz = player.pos.z + tz * dt * creep;
-                [nx, nz] = collideXZ(nx, nz, player.pos.y);[nx, nz] = railCollide(nx, nz, player.pos.y, ox, oz); player.pos.x = nx; player.pos.z = nz;
-                const ground = groundAt(player.pos.x, player.pos.z, player.pos.y);
-                if (player.pos.y <= ground + 0.001 && player.vy <= 0) { if (player.pos.y - ground > 0.5) player.vy = 0; else slimeLand(time); }
-                if (player.pos.y > ground + 0.001 || player.vy > 0) { player.vy -= 22 * dt; player.pos.y += player.vy * dt; const g2 = groundAt(player.pos.x, player.pos.z, player.pos.y); if (player.pos.y <= g2 && player.vy <= 0) slimeLand(time); else if (player.pos.y > g2) player.onGround = false; }
-                if (spd > 0.15) player.yaw = lerpAngle(player.yaw, Math.atan2(tx, tz), Math.min(1, dt * 9));
-                const breathe = 1 + Math.sin(time * 1.7) * 0.03; const pulseSq = moving ? 1 - 0.10 * Math.max(0, Math.sin(slime.pulse - 0.9)) : 1; let jumpSq = 1;
-                if (!player.onGround) jumpSq = player.vy > 2 ? 1.22 : (player.vy < -2 ? 1.12 : 1.07);
-                const targetS = SLIME_FLAT * breathe * pulseSq * jumpSq;
-                slime.squashV += (targetS - slime.squash) * 165 * dt; slime.squashV *= Math.exp(-6.2 * dt); slime.squash += slime.squashV * dt;
-                const sy = Math.max(0.45, Math.min(1.5, slime.squash)); const sxz = (1 / Math.sqrt(sy)) * (1 + slime.wob * 0.10);
-                slime.wobV += (-slime.wob) * 55 * dt; slime.wobV *= Math.exp(-3.4 * dt); slime.wob += slime.wobV * dt; const wob = Math.max(-0.35, Math.min(0.35, slime.wob));
-                slimeRoot.position.set(player.pos.x, player.pos.y, player.pos.z); slimeRoot.rotation.y = player.yaw; slimeBody.scale.set(sxz, sy, sxz); slimeBody.position.y = SLIME_R * sy;
-                const leanT = Math.min(spd / 1.6, 1) * 0.15; slime.tiltV += (leanT - slime.tilt) * 130 * dt; slime.tiltV *= Math.exp(-5 * dt); slime.tilt += slime.tiltV * dt;
-                slimeBody.rotation.x = slime.tilt + wob * 0.35; slimeBody.rotation.z = Math.sin(time * 2.1) * 0.02 + Math.sin(slime.pulse * 0.5) * 0.035 * Math.min(spd / 1.6, 1) + wob * 0.55;
-                const casting = blast.active && blast.t < T_BOOM;
-                if (casting) slime.pulse += dt * 3;
+                ctx.refreshPlatforms();
+                if (ctx.pendYaw !== 0 || ctx.pendPitch !== 0) { const APPLY = 0.6; if (ctx.viewMode === 'fixed') { ctx.fixYaw += ctx.pendYaw * APPLY; ctx.fixPitch += ctx.pendPitch * APPLY; ctx.fixPitch = Math.max(0.05, Math.min(1.45, ctx.fixPitch)); } else { ctx.camYaw += ctx.pendYaw * APPLY; ctx.camPitch += ctx.pendPitch * APPLY; if (ctx.viewMode === 'fp') ctx.camPitch = Math.max(-1.2, Math.min(1.2, ctx.camPitch)); else ctx.camPitch = Math.max(-0.25, Math.min(1.15, ctx.camPitch)); } ctx.pendYaw *= (1 - APPLY); ctx.pendPitch *= (1 - APPLY); if (Math.abs(ctx.pendYaw) < 1e-5) ctx.pendYaw = 0; if (Math.abs(ctx.pendPitch) < 1e-5) ctx.pendPitch = 0; }
+                if (ctx.viewMode === 'fixed') ctx.camYaw = ctx.fixYaw + Math.PI;
+                const typing = document.activeElement === ctx.signInput || document.activeElement === ctx.noteInput || document.activeElement === ctx.picInput; let ix = 0, iz = 0;
+                if (!typing) { if (ctx.keys['KeyW'] || ctx.keys['ArrowUp']) iz += 1; if (ctx.keys['KeyS'] || ctx.keys['ArrowDown']) iz -= 1; if (ctx.keys['KeyA'] || ctx.keys['ArrowLeft']) ix -= 1; if (ctx.keys['KeyD'] || ctx.keys['ArrowRight']) ix += 1; ix += ctx.joyX; iz += -ctx.joyY; const m = Math.hypot(ix, iz); if (m > 1) { ix /= m; iz /= m; } }
+                const joyFull = Math.hypot(ctx.joyX, ctx.joyY) > 0.85; const running = !!(ctx.keys['ShiftLeft'] || ctx.keys['ShiftRight']) || ctx.sprintBtnDown || joyFull; const maxSpeed = running ? 3.2 : 1.6;
+                let tx = 0, tz = 0; if (ix !== 0 || iz !== 0) { const fx = Math.sin(ctx.camYaw), fz = Math.cos(ctx.camYaw); const rx = -Math.cos(ctx.camYaw), rz = Math.sin(ctx.camYaw); tx = (fx * iz + rx * ix) * maxSpeed; tz = (fz * iz + rz * ix) * maxSpeed; }
+                ctx.player.moveSpeed += (Math.hypot(tx, tz) - ctx.player.moveSpeed) * Math.min(1, dt * 10); const spd = ctx.player.moveSpeed; const moving = spd > 0.12;
+                if (moving) ctx.slime.pulse += dt * (2.6 + spd * 1.3);
+                const creep = moving ? 0.45 + 0.55 * Math.max(0, Math.sin(ctx.slime.pulse - 0.5)) : 1;
+                const ox = ctx.player.pos.x, oz = ctx.player.pos.z; let nx = ctx.player.pos.x + tx * dt * creep, nz = ctx.player.pos.z + tz * dt * creep;
+                [nx, nz] = ctx.collideXZ(nx, nz, ctx.player.pos.y);[nx, nz] = ctx.railCollide(nx, nz, ctx.player.pos.y, ox, oz); ctx.player.pos.x = nx; ctx.player.pos.z = nz;
+                const ground = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y);
+                if (ctx.player.pos.y <= ground + 0.001 && ctx.player.vy <= 0) { if (ctx.player.pos.y - ground > 0.5) ctx.player.vy = 0; else slimeLand(time); }
+                if (ctx.player.pos.y > ground + 0.001 || ctx.player.vy > 0) { ctx.player.vy -= 22 * dt; ctx.player.pos.y += ctx.player.vy * dt; const g2 = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y); if (ctx.player.pos.y <= g2 && ctx.player.vy <= 0) slimeLand(time); else if (ctx.player.pos.y > g2) ctx.player.onGround = false; }
+                if (spd > 0.15) ctx.player.yaw = lerpAngle(ctx.player.yaw, Math.atan2(tx, tz), Math.min(1, dt * 9));
+                const breathe = 1 + Math.sin(time * 1.7) * 0.03; const pulseSq = moving ? 1 - 0.10 * Math.max(0, Math.sin(ctx.slime.pulse - 0.9)) : 1; let jumpSq = 1;
+                if (!ctx.player.onGround) jumpSq = ctx.player.vy > 2 ? 1.22 : (ctx.player.vy < -2 ? 1.12 : 1.07);
+                const targetS = ctx.SLIME_FLAT * breathe * pulseSq * jumpSq;
+                ctx.slime.squashV += (targetS - ctx.slime.squash) * 165 * dt; ctx.slime.squashV *= Math.exp(-6.2 * dt); ctx.slime.squash += ctx.slime.squashV * dt;
+                const sy = Math.max(0.45, Math.min(1.5, ctx.slime.squash)); const sxz = (1 / Math.sqrt(sy)) * (1 + ctx.slime.wob * 0.10);
+                ctx.slime.wobV += (-ctx.slime.wob) * 55 * dt; ctx.slime.wobV *= Math.exp(-3.4 * dt); ctx.slime.wob += ctx.slime.wobV * dt; const wob = Math.max(-0.35, Math.min(0.35, ctx.slime.wob));
+                ctx.slimeRoot.position.set(ctx.player.pos.x, ctx.player.pos.y, ctx.player.pos.z); ctx.slimeRoot.rotation.y = ctx.player.yaw; ctx.slimeBody.scale.set(sxz, sy, sxz); ctx.slimeBody.position.y = ctx.SLIME_R * sy;
+                const leanT = Math.min(spd / 1.6, 1) * 0.15; ctx.slime.tiltV += (leanT - ctx.slime.tilt) * 130 * dt; ctx.slime.tiltV *= Math.exp(-5 * dt); ctx.slime.tilt += ctx.slime.tiltV * dt;
+                ctx.slimeBody.rotation.x = ctx.slime.tilt + wob * 0.35; ctx.slimeBody.rotation.z = Math.sin(time * 2.1) * 0.02 + Math.sin(ctx.slime.pulse * 0.5) * 0.035 * Math.min(spd / 1.6, 1) + wob * 0.55;
+                const casting = ctx.blast.active && ctx.blast.t < ctx.T_BOOM;
+                if (casting) ctx.slime.pulse += dt * 3;
                 const wAmp = moving ? 0.013 + 0.007 * Math.min(spd / 1.6, 1) : (casting ? 0.016 : 0.005);
                 const wSpd = moving ? 7.5 : (casting ? 5 : 1.5);
-                deformSlime(time, wAmp, wSpd);
-                core.scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + slime.pulse) + (casting ? 0.15 : 0)); core.position.set(Math.sin(time * 1.3) * 0.012, 0.015 * Math.sin(time * 1.9), Math.sin(time * 1.1) * 0.010);
-                for (const b of bubbles) { const t = (time * 0.22 + b.userData.ph) % 1; const r2 = b.userData.rr * (1 - t * 0.45); b.position.set(Math.cos(b.userData.ang) * r2, -0.12 + t * 0.24, Math.sin(b.userData.ang) * r2); b.scale.setScalar(0.5 + 0.5 * Math.sin(t * Math.PI)); }
-                const shs = 1 / Math.sqrt(sy); slimeShadow.scale.set(shs, shs, 1); slimeShadow.material.opacity = 0.10 + 0.10 / sy;
+                ctx.deformSlime(time, wAmp, wSpd);
+                ctx.core.scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + ctx.slime.pulse) + (casting ? 0.15 : 0)); ctx.core.position.set(Math.sin(time * 1.3) * 0.012, 0.015 * Math.sin(time * 1.9), Math.sin(time * 1.1) * 0.010);
+                for (const b of ctx.bubbles) { const t = (time * 0.22 + b.userData.ph) % 1; const r2 = b.userData.rr * (1 - t * 0.45); b.position.set(Math.cos(b.userData.ang) * r2, -0.12 + t * 0.24, Math.sin(b.userData.ang) * r2); b.scale.setScalar(0.5 + 0.5 * Math.sin(t * Math.PI)); }
+                const shs = 1 / Math.sqrt(sy); ctx.slimeShadow.scale.set(shs, shs, 1); ctx.slimeShadow.material.opacity = 0.10 + 0.10 / sy;
                 // J2.7：三段解算搬进 CameraRig（按当前视角选 solver；原先是 if / else if / else 三段）
-                cameraRig.update({ fixYaw, fixPitch, fixDist, camYaw, camPitch, viewDist, player, look: FIX_LOOK });
+                ctx.cameraRig.update({ fixYaw: ctx.fixYaw, fixPitch: ctx.fixPitch, fixDist: ctx.fixDist, camYaw: ctx.camYaw, camPitch: ctx.camPitch, viewDist: ctx.viewDist, player: ctx.player, look: ctx.FIX_LOOK });
             }
 
             /* ==================== 天空·时间·天气系统 ==================== */
-            let gameSec = 10 * 3600, timeScale = store.get('time.scale');   // J2.8：时间流速来自设置
-            const curHour = () => (gameSec / 3600) % 24;
+            /* ==================== [J4:seg weather] ==================== */
+            // ↓ J4 段导出（weather）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.setWeather = setWeather; ctx.skyColorAt = skyColorAt; ctx.capDir = capDir; ctx.mwDir = mwDir; ctx.spawnMeteor = spawnMeteor; ctx.updateMeteors = updateMeteors;
+            ctx.makeCloud = makeCloud; ctx.spawnBolt = spawnBolt; ctx.roofTopAt = roofTopAt; ctx.updateWeatherSystem = updateWeatherSystem;
+            ctx.gameSec = 10 * 3600, ctx.timeScale = store.get('time.scale');   // J2.8：时间流速来自设置
+            const curHour = () => (ctx.gameSec / 3600) % 24;
+            ctx.curHour = curHour;
             const WX_LIST = ['sunny', 'cloudy', 'fog', 'rain', 'storm', 'snow', 'blizzard'];
+            ctx.WX_LIST = WX_LIST;
             const WX_NAME = { sunny: '晴', cloudy: '多云', fog: '雾', rain: '雨', storm: '暴雨', snow: '雪', blizzard: '暴雪' };
+            ctx.WX_NAME = WX_NAME;
             const WX_CFG = {
                 sunny: { clouds: 2, rain: 0, snow: 0, fog: 0, gray: 0, wind: 0.2 },
                 cloudy: { clouds: 10, rain: 0, snow: 0, fog: 0.15, gray: 0.25, wind: 0.4 },
@@ -4935,14 +5347,20 @@ export function installCabin(app) {
                 snow: { clouds: 5, rain: 0, snow: 200, fog: 0.35, gray: 0.35, wind: 0.3 },
                 blizzard: { clouds: 9, rain: 0, snow: 420, fog: 0.60, gray: 0.55, wind: 1.8 }
             };
+            ctx.WX_CFG = WX_CFG;
             const wx = { type: 'sunny', random: false, timer: 14, clouds: 2, rain: 0, snow: 0, fog: 0, gray: 0, wind: 0.2 };
+            ctx.wx = wx;
             const WIND_DIR = { x: 0.86, z: 0.51 };
+            ctx.WIND_DIR = WIND_DIR;
             const wxChipsBox = document.getElementById('wxChips'), timeSlider = document.getElementById('timeSlider'), clockEl = document.getElementById('clock');
+            ctx.wxChipsBox = wxChipsBox; ctx.timeSlider = timeSlider; ctx.clockEl = clockEl;
             const chipEls = [];
-            for (const t of WX_LIST) { const b = document.createElement('div'); b.className = 'wxChip'; b.textContent = WX_NAME[t]; b.addEventListener('click', () => { SND.play('ui'); setWeather(t); }); wxChipsBox.appendChild(b); chipEls.push(b); }
+            ctx.chipEls = chipEls;
+            for (const t of WX_LIST) { const b = document.createElement('div'); b.className = 'wxChip'; b.textContent = WX_NAME[t]; b.addEventListener('click', () => { ctx.SND.play('ui'); setWeather(t); }); wxChipsBox.appendChild(b); chipEls.push(b); }
             // J2.10：环境量（天气 / 时间 / 采光）有了唯一持有者，并通过 bus 广播 env:change。
             // 需要响应环境的东西改为**订阅事件**，而不是去读 wx.type / uDaylight（不变量 N1）。
-            const environment = createEnvironment({ bus, fillMaterial: FILL });
+            const environment = createEnvironment({ bus, fillMaterial: ctx.FILL });
+            ctx.environment = environment;
             function setWeather(t) { wx.type = t; environment.setWeather(t); chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
             setWeather('sunny');
             // J2.5：随机天气开关与流速滑杆都由 schema 生成（见 src/config/settings.config.js 的
@@ -4951,9 +5369,9 @@ export function installCabin(app) {
             store.subscribe('weather.random', ({ value }) => { wx.random = value; wx.timer = 6 + runtimeRng() * 10; });
             // 流速的非线性曲线（0–3600×）已搬到 config 的 `TIME_SCALE_CURVE`，公式一字未改；
             // 面板拖的是 0–1 的位置，存进 store 的与这里读到的都是**倍率**。
-            store.subscribe('time.scale', ({ value }) => { timeScale = value; });
-            let draggingTime = false; timeSlider.addEventListener('pointerdown', () => draggingTime = true); addEventListener('pointerup', () => draggingTime = false);
-            timeSlider.addEventListener('input', () => { gameSec = parseFloat(timeSlider.value) * 3600; });
+            store.subscribe('time.scale', ({ value }) => { ctx.timeScale = value; });
+            ctx.draggingTime = false; timeSlider.addEventListener('pointerdown', () => ctx.draggingTime = true); addEventListener('pointerup', () => ctx.draggingTime = false);
+            timeSlider.addEventListener('input', () => { ctx.gameSec = parseFloat(timeSlider.value) * 3600; });
 
             const SKY_STOPS = [
                 [0.0, 0x040710], [3.5, 0x0d1322], [4.5, 0x1b2138], [5.3, 0x43355e],
@@ -4963,34 +5381,53 @@ export function installCabin(app) {
                 [19.1, 0xc75a6e], [19.6, 0x6e4a78], [20.2, 0x33355e], [21.0, 0x141a30],
                 [22.0, 0x080b14], [24.0, 0x040710]
             ];
+            ctx.SKY_STOPS = SKY_STOPS;
             const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _gray = new THREE.Color(), _sky = new THREE.Color(), _white = new THREE.Color(0xffffff), _amb = new THREE.Color(), _nightAmb = new THREE.Color(0x4a5570), _warm = new THREE.Color(0xffd9a0), _moonCol = new THREE.Color(0x8090a0), _fireGlowColor = new THREE.Color(0xff9040), _lampGlowColor = new THREE.Color(1.0, 0.76, 0.62);
+            ctx._c1 = _c1; ctx._c2 = _c2; ctx._gray = _gray; ctx._sky = _sky; ctx._white = _white; ctx._amb = _amb;
+            ctx._nightAmb = _nightAmb; ctx._warm = _warm; ctx._moonCol = _moonCol; ctx._fireGlowColor = _fireGlowColor; ctx._lampGlowColor = _lampGlowColor;
             function skyColorAt(h, out) { for (let i = 0; i < SKY_STOPS.length - 1; i++) { const [h0, c0] = SKY_STOPS[i]; const [h1, c1] = SKY_STOPS[i + 1]; if (h >= h0 && h <= h1) { const t = (h - h0) / (h1 - h0); return out.setHex(c0).lerp(_c2.setHex(c1), t); } } return out.setHex(SKY_STOPS[0][1]); }
 
-            const glowCanvas = document.createElement('canvas'); glowCanvas.width = 64; glowCanvas.height = 64; const gCtx = glowCanvas.getContext('2d');
+            const glowCanvas = document.createElement('canvas');
+            ctx.glowCanvas = glowCanvas; glowCanvas.width = 64; glowCanvas.height = 64; const gCtx = glowCanvas.getContext('2d');
+            ctx.gCtx = gCtx;
             const gGrad = gCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            ctx.gGrad = gGrad;
             gGrad.addColorStop(0, 'rgba(255,255,255,1)');
             gGrad.addColorStop(0.3, 'rgba(255,235,205,0.55)');
             gGrad.addColorStop(1, 'rgba(255,200,150,0)');
             gCtx.fillStyle = gGrad; gCtx.fillRect(0, 0, 64, 64);
             const glowTex = new THREE.CanvasTexture(glowCanvas);
+            ctx.glowTex = glowTex;
 
             const sunGroup = new THREE.Group();
+            ctx.sunGroup = sunGroup;
             const sunFillMat = new THREE.MeshBasicMaterial({ color: 0xffd75e, transparent: true, fog: false, side: THREE.DoubleSide });
+            ctx.sunFillMat = sunFillMat;
             const sunLineMat = new THREE.LineBasicMaterial({ color: 0xc98a2e, transparent: true, fog: false });
-            { const disc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 28), sunFillMat); sunGroup.add(disc); sunGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CircleGeometry(1.7, 28), 15), sunLineMat)); const rayPts = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; const c = Math.cos(a), s = Math.sin(a); rayPts.push(V(c * 2.05, s * 2.05, 0), V(c * 2.9, s * 2.9, 0)); } sunGroup.add(new THREE.LineSegments(geo(rayPts.map(p => [p.x, p.y, p.z])), sunLineMat)); }
+            ctx.sunLineMat = sunLineMat;
+            { const disc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 28), sunFillMat); sunGroup.add(disc); sunGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CircleGeometry(1.7, 28), 15), sunLineMat)); const rayPts = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; const c = Math.cos(a), s = Math.sin(a); rayPts.push(ctx.V(c * 2.05, s * 2.05, 0), ctx.V(c * 2.9, s * 2.9, 0)); } sunGroup.add(new THREE.LineSegments(ctx.geo(rayPts.map(p => [p.x, p.y, p.z])), sunLineMat)); }
             const sunGlowMatA = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffc8a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+            ctx.sunGlowMatA = sunGlowMatA;
             const sunGlowMatB = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xff9760, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+            ctx.sunGlowMatB = sunGlowMatB;
             const sunGlowA = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), sunGlowMatA);
+            ctx.sunGlowA = sunGlowA;
             const sunGlowB = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), sunGlowMatB);
+            ctx.sunGlowB = sunGlowB;
             sunGlowA.position.z = 0.5; sunGlowB.position.z = 0.4;
             sunGroup.add(sunGlowA); sunGroup.add(sunGlowB);
-            scene.add(sunGroup);
+            ctx.scene.add(sunGroup);
 
             const moonGroup = new THREE.Group();
+            ctx.moonGroup = moonGroup;
             const moonFillMatA = new THREE.MeshBasicMaterial({ color: 0xcdb8f0, transparent: true, fog: false, side: THREE.DoubleSide });
+            ctx.moonFillMatA = moonFillMatA;
             const moonLineMatA = new THREE.LineBasicMaterial({ color: 0x8068a8, transparent: true, fog: false });
+            ctx.moonLineMatA = moonLineMatA;
             const moonFillMatB = new THREE.MeshBasicMaterial({ color: 0xbdd9f2, transparent: true, fog: false, side: THREE.DoubleSide });
+            ctx.moonFillMatB = moonFillMatB;
             const moonLineMatB = new THREE.LineBasicMaterial({ color: 0x6088a8, transparent: true, fog: false });
+            ctx.moonLineMatB = moonLineMatB;
             {
                 const mA = new THREE.Group();
                 mA.add(new THREE.Mesh(new THREE.CircleGeometry(1.3, 32), moonFillMatA));
@@ -5004,9 +5441,11 @@ export function installCabin(app) {
                 moonGroup.add(mB);
             }
             const moonGlowMat = new THREE.MeshBasicMaterial({ map: glowTex, color: 0x93a8e8, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+            ctx.moonGlowMat = moonGlowMat;
             const moonGlow = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), moonGlowMat);
+            ctx.moonGlow = moonGlow;
             moonGlow.position.z = 0.3; moonGroup.add(moonGlow);
-            scene.add(moonGroup);
+            ctx.scene.add(moonGroup);
 
             /* ============ 星空 ============ */
             function capDir(yMin) {
@@ -5015,9 +5454,12 @@ export function installCabin(app) {
                 const th = skyRng() * Math.PI * 2;
                 return { x: t * Math.cos(th), y: y, z: t * Math.sin(th) };
             }
-            const mwN = V(0.58, 0.72, 0.38).normalize();
-            const mwU = V(1, 0, 0).addScaledVector(mwN, -mwN.x).normalize();
+            const mwN = ctx.V(0.58, 0.72, 0.38).normalize();
+            ctx.mwN = mwN;
+            const mwU = ctx.V(1, 0, 0).addScaledVector(mwN, -mwN.x).normalize();
+            ctx.mwU = mwU;
             const mwV = new THREE.Vector3().crossVectors(mwN, mwU);
+            ctx.mwV = mwV;
             function mwDir(yMin) {
                 for (let k = 0; k < 40; k++) {
                     const a = skyRng() * Math.PI * 2;
@@ -5033,14 +5475,23 @@ export function installCabin(app) {
             }
 
             const STAR_COUNT = 750;
+            ctx.STAR_COUNT = STAR_COUNT;
             const MW_COUNT = 1650;
+            ctx.MW_COUNT = MW_COUNT;
             const TOTAL_STARS = STAR_COUNT + MW_COUNT;
+            ctx.TOTAL_STARS = TOTAL_STARS;
             const starPos = new Float32Array(TOTAL_STARS * 3);
+            ctx.starPos = starPos;
             const starTwinkle = new Float32Array(TOTAL_STARS);
+            ctx.starTwinkle = starTwinkle;
             const starSpeed = new Float32Array(TOTAL_STARS);
+            ctx.starSpeed = starSpeed;
             const starColorMix = new Float32Array(TOTAL_STARS);
+            ctx.starColorMix = starColorMix;
             const starSize = new Float32Array(TOTAL_STARS);
+            ctx.starSize = starSize;
             const starGeo = new THREE.BufferGeometry();
+            ctx.starGeo = starGeo;
             starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
             starGeo.setAttribute('aTwinkle', new THREE.BufferAttribute(starTwinkle, 1));
             starGeo.setAttribute('aSpeed', new THREE.BufferAttribute(starSpeed, 1));
@@ -5068,6 +5519,7 @@ export function installCabin(app) {
             }
             starGeo.attributes.position.needsUpdate = true;
             const starUniforms = { uTime: { value: 0 }, uOpacity: { value: 0 } };
+            ctx.starUniforms = starUniforms;
             const starMat = new THREE.ShaderMaterial({
                 uniforms: starUniforms,
                 vertexShader: `
@@ -5106,21 +5558,25 @@ export function installCabin(app) {
         }`,
                 transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
             });
+            ctx.starMat = starMat;
             const stars = new THREE.Points(starGeo, starMat);
+            ctx.stars = stars;
             stars.frustumCulled = false;
-            scene.add(stars);
+            ctx.scene.add(stars);
 
             const METEOR_N = 3, METEOR_PTS = 20;
+            ctx.METEOR_N = METEOR_N; ctx.METEOR_PTS = METEOR_PTS;
             const meteorList = [];
+            ctx.meteorList = meteorList;
             for (let i = 0; i < METEOR_N; i++) {
                 const mg = new THREE.BufferGeometry();
                 mg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(METEOR_PTS * 3), 3));
                 mg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(METEOR_PTS * 3), 3));
                 const mm = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-                const ml = new THREE.Line(mg, mm); ml.frustumCulled = false; scene.add(ml);
+                const ml = new THREE.Line(mg, mm); ml.frustumCulled = false; ctx.scene.add(ml);
                 meteorList.push({ geom: mg, mat: mm, active: false, t: 0, life: 1, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0 });
             }
-            let meteorTimer = 5;
+            ctx.meteorTimer = 5;
             function spawnMeteor(m) {
                 const th = runtimeRng() * Math.PI * 2;
                 const ph = Math.acos(0.25 + runtimeRng() * 0.65);
@@ -5137,10 +5593,10 @@ export function installCabin(app) {
                 m.t = 0; m.active = true;
             }
             function updateMeteors(dt, skyVis) {
-                meteorTimer -= dt;
-                if (meteorTimer <= 0) {
+                ctx.meteorTimer -= dt;
+                if (ctx.meteorTimer <= 0) {
                     if (skyVis > 0.25) { const m = meteorList.find(x => !x.active); if (m) spawnMeteor(m); }
-                    meteorTimer = 3.5 + runtimeRng() * 7.5;
+                    ctx.meteorTimer = 3.5 + runtimeRng() * 7.5;
                 }
                 for (const m of meteorList) {
                     if (!m.active) { if (m.mat.opacity !== 0) m.mat.opacity = 0; continue; }
@@ -5167,8 +5623,11 @@ export function installCabin(app) {
             }
 
             const CLOUD_POOL = 14;
+            ctx.CLOUD_POOL = CLOUD_POOL;
             const cloudList = [];
+            ctx.cloudList = cloudList;
             const cloudFillMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88, depthWrite: false });
+            ctx.cloudFillMat = cloudFillMat;
             function makeCloud() {
                 const g = new THREE.Group(); const n = 4 + Math.floor(skyRng() * 4); let cx = 0;
                 for (let i = 0; i < n; i++) {
@@ -5182,23 +5641,32 @@ export function installCabin(app) {
                 }
                 g.scale.set(1, 0.68, 1);
                 g.position.set((skyRng() - 0.5) * 90, 18 + skyRng() * 8, -30 + skyRng() * 60); g.visible = false;
-                const c = { grp: g, op: 0, spd: 0.7 + skyRng() * 0.6, floatPh: skyRng() * 6.28 }; cloudList.push(c); scene.add(g); return c;
+                const c = { grp: g, op: 0, spd: 0.7 + skyRng() * 0.6, floatPh: skyRng() * 6.28 }; cloudList.push(c); ctx.scene.add(g); return c;
             }
             for (let i = 0; i < CLOUD_POOL; i++) makeCloud();
             const _cloudCol = new THREE.Color();
+            ctx._cloudCol = _cloudCol;
 
             const RAIN_MAX = 560, rainPos = new Float32Array(RAIN_MAX * 6), rainGeo = new THREE.BufferGeometry();
+            ctx.RAIN_MAX = RAIN_MAX; ctx.rainPos = rainPos; ctx.rainGeo = rainGeo;
             rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
             const rainMat = new THREE.LineBasicMaterial({ color: 0x7d93a8, transparent: true, opacity: 0.55, depthWrite: false });
-            const rainLines = new THREE.LineSegments(rainGeo, rainMat); rainLines.frustumCulled = false; scene.add(rainLines);
+            ctx.rainMat = rainMat;
+            const rainLines = new THREE.LineSegments(rainGeo, rainMat);
+            ctx.rainLines = rainLines; rainLines.frustumCulled = false; ctx.scene.add(rainLines);
             const rainDrops = [];
+            ctx.rainDrops = rainDrops;
             for (let i = 0; i < RAIN_MAX; i++) rainDrops.push({ x: (skyRng() - 0.5) * 34, y: skyRng() * 14, z: (skyRng() - 0.5) * 34, v: 9 + skyRng() * 4 });
 
             const SNOW_MAX = 440, snowPos = new Float32Array(SNOW_MAX * 18), snowGeo = new THREE.BufferGeometry();
+            ctx.SNOW_MAX = SNOW_MAX; ctx.snowPos = snowPos; ctx.snowGeo = snowGeo;
             snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
             const snowMat = new THREE.LineBasicMaterial({ color: 0xa8c0dc, transparent: true, opacity: 0.85, depthWrite: false });
-            const snowLines = new THREE.LineSegments(snowGeo, snowMat); snowLines.frustumCulled = false; scene.add(snowLines);
+            ctx.snowMat = snowMat;
+            const snowLines = new THREE.LineSegments(snowGeo, snowMat);
+            ctx.snowLines = snowLines; snowLines.frustumCulled = false; ctx.scene.add(snowLines);
             const snowFlakes = [];
+            ctx.snowFlakes = snowFlakes;
             for (let i = 0; i < SNOW_MAX; i++) {
                 const phi = Math.acos(skyRng() * 0.6 + 0.2);
                 const theta = skyRng() * Math.PI * 2;
@@ -5220,20 +5688,30 @@ export function installCabin(app) {
                 snowFlakes.push({ x: (skyRng() - 0.5) * 34, y: skyRng() * 14, z: (skyRng() - 0.5) * 34, v: 0.6 + skyRng() * 0.5, ph: skyRng() * 6.28, amp: 0.35 + skyRng() * 0.4, fq: 0.5 + skyRng() * 0.7, rot: skyRng() * 6.28, rotV: (skyRng() - 0.5) * 2, ux, uy, uz, vx, vy, vz });
             }
 
-            const SNOW_BALL_MAX = 150; const snowBallPos = new Float32Array(SNOW_BALL_MAX * 3); const snowBallGeo = new THREE.BufferGeometry();
+            const SNOW_BALL_MAX = 150;
+            ctx.SNOW_BALL_MAX = SNOW_BALL_MAX; const snowBallPos = new Float32Array(SNOW_BALL_MAX * 3);
+            ctx.snowBallPos = snowBallPos; const snowBallGeo = new THREE.BufferGeometry();
+            ctx.snowBallGeo = snowBallGeo;
             snowBallGeo.setAttribute('position', new THREE.BufferAttribute(snowBallPos, 3));
-            const snowBallCanvas = document.createElement('canvas'); snowBallCanvas.width = 32; snowBallCanvas.height = 32; const sbCtx = snowBallCanvas.getContext('2d');
-            const grad = sbCtx.createRadialGradient(16, 16, 0, 16, 16, 16); grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.6)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+            const snowBallCanvas = document.createElement('canvas');
+            ctx.snowBallCanvas = snowBallCanvas; snowBallCanvas.width = 32; snowBallCanvas.height = 32; const sbCtx = snowBallCanvas.getContext('2d');
+            ctx.sbCtx = sbCtx;
+            const grad = sbCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            ctx.grad = grad; grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.6)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
             sbCtx.fillStyle = grad; sbCtx.fillRect(0, 0, 32, 32);
             const snowBallMat = new THREE.PointsMaterial({ size: 0.15, map: new THREE.CanvasTexture(snowBallCanvas), transparent: true, depthWrite: false, opacity: 0.85, sizeAttenuation: true });
-            const snowBalls = new THREE.Points(snowBallGeo, snowBallMat); snowBalls.frustumCulled = false; scene.add(snowBalls);
+            ctx.snowBallMat = snowBallMat;
+            const snowBalls = new THREE.Points(snowBallGeo, snowBallMat);
+            ctx.snowBalls = snowBalls; snowBalls.frustumCulled = false; ctx.scene.add(snowBalls);
             const snowBallFlakes = [];
+            ctx.snowBallFlakes = snowBallFlakes;
             for (let i = 0; i < SNOW_BALL_MAX; i++) snowBallFlakes.push({ x: (skyRng() - 0.5) * 34, y: skyRng() * 14, z: (skyRng() - 0.5) * 34, v: 0.5 + skyRng() * 0.4, ph: skyRng() * 6.28, amp: 0.2 + skyRng() * 0.3, fq: 0.6 + skyRng() * 0.5 });
 
             const boltMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, fog: false });
-            let boltLine = new THREE.Line(new THREE.BufferGeometry(), boltMat); boltLine.frustumCulled = false; boltLine.visible = false; scene.add(boltLine);
-            let boltT = 0, nextBolt = 6 + runtimeRng() * 12;
-            function spawnBolt() { const pts = []; let bx = -10 + runtimeRng() * 20, bz = -14 + runtimeRng() * 10, by = 13; pts.push(V(bx, by, bz)); while (by > 0.5) { by -= 1.5 + runtimeRng() * 1.5; bx += (runtimeRng() - 0.5) * 2.6; bz += (runtimeRng() - 0.5) * 1.2; pts.push(V(bx, Math.max(by, 0), bz)); } boltLine.geometry.dispose(); boltLine.geometry = geo(pts.map(p => [p.x, p.y, p.z])); boltLine.visible = true; }
+            ctx.boltMat = boltMat;
+            ctx.boltLine = new THREE.Line(new THREE.BufferGeometry(), boltMat); ctx.boltLine.frustumCulled = false; ctx.boltLine.visible = false; ctx.scene.add(ctx.boltLine);
+            ctx.boltT = 0, ctx.nextBolt = 6 + runtimeRng() * 12;
+            function spawnBolt() { const pts = []; let bx = -10 + runtimeRng() * 20, bz = -14 + runtimeRng() * 10, by = 13; pts.push(ctx.V(bx, by, bz)); while (by > 0.5) { by -= 1.5 + runtimeRng() * 1.5; bx += (runtimeRng() - 0.5) * 2.6; bz += (runtimeRng() - 0.5) * 1.2; pts.push(ctx.V(bx, Math.max(by, 0), bz)); } ctx.boltLine.geometry.dispose(); ctx.boltLine.geometry = ctx.geo(pts.map(p => [p.x, p.y, p.z])); ctx.boltLine.visible = true; }
 
             function roofTopAt(x, z) {
                 if (x > -3.72 && x < -2.98 && z > 1.13 && z < 1.87) return 7.3;
@@ -5242,18 +5720,18 @@ export function installCabin(app) {
                 return 0;
             }
 
-            let clockTick = 0;
+            ctx.clockTick = 0;
             function updateWeatherSystem(dt, time) {
                 const cfg = WX_CFG[wx.type]; const k = 1 - Math.exp(-dt * 0.55);
                 wx.clouds += (cfg.clouds - wx.clouds) * k; wx.rain += (cfg.rain - wx.rain) * k; wx.snow += (cfg.snow - wx.snow) * k; wx.fog += (cfg.fog - wx.fog) * k; wx.gray += (cfg.gray - wx.gray) * k; wx.wind += (cfg.wind - wx.wind) * k;
                 if (wx.random) { wx.timer -= dt; if (wx.timer <= 0) { const others = WX_LIST.filter(t => t !== wx.type); setWeather(others[Math.floor(runtimeRng() * others.length)]); wx.timer = 16 + runtimeRng() * 18; } }
-                gameSec += timeScale * dt; const hour = curHour();
+                ctx.gameSec += ctx.timeScale * dt; const hour = curHour();
 
                 skyColorAt(hour, _sky);
                 if (wx.gray > 0.005) { const L = _sky.r * 0.3 + _sky.g * 0.59 + _sky.b * 0.11; _gray.setScalar(L * 0.9 + 0.08); _sky.lerp(_gray, Math.min(1, wx.gray) * 0.75); }
-                if (boltT > 0) { const flick = Math.max(0, Math.sin(boltT * 34)) * (boltT / 0.45); _sky.lerp(_white, flick * 0.4); boltMat.opacity = flick; boltT -= dt; if (boltT <= 0) boltLine.visible = false; }
-                scene.background.copy(_sky); scene.fog.color.copy(_sky);
-                scene.fog.near = 60 + (3 - 60) * wx.fog; scene.fog.far = 160 + (24 - 160) * wx.fog;
+                if (ctx.boltT > 0) { const flick = Math.max(0, Math.sin(ctx.boltT * 34)) * (ctx.boltT / 0.45); _sky.lerp(_white, flick * 0.4); boltMat.opacity = flick; ctx.boltT -= dt; if (ctx.boltT <= 0) ctx.boltLine.visible = false; }
+                ctx.scene.background.copy(_sky); ctx.scene.fog.color.copy(_sky);
+                ctx.scene.fog.near = 60 + (3 - 60) * wx.fog; ctx.scene.fog.far = 160 + (24 - 160) * wx.fog;
 
                 let night = 0;
                 if (hour < 5 || hour > 19) night = 1; else if (hour < 7) night = (7 - hour) / 2; else if (hour > 17) night = (hour - 17) / 2;
@@ -5280,24 +5758,24 @@ export function installCabin(app) {
                 let brightness = 1.0 - night * 0.4 - wx.gray * 0.3 + moonlit * 0.4;
                 _amb.multiplyScalar(brightness);
 
-                FILL.uniforms.uColor.value.copy(_amb);
+                ctx.FILL.uniforms.uColor.value.copy(_amb);
                 environment.applyDaylight(dayFactor);   // J2.10：采光走环境的唯一入口（内部写 uDaylight）
 
-                WIN_GLASS.color.setHex(0xffffff);
-                if (twilight > 0.03) WIN_GLASS.color.lerp(_warm, twilight * 0.3);
-                if (fireP > 0) { WIN_GLASS.color.lerp(_fireGlowColor, fireP * 0.6 * (1 - dayFactor)); }
-                WIN_GLASS_UP.color.setHex(0xffffff);
-                if (twilight > 0.03) WIN_GLASS_UP.color.lerp(_warm, twilight * 0.3);
-                if (lampP > 0) { WIN_GLASS_UP.color.lerp(_lampGlowColor, lampP * 0.65 * (1 - dayFactor)); }
+                ctx.WIN_GLASS.color.setHex(0xffffff);
+                if (twilight > 0.03) ctx.WIN_GLASS.color.lerp(_warm, twilight * 0.3);
+                if (ctx.fireP > 0) { ctx.WIN_GLASS.color.lerp(_fireGlowColor, ctx.fireP * 0.6 * (1 - dayFactor)); }
+                ctx.WIN_GLASS_UP.color.setHex(0xffffff);
+                if (twilight > 0.03) ctx.WIN_GLASS_UP.color.lerp(_warm, twilight * 0.3);
+                if (ctx.lampP > 0) { ctx.WIN_GLASS_UP.color.lerp(_lampGlowColor, ctx.lampP * 0.65 * (1 - dayFactor)); }
 
-                signSideMat.color.copy(FILL.uniforms.uColor.value);
-                signFaceMat.color.copy(FILL.uniforms.uColor.value);
-                for (const f of flowerMats) f.mat.color.copy(f.base).multiply(_amb);
+                ctx.signSideMat.color.copy(ctx.FILL.uniforms.uColor.value);
+                ctx.signFaceMat.color.copy(ctx.FILL.uniforms.uColor.value);
+                for (const f of ctx.flowerMats) f.mat.color.copy(f.base).multiply(_amb);
 
                 let ffTarget = 0;
                 if ((wx.type === 'sunny' || wx.type === 'cloudy') && night > 0.5) ffTarget = night;
-                ffOpacity += (ffTarget - ffOpacity) * Math.min(1, dt * 1.2);
-                ffUniforms.uOpacity.value = ffOpacity;
+                ctx.ffOpacity += (ffTarget - ctx.ffOpacity) * Math.min(1, dt * 1.2);
+                ctx.ffUniforms.uOpacity.value = ctx.ffOpacity;
 
                 const sunA = ((hour - 6) / 12) * Math.PI;
                 sunGroup.position.set(Math.cos(sunA) * 44, Math.sin(sunA) * 44, -30); sunGroup.lookAt(0, 2, 0);
@@ -5326,10 +5804,10 @@ export function installCabin(app) {
                 if (wx.type === 'sunny' || wx.type === 'cloudy') { starVis = Math.max(0, night - cover * 0.5); }
                 starUniforms.uOpacity.value += (starVis * 1.25 - starUniforms.uOpacity.value) * Math.min(1, dt * 2.0);
                 starUniforms.uTime.value = time;
-                if (timeScale > 0) { stars.rotation.y += Math.sqrt(timeScale / 60) * 0.02 * dt; }
+                if (ctx.timeScale > 0) { stars.rotation.y += Math.sqrt(ctx.timeScale / 60) * 0.02 * dt; }
                 updateMeteors(dt, starVis);
 
-                const want = Math.round(wx.clouds); const flowFactor = timeScale > 0 ? Math.sqrt(timeScale / 60) : 0; const cloudSpeed = (0.3 + wx.wind * 0.45) * flowFactor;
+                const want = Math.round(wx.clouds); const flowFactor = ctx.timeScale > 0 ? Math.sqrt(ctx.timeScale / 60) : 0; const cloudSpeed = (0.3 + wx.wind * 0.45) * flowFactor;
                 _cloudCol.setHex(0xffffff);
                 if (twilight > 0.02) {
                     const duskMix = Math.min(1, Math.max(0, (hour - 16.5) / 2.6));
@@ -5401,65 +5879,69 @@ export function installCabin(app) {
                     snowBallGeo.attributes.position.needsUpdate = true;
                 }
 
-                if (wx.type === 'storm' && wx.rain > 260) { nextBolt -= dt; if (nextBolt <= 0) { spawnBolt(); boltT = 0.45; nextBolt = 6 + runtimeRng() * 14; } }
+                if (wx.type === 'storm' && wx.rain > 260) { ctx.nextBolt -= dt; if (ctx.nextBolt <= 0) { spawnBolt(); ctx.boltT = 0.45; ctx.nextBolt = 6 + runtimeRng() * 14; } }
 
-                clockTick -= dt;
-                if (clockTick <= 0) {
-                    clockTick = 0.25; const hh = String(Math.floor(hour)).padStart(2, '0'); const mm = String(Math.floor((hour % 1) * 60)).padStart(2, '0'); clockEl.textContent = hh + ':' + mm + ' · ' + WX_NAME[wx.type];
-                    if (menuPanel.classList.contains('open') && !draggingTime) timeSlider.value = hour;
+                ctx.clockTick -= dt;
+                if (ctx.clockTick <= 0) {
+                    ctx.clockTick = 0.25; const hh = String(Math.floor(hour)).padStart(2, '0'); const mm = String(Math.floor((hour % 1) * 60)).padStart(2, '0'); clockEl.textContent = hh + ':' + mm + ' · ' + WX_NAME[wx.type];
+                    if (ctx.menuPanel.classList.contains('open') && !ctx.draggingTime) timeSlider.value = hour;
                 }
             }
 
             // J0.4：截图回归的测试机位覆盖（六元数组 [px,py,pz,lx,ly,lz]）。
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
-            let testCam = null;
-            let ptLantern = 1, ptKot = 1, ptMc = 0, ptCb = 0, ptPlant = 0;
+            ctx.testCam = null;
+            ctx.ptLantern = 1, ctx.ptKot = 1, ctx.ptMc = 0, ctx.ptCb = 0, ctx.ptPlant = 0;
             // J2.3：室内点光源改为**注册式**（原实现是 tickOnce() 里 8 行硬编码的 PP[i]/PC[i]/PG[i]）。
             // ★ 注册顺序 = 槽位顺序：shader 的闪烁相位含 float(i)，顺序一换画面就变 ——
             //   所以这 8 个的次序必须与原 PP[0]…PP[7] **完全一致**，位置/颜色/半径/yMin/yMax 也逐字照搬。
             //   位置来自 cabin/world/layout.js（不变量 N9），强度用闭包读状态量，于是 core/ 里
             //   不出现任何具体物件的名字（不变量 N1）。
-            const lightField = createLightField({ fillMaterial: FILL, warn: (m) => console.warn(m) });
-            lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [MTX, 2.52, MTZ], color: 0xffb066, radius: 4.6, strength: () => ptLantern, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [CCX, 1.14, CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [MC_X, 0.36, MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ptMc, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [KOT_X, 0.48, KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [CBX, 0.88, CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ptCb, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor2/candle', position: [NSX, FY + 1.00, NSZ], color: 0xffc06a, radius: 3.6, strength: () => candleP, yMin: 3.02, yMax: 6.9 }));
-            lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => magicP, yMin: 3.02, yMax: 6.9 }));
-            lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [PLX, 0.48, PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ptPlant, yMin: 0.0, yMax: 3.04 }));
+            const lightField = createLightField({ fillMaterial: ctx.FILL, warn: (m) => console.warn(m) });
+            ctx.lightField = lightField;
+            lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [ctx.MTX, 2.52, ctx.MTZ], color: 0xffb066, radius: 4.6, strength: () => ctx.ptLantern, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [ctx.MC_X, 0.36, ctx.MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ctx.ptMc, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
+            lightField.register(createPointLightSource({ id: 'floor2/candle', position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.magicP, yMin: 3.02, yMax: 6.9 }));
+            lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [ctx.PLX, 0.48, ctx.PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ctx.ptPlant, yMin: 0.0, yMax: 3.04 }));
             // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
             for (const src of lightField.sources) registry.registerLight(src);
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
+            /* ==================== [J4:seg tick] ==================== */
+            // ↓ J4 段导出（tick）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.tickOnce = tickOnce;
             function tickOnce() {
                 const time = clock.now; const dt = clock.dt;
-                updateSprings(); updatePlayer(dt, time); updateWeatherSystem(dt, time); updateInteractHint();
+                ctx.updateSprings(); ctx.updatePlayer(dt, time); ctx.updateWeatherSystem(dt, time); ctx.updateInteractHint();
                 // J2.10：把这一帧累积的环境变化合并成**至多一次**广播 env:change（节流在 environment 内部：
                 // 天气换了或采光变化 > 1% 才 emit —— 太阳每帧都在走，逐帧广播毫无意义）。
-                environment.setGameHour(curHour()); environment.flush();
-                updateWand(dt, time);
-                updateBlast(dt, time);
+                ctx.environment.setGameHour(ctx.curHour()); ctx.environment.flush();
+                ctx.updateWand(dt, time);
+                ctx.updateBlast(dt, time);
 
-                FILL.uniforms.uTime.value = time;
-                FILL.uniforms.uFireStrength.value = fireP;
+                ctx.FILL.uniforms.uTime.value = time;
+                ctx.FILL.uniforms.uFireStrength.value = ctx.fireP;
 
-                if (ffOpacity > 0.01) {
-                    for (let i = 0; i < FF_N; i++) {
-                        const f = fireflies[i];
-                        ffPos[i * 3] = f.bx + Math.sin(time * f.sp + f.ph) * f.amp;
-                        ffPos[i * 3 + 1] = f.by + Math.sin(time * f.sp * 0.8 + f.ph * 1.3) * 0.32;
-                        ffPos[i * 3 + 2] = f.bz + Math.cos(time * f.sp * 0.9 + f.ph * 0.7) * f.amp;
+                if (ctx.ffOpacity > 0.01) {
+                    for (let i = 0; i < ctx.FF_N; i++) {
+                        const f = ctx.fireflies[i];
+                        ctx.ffPos[i * 3] = f.bx + Math.sin(time * f.sp + f.ph) * f.amp;
+                        ctx.ffPos[i * 3 + 1] = f.by + Math.sin(time * f.sp * 0.8 + f.ph * 1.3) * 0.32;
+                        ctx.ffPos[i * 3 + 2] = f.bz + Math.cos(time * f.sp * 0.9 + f.ph * 0.7) * f.amp;
                     }
-                    ffGeo.attributes.position.needsUpdate = true;
+                    ctx.ffGeo.attributes.position.needsUpdate = true;
                 }
-                ffUniforms.uTime.value = time;
+                ctx.ffUniforms.uTime.value = time;
 
                 /* ============ 室内陈设动画（一二楼家具·猫·坩埚·塔罗牌·茶壶等） ============ */
                 // J3（B2）：三脚圆凳的每帧分支已搬入 world/floor1/stools.js（原地 tick）
-                stoolsApi.tick(dt, time);
+                ctx.stoolsApi.tick(dt, time);
 
-                for (const c of chairs) {
+                for (const c of ctx.chairs) {
                     const u = c.userData;
                     const target = u.open ? 0.45 : 0;
                     u.vel += (target - u.cur) * 0.02;
@@ -5471,58 +5953,58 @@ export function installCabin(app) {
 
                 {
                     // J3（B4）：星象仪的每帧分支已搬入 world/floor1/orrery.js（原地 tick）
-                    orreryApi.tick(dt, time);
+                    ctx.orreryApi.tick(dt, time);
                 }
 
                 {
                     // J3（B4）：魔法药剂瓶的每帧分支已搬入 world/floor1/potionBottle.js（原地 tick）
-                    potionBottleApi.tick(dt, time);
+                    ctx.potionBottleApi.tick(dt, time);
                 }
 
                 {
                     // J3（B4）：魔法书的每帧分支已搬入 world/floor1/diningBook.js（原地 tick）
-                    diningBookApi.tick(dt, time);
+                    ctx.diningBookApi.tick(dt, time);
                 }
 
                 {
                     // J3（B3）：左窗下魔法书堆的每帧分支已搬入 world/floor1/bookPile.js（原地 tick）
-                    bookPileApi.tick(dt, time);
+                    ctx.bookPileApi.tick(dt, time);
                 }
 
-                lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;
-                lanternPivot.rotation.z = Math.sin(time * 0.9 + 1) * 0.05;
-                lanternFlame.visible = lanternLit;
-                halo.visible = beam.visible = floorPool.visible = floorPool2.visible = tablePool.visible = lanternLit;
-                if (lanternLit) {
+                ctx.lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;
+                ctx.lanternPivot.rotation.z = Math.sin(time * 0.9 + 1) * 0.05;
+                ctx.lanternFlame.visible = ctx.lanternLit;
+                ctx.halo.visible = ctx.beam.visible = ctx.floorPool.visible = ctx.floorPool2.visible = ctx.tablePool.visible = ctx.lanternLit;
+                if (ctx.lanternLit) {
                     const fk = 1 + Math.sin(time * 9) * 0.10 + Math.sin(time * 13.7) * 0.04;
-                    lanternFlame.scale.set(1, fk, 1);
-                    haloMat.opacity = 0.11 + 0.04 * fk;
-                    beamMat.opacity = 0.07 + 0.025 * fk;
-                    glowMatA.opacity = 0.07 + 0.025 * fk;
-                    glowMatB.opacity = 0.06 + 0.02 * fk;
+                    ctx.lanternFlame.scale.set(1, fk, 1);
+                    ctx.haloMat.opacity = 0.11 + 0.04 * fk;
+                    ctx.beamMat.opacity = 0.07 + 0.025 * fk;
+                    ctx.glowMatA.opacity = 0.07 + 0.025 * fk;
+                    ctx.glowMatB.opacity = 0.06 + 0.02 * fk;
                 }
 
                 /* ---- 实体猫 ---- */
 
                 {
-                    catP += ((catAwake ? 1 : 0) - catP) * 0.03;
-                    const br = 1 + Math.sin(time * 2.2) * 0.025 * (1 - 0.6 * catP);
-                    catBody.scale.set(1, br, 1);
-                    catHead.position.y = 0.265 + 0.05 * catP;
-                    catHead.position.x = 0.215 - 0.03 * catP;
-                    const blink = catP > 0.5 && (time % 3.6) < 0.14;
-                    eyesOpen.visible = catP > 0.5 && !blink;
-                    eyesClosed.visible = !eyesOpen.visible;
+                    ctx.catP += ((ctx.catAwake ? 1 : 0) - ctx.catP) * 0.03;
+                    const br = 1 + Math.sin(time * 2.2) * 0.025 * (1 - 0.6 * ctx.catP);
+                    ctx.catBody.scale.set(1, br, 1);
+                    ctx.catHead.position.y = 0.265 + 0.05 * ctx.catP;
+                    ctx.catHead.position.x = 0.215 - 0.03 * ctx.catP;
+                    const blink = ctx.catP > 0.5 && (time % 3.6) < 0.14;
+                    ctx.eyesOpen.visible = ctx.catP > 0.5 && !blink;
+                    ctx.eyesClosed.visible = !ctx.eyesOpen.visible;
                     const twitch = Math.max(0, Math.sin(time * 0.37) - 0.985) * 30;
-                    earLG.rotation.z = -0.05 + twitch * 0.25;
-                    earRG.rotation.z = 0.05 + twitch * 0.25;
-                    for (let i = 0; i < tailSegs.length; i++)
-                        tailSegs[i].rotation.y = Math.sin(time * 1.1 + i * 0.7) * (0.03 + 0.06 * catP);
+                    ctx.earLG.rotation.z = -0.05 + twitch * 0.25;
+                    ctx.earRG.rotation.z = 0.05 + twitch * 0.25;
+                    for (let i = 0; i < ctx.tailSegs.length; i++)
+                        ctx.tailSegs[i].rotation.y = Math.sin(time * 1.1 + i * 0.7) * (0.03 + 0.06 * ctx.catP);
                 }
 
                 /* ---- 毛线球 ---- */
                 {
-                    const u = yarnG.userData;
+                    const u = ctx.yarnG.userData;
                     u.vy -= 9.8 * dt;
                     u.y += u.vy * dt;
                     if (u.y <= 0) {
@@ -5530,34 +6012,34 @@ export function installCabin(app) {
                         if (Math.abs(u.vy) > 0.45) { u.vy = -u.vy * 0.45; u.spinV *= 0.72; }
                         else { u.vy = 0; u.spinV *= (1 - 2.5 * dt); }
                     }
-                    yarnBall.position.y = u.y;
-                    yarnBall.rotation.y += u.spinV * dt;
+                    ctx.yarnBall.position.y = u.y;
+                    ctx.yarnBall.rotation.y += u.spinV * dt;
                     u.spinV *= (1 - 0.4 * dt);
                 }
 
                 /* ---- 水晶球 ---- */
                 {
-                    if (cbRun > 0) cbRun -= dt;
-                    const act = cbRun > 0;
-                    for (let i = 0; i < cbMists.length; i++)
-                        cbMists[i].l.rotation.y += dt * (act ? 2.0 + i * 0.5 : 0.35 + i * 0.1);
-                    for (let i = 0; i < cbStars.length; i++) {
-                        cbStars[i].rotation.y += dt * (act ? 3.0 : 0.8);
-                        cbStars[i].position.y = (i % 2 ? 0.07 : -0.05) + Math.sin(time * 1.4 + i * 1.7) * 0.02;
+                    if (ctx.cbRun > 0) ctx.cbRun -= dt;
+                    const act = ctx.cbRun > 0;
+                    for (let i = 0; i < ctx.cbMists.length; i++)
+                        ctx.cbMists[i].l.rotation.y += dt * (act ? 2.0 + i * 0.5 : 0.35 + i * 0.1);
+                    for (let i = 0; i < ctx.cbStars.length; i++) {
+                        ctx.cbStars[i].rotation.y += dt * (act ? 3.0 : 0.8);
+                        ctx.cbStars[i].position.y = (i % 2 ? 0.07 : -0.05) + Math.sin(time * 1.4 + i * 1.7) * 0.02;
                     }
-                    cbMistMat.opacity = act ? 0.85 : 0.5;
-                    cbGlowMat.opacity = act ? 0.10 + 0.06 * Math.sin(time * 6) : 0;
+                    ctx.cbMistMat.opacity = act ? 0.85 : 0.5;
+                    ctx.cbGlowMat.opacity = act ? 0.10 + 0.06 * Math.sin(time * 6) : 0;
                 }
 
                 /* ---- 月光魔法盆栽 ---- */
                 {
-                    if (plantRun > 0) plantRun -= dt;
-                    const act = plantRun > 0;
-                    for (const s of plantStems) {
+                    if (ctx.plantRun > 0) ctx.plantRun -= dt;
+                    const act = ctx.plantRun > 0;
+                    for (const s of ctx.plantStems) {
                         s.stem.rotation.z = Math.sin(time * 1.2 + s.ph) * 0.05 + (act ? Math.sin(time * 5 + s.ph) * 0.06 : 0);
                         s.stem.rotation.x = Math.cos(time * 0.9 + s.ph) * 0.04;
                     }
-                    for (const b of plantBerries) {
+                    for (const b of ctx.plantBerries) {
                         b.obj.scale.setScalar(act ? 1 + 0.25 * Math.sin(time * 7 + b.ph) : 1);
                         b.m.opacity = act ? 1 : 0.85;
                     }
@@ -5565,29 +6047,29 @@ export function installCabin(app) {
 
                 /* ---- 滑轮置物台：滑动 + 轮子滚动（朝被炉 -z 方向）---- */
                 {
-                    cartP += ((cartOut ? 1 : 0) - cartP) * 0.07;
-                    cartG.position.set(CART_P0.x + CART_DIR.x * CART_DIST * cartP, 0,
-                        CART_P0.z + CART_DIR.z * CART_DIST * cartP);
-                    cartG.updateMatrixWorld(true);
-                    const dC = cartP - cartPrevP;
+                    ctx.cartP += ((ctx.cartOut ? 1 : 0) - ctx.cartP) * 0.07;
+                    ctx.cartG.position.set(ctx.CART_P0.x + ctx.CART_DIR.x * ctx.CART_DIST * ctx.cartP, 0,
+                        ctx.CART_P0.z + ctx.CART_DIR.z * ctx.CART_DIST * ctx.cartP);
+                    ctx.cartG.updateMatrixWorld(true);
+                    const dC = ctx.cartP - ctx.cartPrevP;
                     if (Math.abs(dC) > 1e-5)
-                        for (const w of cartWheels) w.children[0].rotation.y -= dC * 16;
-                    cartPrevP = cartP;
+                        for (const w of ctx.cartWheels) w.children[0].rotation.y -= dC * 16;
+                    ctx.cartPrevP = ctx.cartP;
                 }
 
                 /* ---- 羽毛笔：飞出书写魔法符号后归位 ---- */
                 {
-                    if (quillRun > 0) {
-                        quillRun -= dt;
-                        const p = 1 - Math.max(quillRun, 0) / QUILL_T;
-                        _cw.set(QUILL_REST.pos[0], QUILL_REST.pos[1], QUILL_REST.pos[2]);
-                        cartG.localToWorld(_cw);
-                        const restX = _cw.x, restY = _cw.y, restZ = _cw.z;
-                        const sX = QW_A.x, sY = QW_A.y + 0.08, sZ = QW_A.z;
-                        const eX = QW_B.x, eY = QW_B.y + 0.08, eZ = QW_B.z;
-                        let px, py, pz, rx = QUILL_REST.rotX, rz = QUILL_REST.rotZ;
+                    if (ctx.quillRun > 0) {
+                        ctx.quillRun -= dt;
+                        const p = 1 - Math.max(ctx.quillRun, 0) / ctx.QUILL_T;
+                        ctx._cw.set(ctx.QUILL_REST.pos[0], ctx.QUILL_REST.pos[1], ctx.QUILL_REST.pos[2]);
+                        ctx.cartG.localToWorld(ctx._cw);
+                        const restX = ctx._cw.x, restY = ctx._cw.y, restZ = ctx._cw.z;
+                        const sX = ctx.QW_A.x, sY = ctx.QW_A.y + 0.08, sZ = ctx.QW_A.z;
+                        const eX = ctx.QW_B.x, eY = ctx.QW_B.y + 0.08, eZ = ctx.QW_B.z;
+                        let px, py, pz, rx = ctx.QUILL_REST.rotX, rz = ctx.QUILL_REST.rotZ;
                         if (p < 0.10) {
-                            const u = sm01(p / 0.10);
+                            const u = ctx.sm01(p / 0.10);
                             px = restX + (sX - restX) * u;
                             py = restY + (sY - restY) * u + Math.sin(u * Math.PI) * 0.30;
                             pz = restZ + (sZ - restZ) * u;
@@ -5600,10 +6082,10 @@ export function installCabin(app) {
                             rx = -0.85 + Math.sin(u * Math.PI * 10) * 0.10;
                             rz = 0.22;
                             for (let i = 0; i < 8; i++) {
-                                if (!magicGlyphs[i].active && u > (i + 0.25) / 8) {
-                                    magicGlyphs[i].active = true;
-                                    magicGlyphs[i].age = 0;
-                                    magicGlyphs[i].sp.visible = true;
+                                if (!ctx.magicGlyphs[i].active && u > (i + 0.25) / 8) {
+                                    ctx.magicGlyphs[i].active = true;
+                                    ctx.magicGlyphs[i].age = 0;
+                                    ctx.magicGlyphs[i].sp.visible = true;
                                 }
                             }
                         } else if (p < 0.80) {
@@ -5611,27 +6093,27 @@ export function installCabin(app) {
                             px = eX; py = eY + Math.sin(u * Math.PI) * 0.05; pz = eZ;
                             rx = -0.5; rz = 0.15;
                         } else {
-                            const u = sm01((p - 0.80) / 0.20);
+                            const u = ctx.sm01((p - 0.80) / 0.20);
                             px = eX + (restX - eX) * u;
                             py = eY + (restY - eY) * u + Math.sin(u * Math.PI) * 0.30;
                             pz = eZ + (restZ - eZ) * u;
-                            rx = -0.25 * (1 - u) + QUILL_REST.rotX * u;
-                            rz = 0.10 * (1 - u) + QUILL_REST.rotZ * u;
+                            rx = -0.25 * (1 - u) + ctx.QUILL_REST.rotX * u;
+                            rz = 0.10 * (1 - u) + ctx.QUILL_REST.rotZ * u;
                         }
-                        _cw.set(px, py, pz);
-                        cartG.worldToLocal(_cw);
-                        quillG.position.copy(_cw);
-                        quillG.rotation.set(rx, 0, rz);
-                        if (quillRun <= 0) {
-                            quillG.position.set(QUILL_REST.pos[0], QUILL_REST.pos[1], QUILL_REST.pos[2]);
-                            quillG.rotation.set(QUILL_REST.rotX, 0, QUILL_REST.rotZ);
+                        ctx._cw.set(px, py, pz);
+                        ctx.cartG.worldToLocal(ctx._cw);
+                        ctx.quillG.position.copy(ctx._cw);
+                        ctx.quillG.rotation.set(rx, 0, rz);
+                        if (ctx.quillRun <= 0) {
+                            ctx.quillG.position.set(ctx.QUILL_REST.pos[0], ctx.QUILL_REST.pos[1], ctx.QUILL_REST.pos[2]);
+                            ctx.quillG.rotation.set(ctx.QUILL_REST.rotX, 0, ctx.QUILL_REST.rotZ);
                         }
                     }
                 }
 
                 /* ---- 魔法符号：上升渐隐 ---- */
                 {
-                    for (const g of magicGlyphs) {
+                    for (const g of ctx.magicGlyphs) {
                         if (g.active) {
                             g.age += dt;
                             const k = g.age / g.life;
@@ -5649,24 +6131,24 @@ export function installCabin(app) {
 
                 /* ---- 纸堆：腾空扇动绕一楼一圈后飞回 ---- */
                 {
-                    if (paperRun > 0) {
-                        paperRun -= dt;
-                        const elapsed = PAPER_T - paperRun;
-                        for (let i = 0; i < papers.length; i++) {
-                            const pp = papers[i];
+                    if (ctx.paperRun > 0) {
+                        ctx.paperRun -= dt;
+                        const elapsed = ctx.PAPER_T - ctx.paperRun;
+                        for (let i = 0; i < ctx.papers.length; i++) {
+                            const pp = ctx.papers[i];
                             const delay = i * 0.12;
-                            const D = PAPER_T - delay;
+                            const D = ctx.PAPER_T - delay;
                             let ti = (elapsed - delay) / D;
                             if (ti < 0) ti = 0;
                             if (ti > 1) ti = 1;
-                            _cw.copy(pp.home);
-                            cartG.localToWorld(_cw);
-                            const hx = _cw.x, hy = _cw.y, hz = _cw.z;
+                            ctx._cw.copy(pp.home);
+                            ctx.cartG.localToWorld(ctx._cw);
+                            const hx = ctx._cw.x, hy = ctx._cw.y, hz = ctx._cw.z;
                             const a0 = pp.a0, r = pp.r;
                             const cirY = (a) => 1.45 + Math.sin(a * 3 + i) * 0.22;
                             let pos;
                             if (ti < 0.18) {
-                                const u = sm01(ti / 0.18);
+                                const u = ctx.sm01(ti / 0.18);
                                 const cx = Math.cos(a0) * r, cy = cirY(a0), cz = Math.sin(a0) * r;
                                 pos = {
                                     x: hx + (cx - hx) * u,
@@ -5678,7 +6160,7 @@ export function installCabin(app) {
                                 const a = a0 + s * Math.PI * 2;
                                 pos = { x: Math.cos(a) * r, y: cirY(a), z: Math.sin(a) * r };
                             } else {
-                                const u = sm01((ti - 0.78) / 0.22);
+                                const u = ctx.sm01((ti - 0.78) / 0.22);
                                 const cx = Math.cos(a0 + Math.PI * 2) * r, cy = cirY(a0 + Math.PI * 2), cz = Math.sin(a0 + Math.PI * 2) * r;
                                 pos = {
                                     x: cx + (hx - cx) * u,
@@ -5686,9 +6168,9 @@ export function installCabin(app) {
                                     z: cz + (hz - cz) * u
                                 };
                             }
-                            _cw.set(pos.x, pos.y, pos.z);
-                            cartG.worldToLocal(_cw);
-                            pp.g.position.copy(_cw);
+                            ctx._cw.set(pos.x, pos.y, pos.z);
+                            ctx.cartG.worldToLocal(ctx._cw);
+                            pp.g.position.copy(ctx._cw);
                             if (ti > 0.02 && ti < 0.98) {
                                 pp.g.rotation.set(Math.sin(time * 7 + i * 1.3) * 0.9,
                                     time * 2.5 + i,
@@ -5697,8 +6179,8 @@ export function installCabin(app) {
                                 pp.g.rotation.set(0, pp.ry0, 0);
                             }
                         }
-                        if (paperRun <= 0) {
-                            for (const pp of papers) {
+                        if (ctx.paperRun <= 0) {
+                            for (const pp of ctx.papers) {
                                 pp.g.position.copy(pp.home);
                                 pp.g.rotation.set(0, pp.ry0, 0);
                             }
@@ -5708,23 +6190,23 @@ export function installCabin(app) {
 
                 /* ---- 暖桌：暖光呼吸 + 收音机音符 ---- */
                 {
-                    if (kotGlowMat) {
-                        kotGlowMat.opacity = kotatsuOn ? 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(time * 4.2)) : 0;
+                    if (ctx.kotGlowMat) {
+                        ctx.kotGlowMat.opacity = ctx.kotatsuOn ? 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(time * 4.2)) : 0;
                     }
-                    if (radioNoteRun > 0) {
-                        radioNoteRun -= dt;
-                        for (const nt of radioNotes) {
+                    if (ctx.radioNoteRun > 0) {
+                        ctx.radioNoteRun -= dt;
+                        for (const nt of ctx.radioNotes) {
                             const p = (time * 0.55 + nt.ph) % 1;
                             if (p < 0.85) {
                                 nt.g.visible = true;
                                 const env = Math.min(p * 7, 1) * (1 - Math.max(0, (p - 0.7) / 0.15));
-                                noteMat.opacity = 0.9 * env;
-                                const src = radioG.userData.noteSrc;
-                                src.getWorldPosition(_tv);
+                                ctx.noteMat.opacity = 0.9 * env;
+                                const src = ctx.radioG.userData.noteSrc;
+                                src.getWorldPosition(ctx._tv);
                                 nt.g.position.set(
-                                    _tv.x + Math.sin(time * 2 + nt.ph * 6) * 0.030 + p * 0.06,
-                                    _tv.y + p * 0.28,
-                                    _tv.z + Math.cos(time * 1.6 + nt.ph * 5) * 0.025
+                                    ctx._tv.x + Math.sin(time * 2 + nt.ph * 6) * 0.030 + p * 0.06,
+                                    ctx._tv.y + p * 0.28,
+                                    ctx._tv.z + Math.cos(time * 1.6 + nt.ph * 5) * 0.025
                                 );
                                 nt.g.rotation.y = Math.sin(time * 3 + nt.ph * 4) * 0.6;
                                 nt.g.rotation.z = Math.sin(time * 2.5 + nt.ph * 3) * 0.25;
@@ -5733,23 +6215,23 @@ export function installCabin(app) {
                             }
                         }
                     } else {
-                        for (const nt of radioNotes) nt.g.visible = false;
+                        for (const nt of ctx.radioNotes) nt.g.visible = false;
                     }
                 }
 
                 /* ---- 橘子：盆内 ⇄ 滚上桌面 ---- */
                 {
-                    const n = oranges.length;
-                    if (orangeState === 'out' || orangeState === 'back') {
-                        orangeT += dt;
+                    const n = ctx.oranges.length;
+                    if (ctx.orangeState === 'out' || ctx.orangeState === 'back') {
+                        ctx.orangeT += dt;
                         let done = true;
                         for (let i = 0; i < n; i++) {
-                            const o = oranges[i];
+                            const o = ctx.oranges[i];
                             const delay = i * 0.085;
-                            let p = Math.min(Math.max((orangeT - delay) / 0.65, 0), 1);
+                            let p = Math.min(Math.max((ctx.orangeT - delay) / 0.65, 0), 1);
                             if (p < 1) done = false;
                             const e = p * p * (3 - 2 * p);
-                            const f = orangeState === 'out' ? e : 1 - e;
+                            const f = ctx.orangeState === 'out' ? e : 1 - e;
                             o.mesh.position.set(
                                 o.hx + (o.tx - o.hx) * f,
                                 o.hy + (o.ty - o.hy) * f + Math.sin(f * Math.PI) * 0.09,
@@ -5757,13 +6239,13 @@ export function installCabin(app) {
                             );
                             o.mesh.rotation.set(o.ax * f, 0, o.az * f);
                         }
-                        if (done) orangeState = orangeState === 'out' ? 'rolled' : 'inbowl';
+                        if (done) ctx.orangeState = ctx.orangeState === 'out' ? 'rolled' : 'inbowl';
                     }
                 }
 
                 /* ---- 坐垫：水平翻滚 180° ---- */
                 {
-                    for (const c of cushions) {
+                    for (const c of ctx.cushions) {
                         if (c.anim) {
                             c.p += dt * 2.2;
                             if (c.p >= 1) { c.p = 1; c.anim = 0; }
@@ -5777,15 +6259,15 @@ export function installCabin(app) {
 
                 {
                     // J3（B3）：塔罗牌阵的每帧分支已搬入 world/floor1/tarot.js（原地 tick）
-                    tarotApi.tick(dt, time);
+                    ctx.tarotApi.tick(dt, time);
                 }
 
-                for (const f of candleWavy) {
+                for (const f of ctx.candleWavy) {
                     f.obj.visible = true;
-                    updateWavyFlame(f, time, 0.9 + 0.1 * Math.sin(time * 11));
+                    ctx.updateWavyFlame(f, time, 0.9 + 0.1 * Math.sin(time * 11));
                 }
 
-                for (const b of shelfBooks) {
+                for (const b of ctx.shelfBooks) {
                     const u = b.userData;
                     const target = u.out ? 1 : 0;
                     u.vel += (target - u.cur) * 0.03;
@@ -5795,7 +6277,7 @@ export function installCabin(app) {
                 }
 
                 /* ---- 试剂瓶 ---- */
-                for (const rg of reagents) {
+                for (const rg of ctx.reagents) {
                     const u = rg.userData;
                     if (u.run > 0) u.run -= dt;
                     if (u.run > 0) {
@@ -5810,19 +6292,19 @@ export function installCabin(app) {
 
                 /* ---- 紫色魔法阵 ---- */
                 {
-                    if (mcRun > 0) mcRun -= dt;
-                    const prog = mcRun > 0 ? 1 - mcRun / 8.0 : 1;
+                    if (ctx.mcRun > 0) ctx.mcRun -= dt;
+                    const prog = ctx.mcRun > 0 ? 1 - ctx.mcRun / 8.0 : 1;
                     let inten = 0;
-                    if (mcRun > 0) {
+                    if (ctx.mcRun > 0) {
                         if (prog < 0.12) inten = prog / 0.12;
                         else if (prog < 0.82) inten = 1;
                         else inten = 1 - (prog - 0.82) / 0.18;
                     }
-                    mcMat.opacity = 0.5 + 0.5 * inten;
-                    mcBase.rotation.y += dt * (0.15 + 2.8 * inten);
-                    for (const f of mcFloats) {
+                    ctx.mcMat.opacity = 0.5 + 0.5 * inten;
+                    ctx.mcBase.rotation.y += dt * (0.15 + 2.8 * inten);
+                    for (const f of ctx.mcFloats) {
                         const ap = Math.min(Math.max((prog - (0.10 + f.ph * 0.07)) / 0.20, 0), 1);
-                        const show = mcRun > 0 && ap > 0 && inten > 0.02;
+                        const show = ctx.mcRun > 0 && ap > 0 && inten > 0.02;
                         f.g.visible = show;
                         if (show) {
                             const e = ap * ap * (3 - 2 * ap);
@@ -5832,13 +6314,13 @@ export function installCabin(app) {
                             f.m.opacity = 0.85 * inten * e;
                         }
                     }
-                    for (const q of mcParts) {
+                    for (const q of ctx.mcParts) {
                         const show = inten > 0.04;
                         q.p.visible = show;
                         if (show) {
                             const pr = (q.ph + time * 0.35) % 1;
                             const a = q.a + time * q.spd;
-                            q.p.position.set(MC_X + Math.cos(a) * q.r, 0.05 + pr * 2.5, MC_Z + Math.sin(a) * q.r);
+                            q.p.position.set(ctx.MC_X + Math.cos(a) * q.r, 0.05 + pr * 2.5, ctx.MC_Z + Math.sin(a) * q.r);
                             const sc = Math.sin(pr * Math.PI) * inten;
                             q.p.scale.setScalar(Math.max(sc, 0.001));
                             q.p.rotation.y = time * 2;
@@ -5849,28 +6331,28 @@ export function installCabin(app) {
                 {
                     // J3（B2）：沙漏的每帧分支已搬入 world/floor1/hourglass.js。
                     // **原位置调用** —— 每帧顺序与搬迁前一个字节不差，画面因此逐字节不变。
-                    hourglassApi.tick(dt, time);
+                    ctx.hourglassApi.tick(dt, time);
                 }
 
                 {
                     // J3（B2）：小宝箱的每帧分支已搬入 world/floor1/chest.js（原地 tick）
-                    chestApi.tick(dt, time);
+                    ctx.chestApi.tick(dt, time);
                 }
 
                 /* ---- 楼梯下储物箱：开盖 + 矿石旋转起伏 ---- */
                 {
-                    const target = storageOpen ? 1 : 0;
-                    storageV += (target - storageP) * 0.02;
-                    storageV *= 0.9;
-                    storageP += storageV;
-                    storageLid.rotation.x = -1.35 * storageP;
-                    const show = storageP > 0.25;
-                    for (let i = 0; i < oreMeshes.length; i++) {
-                        const o = oreMeshes[i];
+                    const target = ctx.storageOpen ? 1 : 0;
+                    ctx.storageV += (target - ctx.storageP) * 0.02;
+                    ctx.storageV *= 0.9;
+                    ctx.storageP += ctx.storageV;
+                    ctx.storageLid.rotation.x = -1.35 * ctx.storageP;
+                    const show = ctx.storageP > 0.25;
+                    for (let i = 0; i < ctx.oreMeshes.length; i++) {
+                        const o = ctx.oreMeshes[i];
                         o.g.visible = show;
                         if (show) {
                             o.g.rotation.y += dt * 0.8;
-                            if (storageP > 0.9)
+                            if (ctx.storageP > 0.9)
                                 o.g.position.y = o.by + Math.sin(time * 2 + i * 1.1) * 0.006;
                         }
                     }
@@ -5878,21 +6360,21 @@ export function installCabin(app) {
 
                 {
                     // J3（B3）：旋转星铃的每帧分支已搬入 world/floor1/starBell.js（原地 tick）
-                    starBellApi.tick(dt, time);
+                    ctx.starBellApi.tick(dt, time);
                 }
 
                 /* ---- 大魔女坩埚 ---- */
                 {
                     // J3（B4）：大魔女坩埚的每帧分支已搬入 world/floor1/cauldron.js（原地 tick）
-                    cauldronApi.tick(dt, time);
+                    ctx.cauldronApi.tick(dt, time);
                 }
 
                 /* ---- 长餐桌 ---- */
                 {
                     // J3（B4）：三只餐盘的转动已搬入 world/floor1/longTable.js（原地 tick）
-                    longTableApi.tick(dt, time);
+                    ctx.longTableApi.tick(dt, time);
                 }
-                for (const c of cups) {
+                for (const c of ctx.cups) {
                     const u = c.userData;
                     if (u.run > 0) u.run -= dt;
                     const prog = u.run > 0 ? Math.min(Math.max(1 - u.run / 2.6, 0), 1) : 1;
@@ -5908,16 +6390,16 @@ export function installCabin(app) {
                 }
                 {
                     // J3（B4）：桌面散放餐具的弹跳已搬入 world/floor1/tableware.js（原地 tick）
-                    tablewareApi.tick(dt, time);
+                    ctx.tablewareApi.tick(dt, time);
                 }
 
                 /* ---- 茶壶 ---- */
                 {
-                    if (potRun > 0) potRun -= dt;
-                    const p = potRun > 0 ? 1 - potRun / POT_T : 0;
-                    const dirX = Math.sin(POT_RY), dirZ = Math.cos(POT_RY);
-                    const hx = CUP_T.position.x - dirX * POT_TIP_FWD;
-                    const hz = CUP_T.position.z - dirZ * POT_TIP_FWD;
+                    if (ctx.potRun > 0) ctx.potRun -= dt;
+                    const p = ctx.potRun > 0 ? 1 - ctx.potRun / ctx.POT_T : 0;
+                    const dirX = Math.sin(ctx.POT_RY), dirZ = Math.cos(ctx.POT_RY);
+                    const hx = ctx.CUP_T.position.x - dirX * ctx.POT_TIP_FWD;
+                    const hz = ctx.CUP_T.position.z - dirZ * ctx.POT_TIP_FWD;
                     const sm = tt => tt * tt * (3 - 2 * tt);
                     let ly = 0, dx = 0, dz = 0, tilt = 0;
                     if (p > 0) {
@@ -5925,18 +6407,18 @@ export function installCabin(app) {
                             ly = sm(p / 0.14) * 0.45;
                         } else if (p < 0.30) {
                             const u = sm((p - 0.14) / 0.16);
-                            ly = 0.45; dx = u * (hx - POT_BX); dz = u * (hz - POT_BZ);
+                            ly = 0.45; dx = u * (hx - ctx.POT_BX); dz = u * (hz - ctx.POT_BZ);
                         } else if (p < 0.40) {
                             const u = sm((p - 0.30) / 0.10);
-                            ly = 0.45; dx = hx - POT_BX; dz = hz - POT_BZ; tilt = u * POT_TILT;
+                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = u * ctx.POT_TILT;
                         } else if (p < 0.70) {
-                            ly = 0.45; dx = hx - POT_BX; dz = hz - POT_BZ; tilt = POT_TILT;
+                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = ctx.POT_TILT;
                         } else if (p < 0.80) {
                             const u = sm((p - 0.70) / 0.10);
-                            ly = 0.45; dx = hx - POT_BX; dz = hz - POT_BZ; tilt = (1 - u) * POT_TILT;
+                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = (1 - u) * ctx.POT_TILT;
                         } else if (p < 0.94) {
                             const u = sm((p - 0.80) / 0.14);
-                            ly = 0.45; dx = (1 - u) * (hx - POT_BX); dz = (1 - u) * (hz - POT_BZ);
+                            ly = 0.45; dx = (1 - u) * (hx - ctx.POT_BX); dz = (1 - u) * (hz - ctx.POT_BZ);
                         } else {
                             const u = sm((p - 0.94) / 0.06);
                             ly = (1 - u) * 0.45;
@@ -5944,48 +6426,48 @@ export function installCabin(app) {
                     }
                     const floating = p > 0.02 && p < 0.98;
                     const bob = floating ? Math.sin(time * 3) * 0.012 : 0;
-                    teapotPos.position.set(POT_BX + dx, DTOP + ly + bob, POT_BZ + dz);
-                    teapot.rotation.x = tilt;
-                    potHalo.visible = floating;
-                    if (floating) potHaloMat.opacity = 0.09 + 0.04 * (0.5 + 0.5 * Math.sin(time * 5));
+                    ctx.teapotPos.position.set(ctx.POT_BX + dx, ctx.DTOP + ly + bob, ctx.POT_BZ + dz);
+                    ctx.teapot.rotation.x = tilt;
+                    ctx.potHalo.visible = floating;
+                    if (floating) ctx.potHaloMat.opacity = 0.09 + 0.04 * (0.5 + 0.5 * Math.sin(time * 5));
                     if (tilt > 0.45) {
-                        potStream.visible = true;
-                        potSpoutTip.getWorldPosition(_tv);
-                        const ex = CUP_T.position.x, ey = CUP_T.position.y + 0.10, ezz = CUP_T.position.z;
-                        const arr = potStreamGeom.attributes.position.array;
+                        ctx.potStream.visible = true;
+                        ctx.potSpoutTip.getWorldPosition(ctx._tv);
+                        const ex = ctx.CUP_T.position.x, ey = ctx.CUP_T.position.y + 0.10, ezz = ctx.CUP_T.position.z;
+                        const arr = ctx.potStreamGeom.attributes.position.array;
                         for (let i = 0; i < 10; i++) {
                             const tt = i / 9;
                             const wob = Math.sin(tt * Math.PI);
-                            arr[i * 3] = _tv.x + (ex - _tv.x) * tt + Math.sin(tt * 9 + time * 8) * 0.008 * wob;
-                            arr[i * 3 + 1] = _tv.y + (ey - _tv.y) * tt - 0.035 * wob;
-                            arr[i * 3 + 2] = _tv.z + (ezz - _tv.z) * tt + Math.cos(tt * 7 + time * 6) * 0.008 * wob;
+                            arr[i * 3] = ctx._tv.x + (ex - ctx._tv.x) * tt + Math.sin(tt * 9 + time * 8) * 0.008 * wob;
+                            arr[i * 3 + 1] = ctx._tv.y + (ey - ctx._tv.y) * tt - 0.035 * wob;
+                            arr[i * 3 + 2] = ctx._tv.z + (ezz - ctx._tv.z) * tt + Math.cos(tt * 7 + time * 6) * 0.008 * wob;
                         }
-                        potStreamGeom.attributes.position.needsUpdate = true;
+                        ctx.potStreamGeom.attributes.position.needsUpdate = true;
                     } else {
-                        potStream.visible = false;
+                        ctx.potStream.visible = false;
                     }
                 }
 
                 {
                     // J3：魔法扫帚的每帧分支已搬入 world/floor1/broom.js。
                     // **原位置调用** —— 顺序与搬迁前一致，画面因此逐字节不变。
-                    broomApi.tick(dt, time);
+                    ctx.broomApi.tick(dt, time);
                 }
 
                 /* ---- 门铃：按钮按压 + 音波涟漪 ---- */
                 {
-                    if (bellRun > 0) bellRun -= dt;
-                    if (bellRun > 0) {
-                        btnG.position.z = -0.014 * Math.sin(Math.min((1.4 - bellRun) * 9, Math.PI));
+                    if (ctx.bellRun > 0) ctx.bellRun -= dt;
+                    if (ctx.bellRun > 0) {
+                        ctx.btnG.position.z = -0.014 * Math.sin(Math.min((1.4 - ctx.bellRun) * 9, Math.PI));
                     } else {
-                        btnG.position.z = 0;
+                        ctx.btnG.position.z = 0;
                     }
-                    if (bellRipple > 0) bellRipple -= dt;
-                    for (const r of bellRipples) {
-                        if (bellRipple > 0) {
-                            const s = 1 + (1 - bellRipple) * 2.4;
+                    if (ctx.bellRipple > 0) ctx.bellRipple -= dt;
+                    for (const r of ctx.bellRipples) {
+                        if (ctx.bellRipple > 0) {
+                            const s = 1 + (1 - ctx.bellRipple) * 2.4;
                             r.l.scale.setScalar(Math.max(s, 0.001));
-                            r.m.opacity = Math.max(0, bellRipple * 0.7);
+                            r.m.opacity = Math.max(0, ctx.bellRipple * 0.7);
                         } else {
                             r.m.opacity = 0;
                         }
@@ -5996,74 +6478,74 @@ export function installCabin(app) {
                 {
                     // J3（B3）：挂杆 / 晴天娃娃 / 风铃三段的每帧分支已合并搬入
                     // world/floor1/doorHangBar.js（原地 tick，顺序不变）。
-                    doorHangBarApi.tick(dt, time);
+                    ctx.doorHangBarApi.tick(dt, time);
                 }
 
-                chairT += ((chairOpen ? 1 : 0) - chairT) * 0.07;
-                const ck = smooth(Math.max(0, Math.min(1, chairT)));
-                chairG.position.z = CHAIR_IN + (CHAIR_OUT - CHAIR_IN) * ck;
-                pillowT += ((pillowOpen ? 1 : 0) - pillowT) * 0.05;
-                const pe = pillowT * pillowT * (3 - 2 * pillowT);
-                pillowG.rotation.x = Math.PI * pe;
-                eraserT += ((eraserOpen ? 1 : 0) - eraserT) * 0.06;
-                const ee = eraserT * eraserT * (3 - 2 * eraserT);
-                eraserG.rotation.x = Math.PI * ee;
-                updateChalk(time);
-                updateWand2(time);
+                ctx.chairT += ((ctx.chairOpen ? 1 : 0) - ctx.chairT) * 0.07;
+                const ck = ctx.smooth(Math.max(0, Math.min(1, ctx.chairT)));
+                ctx.chairG.position.z = ctx.CHAIR_IN + (ctx.CHAIR_OUT - ctx.CHAIR_IN) * ck;
+                ctx.pillowT += ((ctx.pillowOpen ? 1 : 0) - ctx.pillowT) * 0.05;
+                const pe = ctx.pillowT * ctx.pillowT * (3 - 2 * ctx.pillowT);
+                ctx.pillowG.rotation.x = Math.PI * pe;
+                ctx.eraserT += ((ctx.eraserOpen ? 1 : 0) - ctx.eraserT) * 0.06;
+                const ee = ctx.eraserT * ctx.eraserT * (3 - 2 * ctx.eraserT);
+                ctx.eraserG.rotation.x = Math.PI * ee;
+                ctx.updateChalk(time);
+                ctx.updateWand2(time);
                 // J3（B5）：魔方（浮起打乱 / 落回还原）的每帧分支已搬入 world/floor2/rubik.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                rubikApi.tick(dt, time);
+                ctx.rubikApi.tick(dt, time);
                 // J3（B5）：玻璃雪景球（雪花翻滚 / 落回 / 复位）的每帧分支已搬入 world/floor2/snowGlobe.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                snowGlobeApi.tick(dt, time);
+                ctx.snowGlobeApi.tick(dt, time);
                 // J3（B5）：桌面沙漏（翻身 / 流沙）的每帧分支已搬入 world/floor2/deskHourglass.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                deskHourglassApi.tick(dt, time);
+                ctx.deskHourglassApi.tick(dt, time);
                 // J3（B5）：扑克牌堆（浮起 / 扇开 / 洗牌 / 翻牌）的每帧分支已搬入 world/floor2/cardDeck.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                cardDeckApi.tick(dt, time);
-                updateBook(time, dt);
+                ctx.cardDeckApi.tick(dt, time);
+                ctx.updateBook(time, dt);
                 // J3（B5）：台历翻页（12 页翻完再整体翻回 1 月）的每帧分支已搬入 world/floor2/calendar.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                calendarApi.tick(dt, time);
-                updateGlyphs(time, dt);
+                ctx.calendarApi.tick(dt, time);
+                ctx.updateGlyphs(time, dt);
                 // J3（B5）：金币柱倒塌/恢复的每帧分支已搬入 world/floor2/coinTowers.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
-                coinTowersApi.tick(dt, time);
-                tissueBoxApi.tick(dt, time);
-                updateWobblers(dt);
-                witchHatApi.tick(dt, time);
+                ctx.coinTowersApi.tick(dt, time);
+                ctx.tissueBoxApi.tick(dt, time);
+                ctx.updateWobblers(dt);
+                ctx.witchHatApi.tick(dt, time);
 
-                candleP += ((candleLit ? 1 : 0) - candleP) * 0.03;
-                const candleVisible = candleP > 0.02;
-                for (const f of candleWavy) {
+                ctx.candleP += ((ctx.candleLit ? 1 : 0) - ctx.candleP) * 0.03;
+                const candleVisible = ctx.candleP > 0.02;
+                for (const f of ctx.candleWavy) {
                     f.obj.visible = candleVisible;
                     if (candleVisible) {
-                        updateWavyFlame(f, time, candleP * (0.9 + 0.1 * Math.sin(time * 9)));
+                        ctx.updateWavyFlame(f, time, ctx.candleP * (0.9 + 0.1 * Math.sin(time * 9)));
                     }
                 }
 
-                magicP += ((magicOn ? 1 : 0) - magicP) * 0.012;
-                veil.material.opacity = magicP * 0.28;
+                ctx.magicP += ((ctx.magicOn ? 1 : 0) - ctx.magicP) * 0.012;
+                ctx.veil.material.opacity = ctx.magicP * 0.28;
                 {
                     const flick = 0.9 + 0.1 * Math.sin(time * 9) + 0.04 * Math.sin(time * 23);
-                    const boost = 0.30 + 0.50 * magicP;
-                    for (const cg of candleGlows) {
-                        cg.m.material.opacity = cg.maxOp * candleP * boost * flick;
+                    const boost = 0.30 + 0.50 * ctx.magicP;
+                    for (const cg of ctx.candleGlows) {
+                        cg.m.material.opacity = cg.maxOp * ctx.candleP * boost * flick;
                         cg.m.scale.setScalar(1 + 0.05 * Math.sin(time * 9 + cg.maxOp * 10));
                     }
                 }
-                if (magicP > 0.01) {
-                    spinG.rotation.y += 0.020 * magicP;
-                    innerG.rotation.y -= 0.008 * magicP;
+                if (ctx.magicP > 0.01) {
+                    ctx.spinG.rotation.y += 0.020 * ctx.magicP;
+                    ctx.innerG.rotation.y -= 0.008 * ctx.magicP;
                 }
                 const pulse = 0.8 + 0.2 * Math.sin(time * 2.4);
-                for (let i = 0; i < glows.length; i++) {
-                    glows[i].material.opacity = glows[i].userData.maxOp * magicP * pulse;
-                    glows[i].scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + i * 1.1));
+                for (let i = 0; i < ctx.glows.length; i++) {
+                    ctx.glows[i].material.opacity = ctx.glows[i].userData.maxOp * ctx.magicP * pulse;
+                    ctx.glows[i].scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + i * 1.1));
                 }
-                const partsOn = magicP > 0.02;
-                for (const g of magicParts) {
+                const partsOn = ctx.magicP > 0.02;
+                for (const g of ctx.magicParts) {
                     g.visible = partsOn;
                     if (!partsOn) continue;
                     const b = g.userData.p;
@@ -6084,13 +6566,13 @@ export function installCabin(app) {
                     } else {
                         tw = 0.7 + 0.4 * Math.sin(time * 2.0 + b.ph * 5);
                     }
-                    g.scale.setScalar(Math.max(0.001, magicP * (0.8 + 0.35 * tw)));
+                    g.scale.setScalar(Math.max(0.001, ctx.magicP * (0.8 + 0.35 * tw)));
                     if (g.userData.halo) {
-                        g.userData.halo.h1.material.opacity = g.userData.halo.opIn * tw * magicP;
-                        g.userData.halo.h2.material.opacity = g.userData.halo.opOut * tw * magicP;
+                        g.userData.halo.h1.material.opacity = g.userData.halo.opIn * tw * ctx.magicP;
+                        g.userData.halo.h2.material.opacity = g.userData.halo.opOut * tw * ctx.magicP;
                     }
                     if (g.userData.spikes) {
-                        g.userData.spikes.opacity = 0.85 * tw * magicP;
+                        g.userData.spikes.opacity = 0.85 * tw * ctx.magicP;
                     }
                     if (g.userData.cluster) {
                         for (const c of g.userData.cluster) {
@@ -6100,58 +6582,61 @@ export function installCabin(app) {
                     }
                     if (g.userData.tails) {
                         for (const tl of g.userData.tails) {
-                            tl.m.material.opacity = (0.5 / tl.s) * tw * magicP;
+                            tl.m.material.opacity = (0.5 / tl.s) * tw * ctx.magicP;
                             tl.m.position.set(-Math.sin(th) * 0.045 * tl.s, -Math.cos(th * 0.5) * 0.018 * tl.s, 0);
                         }
                     }
                 }
-                fireP += ((fireLit ? 1 : 0) - fireP) * 0.016; const fireVisible = fireP > 0.02;
-                for (const f of wavyFlames) { f.obj.visible = fireVisible; if (fireVisible) updateWavyFlame(f, time, fireP); }
-                for (const sp of sparks) { sp.visible = fireP > 0.05; if (sp.visible) { const prog = (time * 0.22 + sp.userData.phase) % 1; sp.position.set(FX + sp.userData.drift * prog + Math.sin(time * 2.5 + sp.userData.phase * 9) * 0.04, 0.55 + prog * 1.0, FZ + Math.cos(time * 2 + sp.userData.phase * 7) * 0.1); const sc = ((1 - prog) * 0.9 + 0.15) * (0.35 + 0.65 * fireP); sp.scale.set(sc, sc, sc); } }
-                for (const p of smokePuffs) { p.visible = fireP > 0.03; if (p.visible) { const prog = (time * 0.25 + p.userData.phase) % 1; const s = (0.5 + prog * 1.6) * fireP; p.scale.set(s, s, s); p.position.set(CHX - prog * 0.7, 7.35 + prog * 1.6, CHZ + Math.sin(time * 2 + p.userData.phase * 10) * 0.08); } }
+                ctx.fireP += ((ctx.fireLit ? 1 : 0) - ctx.fireP) * 0.016; const fireVisible = ctx.fireP > 0.02;
+                for (const f of ctx.wavyFlames) { f.obj.visible = fireVisible; if (fireVisible) ctx.updateWavyFlame(f, time, ctx.fireP); }
+                for (const sp of ctx.sparks) { sp.visible = ctx.fireP > 0.05; if (sp.visible) { const prog = (time * 0.22 + sp.userData.phase) % 1; sp.position.set(ctx.FX + sp.userData.drift * prog + Math.sin(time * 2.5 + sp.userData.phase * 9) * 0.04, 0.55 + prog * 1.0, ctx.FZ + Math.cos(time * 2 + sp.userData.phase * 7) * 0.1); const sc = ((1 - prog) * 0.9 + 0.15) * (0.35 + 0.65 * ctx.fireP); sp.scale.set(sc, sc, sc); } }
+                for (const p of ctx.smokePuffs) { p.visible = ctx.fireP > 0.03; if (p.visible) { const prog = (time * 0.25 + p.userData.phase) % 1; const s = (0.5 + prog * 1.6) * ctx.fireP; p.scale.set(s, s, s); p.position.set(ctx.CHX - prog * 0.7, 7.35 + prog * 1.6, ctx.CHZ + Math.sin(time * 2 + p.userData.phase * 10) * 0.08); } }
 
-                lampP += ((lampLit ? 1 : 0) - lampP) * 0.016;
-                FILL.uniforms.uLampStrength.value = lampP;
-                const lampVisible = lampP > 0.02;
-                for (const f of chandelierFlames) { f.obj.visible = lampVisible; if (lampVisible) updateWavyFlame(f, time, lampP * (0.9 + 0.1 * Math.sin(time * 9 + f.phase))); }
-                chandelier.rotation.x = Math.sin(time * 0.7) * 0.012;
-                chandelier.rotation.z = Math.cos(time * 0.53) * 0.012;
+                ctx.lampP += ((ctx.lampLit ? 1 : 0) - ctx.lampP) * 0.016;
+                ctx.FILL.uniforms.uLampStrength.value = ctx.lampP;
+                const lampVisible = ctx.lampP > 0.02;
+                for (const f of ctx.chandelierFlames) { f.obj.visible = lampVisible; if (lampVisible) ctx.updateWavyFlame(f, time, ctx.lampP * (0.9 + 0.1 * Math.sin(time * 9 + f.phase))); }
+                ctx.chandelier.rotation.x = Math.sin(time * 0.7) * 0.012;
+                ctx.chandelier.rotation.z = Math.cos(time * 0.53) * 0.012;
                 const lampBreath = 0.9 + 0.1 * Math.sin(time * 2.1);
-                lampGlowMatA.opacity = lampP * 0.38 * lampBreath;
-                lampGlowMatB.opacity = lampP * 0.13 * (0.9 + 0.1 * Math.sin(time * 2.1 + 1.0));
-                lampCrystalMat.color.setRGB(0.45 + 0.55 * lampP, 0.45 + 0.4 * lampP, 0.5 + 0.12 * lampP);
-                lampCrystal.rotation.y += 0.012;
-                pendant.rotation.y -= 0.008;
+                ctx.lampGlowMatA.opacity = ctx.lampP * 0.38 * lampBreath;
+                ctx.lampGlowMatB.opacity = ctx.lampP * 0.13 * (0.9 + 0.1 * Math.sin(time * 2.1 + 1.0));
+                ctx.lampCrystalMat.color.setRGB(0.45 + 0.55 * ctx.lampP, 0.45 + 0.4 * ctx.lampP, 0.5 + 0.12 * ctx.lampP);
+                ctx.lampCrystal.rotation.y += 0.012;
+                ctx.pendant.rotation.y -= 0.008;
 
                 /* ---- 室内点光源：吊挂木灯·坩埚魔火·魔法阵·暖桌·水晶球·蜡烛·星象仪·月光盆栽 ---- */
-                ptLantern += ((lanternLit ? 1 : 0) - ptLantern) * 0.07;
-                ptKot += ((kotatsuOn ? 1 : 0) - ptKot) * 0.07;
-                ptMc += ((mcRun > 0 ? 1 : 0) - ptMc) * 0.055;
-                ptCb += ((cbRun > 0 ? 1 : 0) - ptCb) * 0.055;
-                ptPlant += ((plantRun > 0 ? 1 : 0) - ptPlant) * 0.055;
+                ctx.ptLantern += ((ctx.lanternLit ? 1 : 0) - ctx.ptLantern) * 0.07;
+                ctx.ptKot += ((ctx.kotatsuOn ? 1 : 0) - ctx.ptKot) * 0.07;
+                ctx.ptMc += ((ctx.mcRun > 0 ? 1 : 0) - ctx.ptMc) * 0.055;
+                ctx.ptCb += ((ctx.cbRun > 0 ? 1 : 0) - ctx.ptCb) * 0.055;
+                ctx.ptPlant += ((ctx.plantRun > 0 ? 1 : 0) - ctx.ptPlant) * 0.055;
                 // J2.3：8 个槽位的填充交给光照场（原先是 8 行 PP[i]/PC[i]/PG[i] 硬编码）。
                 // 光源在初始化时注册过一次，这里只按注册顺序刷新强度 —— 新增一盏灯不再改本文件。
-                lightField.update(time, dt);
+                ctx.lightField.update(time, dt);
 
-                if (camShake > 0.002) {
+                if (ctx.camShake > 0.002) {
                     // J2.7：抖动位移交给 CameraRig；衰减与判据留在这里（它们是本文件的状态量）
-                    cameraRig.applyShake(camShake, runtimeRng);
-                    camShake *= Math.exp(-3.2 * dt);
+                    ctx.cameraRig.applyShake(ctx.camShake, runtimeRng);
+                    ctx.camShake *= Math.exp(-3.2 * dt);
                 }
 
                 // J0.4：测试机位覆盖 —— 固定相机位用于截图回归（realtime 下 testCam 恒为 null，不生效）
-                if (testCam) cameraRig.applyTestCamera(testCam);
+                if (ctx.testCam) ctx.cameraRig.applyTestCamera(ctx.testCam);
 
-                renderer.render(scene, camera);
+                ctx.renderer.render(ctx.scene, ctx.camera);
                 // F0.3：手动模式下由主循环驱动装饰循环（realtime 模式由它自己的 rAF 驱动）
-                if (clock.mode === 'manual') updateNewDecor(time, dt);
+                if (clock.mode === 'manual') ctx.updateNewDecor(time, dt);
             }
 
             // F0.3：主循环只负责「推进时钟 + 跑一帧」——时间源可切换为手动步进
+            /* ==================== [J4:seg boot] ==================== */
+            // ↓ J4 段导出（boot）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
+            ctx.animate = animate;
             function animate(t) {
                 requestAnimationFrame(animate);
                 clock.tick(t);
-                tickOnce();
+                ctx.tickOnce();
             }
             // F0.3：启动主循环。
             //   realtime：rAF 自驱动（行为与改动前完全一致）
@@ -6162,27 +6647,27 @@ export function installCabin(app) {
             // ⚠️ 定格后必须**持续重绘**：WebGL 默认 preserveDrawingBuffer=false，
             //    若停止渲染，drawing buffer 会被清空 —— 截图将得到全黑画面（而非定格的那一帧）。
             if (clock.mode === 'manual') {
-                window.__cabinStepFrame = tickOnce;
+                window.__cabinStepFrame = ctx.tickOnce;
                 // J0.4：测试机位设置 —— 截图回归用固定相机位（六元数组 [px,py,pz,lx,ly,lz]；null / 非法值 = 清除覆盖）。
                 //       与单帧钩子一样**只在 manual 模式暴露**，所以正常游玩路径上不存在这个接口。
                 window.__cabinSetTestCamera = function (p) {
-                    testCam = Array.isArray(p) && p.length >= 6 && p.slice(0, 6).every(Number.isFinite) ? p.slice(0, 6) : null;
-                    return testCam ? testCam.slice() : null;
+                    ctx.testCam = Array.isArray(p) && p.length >= 6 && p.slice(0, 6).every(Number.isFinite) ? p.slice(0, 6) : null;
+                    return ctx.testCam ? ctx.testCam.slice() : null;
                 };
                 // J0.4：完整小屋开关 —— 与菜单里的 houseToggle 按钮**等效**（只少了音效），同样只在 manual 模式暴露。
                 //       默认是剖切模式：省略的墙/屋顶用虚线表示，便于从外面看到室内；
                 //       true = 显示完整外观（实墙 + 屋顶）。截图机位据此选择「看室内」还是「看整体」。
                 window.__cabinSetFullHouse = function (on) {
                     // J2.8：与菜单按钮共用同一个应用点；测试钩子**不写 store**（避免测试污染用户设置）
-                    applyFullHouse(on);
-                    return fullHouse;
+                    ctx.applyFullHouse(on);
+                    return ctx.fullHouse;
                 };
                 // 静止重绘：**只重绘，不推进任何状态**。
                 //   不能调用 tickOnce() —— 那会继续更新 gameSec（昼夜/太阳/天空），画面会缓慢变化。
                 window.__cabinStartStillRepaint = function () {
                     (function still() {
                         requestAnimationFrame(still);
-                        renderer.render(scene, camera);
+                        ctx.renderer.render(ctx.scene, ctx.camera);
                     })();
                 };
             } else {
@@ -6196,9 +6681,9 @@ export function installCabin(app) {
             //       "重构是否引入性能回归"最可靠的硬指标。
             if (window.__CABIN_WANT_STATS) {
                 window.__cabinRenderStats = function () {
-                    const r = renderer.info;
+                    const r = ctx.renderer.info;
                     let objects = 0, meshes = 0, lineObjs = 0, points = 0;
-                    scene.traverse(o => {
+                    ctx.scene.traverse(o => {
                         objects++;
                         if (o.isMesh) meshes++; else if (o.isLine || o.isLineSegments) lineObjs++; else if (o.isPoints) points++;
                     });
@@ -6211,6 +6696,6 @@ export function installCabin(app) {
                     };
                 };
             }
-            addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
-        })();
+            addEventListener('resize', () => { ctx.camera.aspect = innerWidth / innerHeight; ctx.camera.updateProjectionMatrix(); ctx.renderer.setSize(innerWidth, innerHeight); });
+        })(ctx);
 }
