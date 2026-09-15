@@ -28,17 +28,18 @@
  *    在两个消费者里再按**原名**解构回来（`const SLOT_POS = parts.slot, …`），于是函数体逐字不变。
  *    （与 [`witchHat.js`](./witchHat.js) 的「细节 3」同款做法。）
  *
- * 2. **⚠️ 已知缺口：飞行纸那一侧的 aim（准星/点击）入口在 `J3` 期间会丢失。**
- *    原实现的第二条 `regMagic(tissuePaperG, …)` 把**纸**的 Mesh 收进 `magicMeshes`；
- *    而 `installProp` 的 aim 桥只认**一个** `root`（本件是 `tissueBoxG`），
+ * 2. **⚠️ 曾经是缺口，`J3.1` 已修：飞行纸那一侧的 aim（准星/点击）入口。**
+ *    原第二条 `regMagic(tissuePaperG, …)` 把**纸**的 Mesh 收进 `magicMeshes`；
+ *    而 `J3` 的 aim 桥只认**一个** `root`（本件是 `tissueBoxG`），
  *    `tissuePaperG` 是 `scene` 的**兄弟节点**（不是 `tissueBoxG` 的子节点，搬迁前后都如此），
- *    因此它的 Mesh 不会被桥收进去 ⇒ **"纸摊在桌上时点它揉成团"这一步在 J3 期间点不动**
+ *    因此它的 Mesh 不会被桥收进去 ⇒ "纸摊在桌上时点它揉成团"这一步点不动
  *    （纸会一直摊在桌上；画面完全不受影响，像素回归也看不见）。
  *    两件都不能动：给两者套一层共同父 Group 会改动 `scene.children` 与透明物体的绘制顺序
- *    （像素回归的雷区）；把纸挂到盒下同理。**这条缺口应由 `J4` 的统一交互契约收编**
- *    （`installProp` 文件头已经写明：`J4` 把 aim 收进统一契约后，⑤.2 那一段连同 `magicMeshes` 一并删除）。
- *    在此之前，`interactables` 里仍**如实声明**这一条（`J4` 一到位即可用），
- *    并且**不要**把它的逻辑并进盒子的 `onActivate`（那会捏造一条原实现没有的交互）。
+ *    （像素回归的雷区）；把纸挂到盒下同理。
+ *    ⇒ `J3.1` 给这条加了 `hits: parts.paper`（**逐条命中体**），两件几何一个字节没动，
+ *    而这条 `mode: 'aim'` 不再依赖"是不是第一条"。
+ *    （`J3.1` 起 `interactables` 的每一条都可以用 `hits` 声明自己的命中体；
+ *    详见 `app/installProp.js` 的 ⑤.2 与 `systems/interaction/types.js` 的 `normalizeHits()`。）
  *
  * 3. **`s.t` 是把 `tissueState.t` 扁平化**（`const s = tissueState;` 那一行随状态入 `state()` 消失），
  *    `standbyAnimT → s.standbyT`。`updateTissue` 的其余每一行与搬迁前逐字相同。
@@ -251,6 +252,9 @@ export default defineProp({
       // 锚点与几何同源：纸巾摊在书桌上的落点就是 `DESK_REST`（`V(2.05, TBL_TOP + 0.008, -2.00)`）
       anchor: { x: parts.desk.x, z: parts.desk.z },
       radius: 1.6,
+      // ★ `hits` = 纸巾自己（`J3.1`，见文件头「细节 2」）：`tissuePaperG` 是**独立挂在 `scene`**
+      //   的兄弟节点，不写 `hits` 就永远进不了命中集合 ⇒ 这条 `mode: 'aim'` 会是个死条目。
+      hits: parts.paper,
       onActivate: () => {
         // 原 `regMagic(tissuePaperG, function () { … })` 的函数体逐字搬运
         if (s.phase !== 'rest') return;

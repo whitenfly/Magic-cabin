@@ -27,9 +27,13 @@
  *
  * 原实现是 `regMagic(potG, …)` 与 `regMagic(corkG, …)`，**两处回调体一字不差**
  * （都是 `corkOut = !corkOut`）。合并为一条交互有两个理由：
- *   ① `installProp` 的准星通路只给 `root`（= `potG`）注册命中体，`corkG` 本来就拿不到独立准星入口；
- *   ② 近距列表按注册顺序出提示，两条同义条目会让玩家看到重复文案。
- * 代价：软木塞本体不再单独作为准星目标（原先是）。与 `stools` 的多入口处理同源。
+ *   ① 两处回调体完全相同，拆成两条只会让近距列表按注册顺序出**重复文案**；
+ *   ② 命中体本来就可以是多件（`J3.1` 的 `hits`）—— 一条交互挂在瓶身 + 软木塞两个对象上，
+ *      语义与原实现等价，而玩家看到的提示只有一条。
+ *
+ * ⚠️ `J3` 期间这里还有第三个（**错误**的）理由：当时 aim 桥只给 `root`（= `potG`）注册命中体，
+ * `corkG` 拿不到独立准星入口 —— 于是"合并"顺带掩盖了软木塞点不动这件事。
+ * `J3.1` 用 `hits: [parts.bottle, parts.cork]` 把两个对象都还给这条交互，缺口消失。
  *
  * 不用 `rng` 之外的随机源；`floor1Rng()` 在原位置仅被调用 4 次（4 个气泡的 `wob`），
  * 次数与顺序都没变 ⇒ 后续随机数序列与画面不变。
@@ -141,13 +145,16 @@ export default defineProp({
 
   // 原两处 `regMagic`（`potG` / `corkG`）的回调体完全一致，故合并为一条（理由见文件头）。
   // 主入口同时给 aim（准星）与 proximity（近距）两条 —— 否则默认固定视角下点不开（风险 `R1`）
-  interactables: (s, { L }) => [{
+  // `hits` = **两处原 `regMagic` 的对象**（`J3.1`）：瓶身与软木塞都点得动。
+  // 不给 `hits` 时只有 `root`（瓶身）进命中集合 ⇒ 软木塞点不动（原先是独立入口）。
+  interactables: (s, { L, parts }) => [{
     id: 'potion-bottle/uncork',
     label: '拔出 / 塞回魔法药剂瓶的软木塞',
     mode: 'both',
     // 锚点与几何同源：都取自 `L.MTX / L.MTZ` 的同一对偏移（不变量 N9）
     anchor: { x: L.MTX + 0.05, z: L.MTZ + 0.24 },
     radius: 1.4,
+    hits: [parts.bottle, parts.cork],
     onActivate: () => { s.corkOut = !s.corkOut; },
   }],
 

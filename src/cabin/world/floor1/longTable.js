@@ -34,6 +34,8 @@
  *    原先是三只盘各有自己的 `regMagic`，搬迁后只有第一只保留准星目标；
  *    另两只改由**近距入口**（三条 `anchor` 各自与几何同源、`radius` 1.2）覆盖。
  *    这与 `stools`（两只凳子只留一只准星）完全同源，是 `J3` 过渡期的既知代价。
+ *    ⇒ **`J3.1` 已修**：三条 `interactables` 各自声明 `hits`（= `parts.fish` / `egg` / `pancakes`），
+ *    准星与点击回到"点哪只盘转哪只"，近距入口同时保留。
  *
  * 不用 `rng`（不消耗种子随机源，故不影响后续任何随机数序列）。
  * 状态（每只盘的 `spinV`）**仍住在 `g.userData` 里**（原实现如此），故本件无 `state()`。
@@ -98,6 +100,7 @@ export default defineProp({
 
   // 原三处 `regMagic(g, () => { g.userData.spinV = 9; })` —— 一处一条，`label` 语义化。
   // 锚点与几何同源：全是 `makePlate(DT_X ± …, DT_Z ± …)` 的落点（不变量 `N9`）
+  // `hits` = **这一条自己的**命中体（`J3.1`）：三只盘各点各的，否则只有第一只点得动。
   interactables: (s, { L, parts }) => [
     {
       id: 'long-table/spin-fish',
@@ -105,6 +108,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X - 0.85, z: L.DT_Z - 0.12 },
       radius: 1.2,
+      hits: parts.fish,
       onActivate: () => { parts.fish.userData.spinV = 9; },
     },
     {
@@ -113,6 +117,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X + 0.85, z: L.DT_Z - 0.12 },
       radius: 1.2,
+      hits: parts.egg,
       onActivate: () => { parts.egg.userData.spinV = 9; },
     },
     {
@@ -121,6 +126,7 @@ export default defineProp({
       mode: 'both',
       anchor: { x: L.DT_X + 0.30, z: L.DT_Z - 0.32 },
       radius: 1.2,
+      hits: parts.pancakes,
       onActivate: () => { parts.pancakes.userData.spinV = 9; },
     },
   ],

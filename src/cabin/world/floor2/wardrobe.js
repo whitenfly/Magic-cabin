@@ -39,6 +39,15 @@
  *    `parts`）。三者在原实现里是块级 `const`，块外拿不到 —— 展开后**没有**任何重名冲突
  *    （`p` / `knob` / `hw` / `hh` 各自住在更内层的子块里），对父子结构与渲染顺序**零影响**。
  *
+ * 4. ★ **挂衣的准星入口曾经被 `installProp` 覆盖掉（`J3` 回归，`J3.1` 已修）。**
+ *    `regWobble(hg)` 的内部就是 `regMagic(hg, …)`（`monolith.js` 的 `regWobble` 定义）——
+ *    所以三件挂衣**本来各自是可点击的**（点一下晃起来）。
+ *    但 `J3` 的 aim 桥会对 `root`（= 整个 `wardrobeG`）做 `traverse()`，把柜内**所有** Mesh 的
+ *    `userData.magicRoot` 统一改写为 `wardrobeG` —— 连同挂衣已经注册好的那份一起覆盖。
+ *    于是点挂衣解析到衣柜根的回调 = **抽屉**（门关着时静默返回，表现为"点挂衣毫无反应"）。
+ *    `J3.1` 的修法是"aim 桥不覆盖已有 `magicRoot`"（见 `app/installProp.js` ⑤.2 的两个 `!`），
+ *    并给抽屉那条补上 `hits: parts.drawer` ⇒ 柜体/层板/挂衣不再被算成抽屉的命中体。
+ *
  * 未用 `rng`：本件不消耗任何种子随机源 ⇒ 后续随机数序列不变（不变量 `N8`）。
  */
 import * as THREE from 'three'
@@ -217,6 +226,11 @@ export default defineProp({
     // 锚点与几何同源：衣柜根就落在 L.WD_X / L.WD_Z（不变量 N9）
     anchor: { x: L.WD_X, z: L.WD_Z },
     radius: 1.8,
+    // ★ `hits` = 抽屉本体（`J3.1`）：等价于原实现对抽屉那一处的注册命中体。
+    //   （注释里刻意不写带括号的调用名 —— `verify-migration.mjs` 的计数会把它算进去）
+    //   不给它时，装配器会把**整个衣柜**（柜体 / 层板 / 叠放衣物 / 挂衣）都算成抽屉的命中体 ⇒
+    //   点柜子任何地方都在拉抽屉，而那本不是可交互对象。
+    hits: parts.drawer,
     onActivate: () => {
       // 原 `regMagic` 的箭头函数体逐字搬运；`doorsBothOpen()`（build 闭包内）按本文件头「细节 2」展开
       const sl = parts.drawer.userData.slide;
