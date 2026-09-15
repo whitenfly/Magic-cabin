@@ -249,7 +249,9 @@ export async function bootCabin() {
   const settingsForm = mountSettingsForm(app)
 
   // ③.5 安装 3D 实现（画面与重构前完全一致）
-  const { installCabin } = await import('./legacy/monolith.js')
+  //      J4.7：`legacy/monolith.js` 已删除 —— 21 个段各住各的模块，
+  //      这里加载的是"造 ctx + 按原顺序调用 21 段"的骨架（`app/scene/installCabin.js`）。
+  const { installCabin } = await import('./app/scene/installCabin.js')
   installCabin(app)
 
   // ③.6 装配功能模块（J2.5）：按 `src/config/modules.config.js` 过滤后逐个 register。

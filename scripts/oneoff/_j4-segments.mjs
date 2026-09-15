@@ -34,7 +34,37 @@
  *
  * `module` 一律相对 **`src/cabin/`**（与 `systems/README.md` 的写法一致），
  * 由 `_j4-apply.mjs --move` 解析。**一个段一个文件** —— 两个段写同一个文件会互相覆盖。
+ *
+ * ## `bind`：段模块自己的"模块级绑定"
+ *
+ * 有些名字住在 monolith 的**模块顶层**（IIFE 之外），既不是 import、也不是 `app` 的解构 ——
+ * 它们的符号声明落在段外，`_j4-apply.mjs` 的 `unknown` 判据会（正确地）报出来。
+ * `bind` 就是回答"它们从哪来"：段模块里就地重建同样的绑定。
  */
+
+/**
+ * monolith 模块顶层的**随机源**：6 个构建期种子随机 + 1 个运行期随机。
+ *
+ * ```js
+ * const { outdoor: outdoorRng, floor1: floor1Rng, …, slime: slimeRng } = scene
+ * const runtimeRng = runtime
+ * ```
+ *
+ * 搬到段模块时按需重建 —— 它们是**同一个对象/函数**的别名，
+ * 重建后 `rng` 的调用序列与搬迁前完全一致（这正是像素零差异的前提之一）。
+ */
+export const RNG_BIND = {
+  outdoorRng: { expr: 'scene.outdoor', import: { from: '../app/rng.js', names: ['scene'] } },
+  floor1Rng: { expr: 'scene.floor1', import: { from: '../app/rng.js', names: ['scene'] } },
+  floor2Rng: { expr: 'scene.floor2', import: { from: '../app/rng.js', names: ['scene'] } },
+  skyRng: { expr: 'scene.sky', import: { from: '../app/rng.js', names: ['scene'] } },
+  textureRng: { expr: 'scene.texture', import: { from: '../app/rng.js', names: ['scene'] } },
+  slimeRng: { expr: 'scene.slime', import: { from: '../app/rng.js', names: ['scene'] } },
+  runtimeRng: { expr: 'runtime', import: { from: '../app/rng.js', names: ['runtime'] } },
+}
+
+/** 从 `RNG_BIND` 里取若干项拼成某一段的 `bind` */
+const rng = (...names) => Object.fromEntries(names.map((n) => [n, RNG_BIND[n]]))
 
 /** 段：`hint` 是提示行号（吸附到该行之后最近的顶层语句起点），实际边界由应用器算 */
 export const SEGMENTS = [
@@ -43,21 +73,39 @@ export const SEGMENTS = [
   { id: 'audio', hint: 118, module: 'systems/audio/AudioSystem.js', fn: 'installAudio', note: 'SND 音效池' },
   { id: 'core3d', hint: 139, module: 'app/scene/SceneCore.js', fn: 'installSceneCore', note: 'scene / camera / renderer / 材质 / 几何 DSL / L' },
   // ── 世界（`world/`）──────────────────────────────────────────────────────
-  { id: 'houseShell', hint: 184, module: 'world/house/shell.js', fn: 'installHouseShell', note: '墙 / 屋顶 / 门窗 / 楼梯 / 路牌' },
-  { id: 'outdoor', hint: 437, module: 'world/outdoor/yard.js', fn: 'installOutdoorYard', note: '森林 / 草地 / 石头 / 花 / 萤火虫' },
+  {
+    id: 'houseShell', hint: 184, module: 'world/house/shell.js', fn: 'installHouseShell',
+    note: '墙 / 屋顶 / 门窗 / 楼梯 / 路牌', bind: rng('runtimeRng'),
+  },
+  {
+    id: 'outdoor', hint: 437, module: 'world/outdoor/yard.js', fn: 'installOutdoorYard',
+    note: '森林 / 草地 / 石头 / 花 / 萤火虫', bind: rng('outdoorRng'),
+  },
   { id: 'propsTools', hint: 643, module: 'core/geometry/propTools.js', fn: 'installPropTools', note: '圆角几何 / 陈设工具' },
-  { id: 'installer', hint: 664, module: 'app/scene/PropInstaller.js', fn: 'installPropInstaller', note: 'J3 装配器接线 + 装配环境 ctx' },
-  { id: 'floor1', hint: 719, module: 'world/floor1/install.js', fn: 'installFloor1', note: '一楼陈设' },
+  {
+    id: 'installer', hint: 664, module: 'app/scene/PropInstaller.js', fn: 'installPropInstaller',
+    note: 'J3 装配器接线 + 装配环境 ctx',
+    // 装配环境把 7 个随机源一并交给物件（`propTool('rng', () => ({ … }))`）
+    bind: rng('outdoorRng', 'floor1Rng', 'floor2Rng', 'skyRng', 'textureRng', 'slimeRng', 'runtimeRng'),
+  },
+  {
+    id: 'floor1', hint: 719, module: 'world/floor1/install.js', fn: 'installFloor1',
+    note: '一楼陈设', bind: rng('floor1Rng'),
+  },
   { id: 'junkBoxes', hint: 1694, module: 'world/floor1/junkBoxes.js', fn: 'installJunkBoxes', note: '楼梯下储物箱' },
-  { id: 'floor2', hint: 1741, module: 'world/floor2/install.js', fn: 'installFloor2', note: '二楼陈设' },
+  {
+    id: 'floor2', hint: 1741, module: 'world/floor2/install.js', fn: 'installFloor2',
+    note: '二楼陈设', bind: rng('runtimeRng', 'floor2Rng', 'textureRng'),
+  },
   // ── 系统（`systems/`）────────────────────────────────────────────────────
   { id: 'noteEditor', hint: 3384, module: 'systems/ui/editors/NoteEditor.js', fn: 'installNoteEditor', note: '便签编辑器（二楼计划板）' },
-  { id: 'chandelier', hint: 3406, module: 'world/floor2/chandelier.js', fn: 'installChandelier', note: '二楼顶中央魔法吊灯' },
+  {
+    id: 'chandelier', hint: 3406, module: 'world/floor2/chandelier.js', fn: 'installChandelier',
+    note: '二楼顶中央魔法吊灯', bind: rng('slimeRng'),
+  },
   {
     id: 'magic', hint: 3474, module: 'systems/magic/MagicSystem.js', fn: 'installMagicSystem',
-    note: '超位魔法系统：魔杖 / 24 层阵 / 爆炸',
-    // 与 `weather` 同理：`runtimeRng` 住在 monolith 的**模块顶层**（`const runtimeRng = runtime`）
-    bind: { runtimeRng: { expr: 'runtime', import: { from: '../app/rng.js', names: ['runtime'] } } },
+    note: '超位魔法系统：魔杖 / 24 层阵 / 爆炸', bind: rng('runtimeRng'),
   },
   // ── 玩家 ────────────────────────────────────────────────────────────────
   { id: 'collision', hint: 4715, module: 'systems/player/collision.js', fn: 'installCollision', note: '家具平台碰撞体 + collideXZ / groundAt' },
@@ -68,15 +116,7 @@ export const SEGMENTS = [
   // ── 天气与主循环 ────────────────────────────────────────────────────────
   {
     id: 'weather', hint: 4924, module: 'systems/weather/WeatherSystem.js', fn: 'installWeatherSystem',
-    note: '天空 / 时间 / 天气 / 星空',
-    // ★ 这两个名字住在 monolith 的**模块顶层**（IIFE 之外），既不是 import、也不是 `app` 的解构：
-    //     `const { sky: skyRng } = scene`  /  `const runtimeRng = runtime`
-    //   `_j4-apply.mjs` 的 `unknown` 判据会（正确地）把它们报出来，
-    //   `bind` 就是回答"它们从哪来" —— 段模块里就地重建同样的绑定。
-    bind: {
-      skyRng: { expr: 'scene.sky', import: { from: '../app/rng.js', names: ['scene'] } },
-      runtimeRng: { expr: 'runtime', import: { from: '../app/rng.js', names: ['runtime'] } },
-    },
+    note: '天空 / 时间 / 天气 / 星空', bind: rng('skyRng', 'runtimeRng'),
   },
   { id: 'tick', hint: 5435, module: 'app/scene/FrameBody.js', fn: 'installFrameBody', note: 'tickOnce：716 行的每帧体' },
   { id: 'boot', hint: 6151, module: 'app/scene/SceneLoop.js', fn: 'installSceneLoop', note: 'animate + manual 钩子 + 统计钩子' },
