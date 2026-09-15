@@ -53,7 +53,12 @@ export const SEGMENTS = [
   // ── 系统（`systems/`）────────────────────────────────────────────────────
   { id: 'noteEditor', hint: 3384, module: 'systems/ui/editors/NoteEditor.js', fn: 'installNoteEditor', note: '便签编辑器（二楼计划板）' },
   { id: 'chandelier', hint: 3406, module: 'world/floor2/chandelier.js', fn: 'installChandelier', note: '二楼顶中央魔法吊灯' },
-  { id: 'magic', hint: 3474, module: 'systems/magic/MagicSystem.js', fn: 'installMagicSystem', note: '超位魔法系统：魔杖 / 24 层阵 / 爆炸' },
+  {
+    id: 'magic', hint: 3474, module: 'systems/magic/MagicSystem.js', fn: 'installMagicSystem',
+    note: '超位魔法系统：魔杖 / 24 层阵 / 爆炸',
+    // 与 `weather` 同理：`runtimeRng` 住在 monolith 的**模块顶层**（`const runtimeRng = runtime`）
+    bind: { runtimeRng: { expr: 'runtime', import: { from: '../app/rng.js', names: ['runtime'] } } },
+  },
   // ── 玩家 ────────────────────────────────────────────────────────────────
   { id: 'collision', hint: 4715, module: 'systems/player/collision.js', fn: 'installCollision', note: '家具平台碰撞体 + collideXZ / groundAt' },
   { id: 'sfxBridge', hint: 4757, module: 'systems/interaction/Bridge.js', fn: 'installInteractionBridge', note: '音效辅助 + 交互通路接线' },
