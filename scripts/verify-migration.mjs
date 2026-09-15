@@ -167,6 +167,16 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     'getElementById(': -8,
     'SND.play(': -4,
   }
+  // ★ J3：计数前先**剥掉块注释**。
+  //
+  // 搬迁对照表会大量提到这些名字 —— 每个 `defineProp` 模块的文件头都有一张
+  // 「原来住哪 → 现在住哪」的表，里面写着 `regMagic(chest, …)`、`addEventListener('pointerup', …)`、
+  // `Math.random()` 这类**字面量**。把它们算进计数，「注释写得越清楚，门禁越红」——
+  // 而这条判据真正要守的是**代码里**的调用点数（`regMagic` 是否真被 `interactables` 取代、
+  // 是否有人偷偷加了裸随机）。两边用同一套剥离规则，判据因此**不放松**，只是不再被文字干扰。
+  const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+  const srcCode = stripComments(srcText)
+  const curCode = stripComments(restored)
   for (const [label, re] of [
     ['Math.random()', /Math\.random\(\)/g],
     ['new THREE.Mesh(', /new THREE\.Mesh\(/g],
@@ -177,8 +187,8 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     ['getElementById(', /getElementById\(/g],
     ["SND.play(", /SND\.play\(/g],
   ]) {
-    const a = count(srcText, re)
-    const b = count(restored, re)
+    const a = count(srcCode, re)
+    const b = count(curCode, re)
     const delta = J25_DELTA[label] ?? 0
     check(
       `${label}  ${a} → ${b}`,

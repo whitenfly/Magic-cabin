@@ -9,22 +9,18 @@
  *   ③ `textureRng` 改从 ctx 的 `rng.texture` 解构（同一个种子随机源实例，调用**次数与顺序**未变
  *      —— 这正是"像素零差异"的关键之一，见 `defineProp.js` 的三条纪律）。
  *
- * ## ★ 关于本文件里那份 `crboxCol`（唯一一处"多出来的代码"，务必知情）
+ * ## ★ 关于 `crboxCol`（曾经的"复刻"，已改为取 `ctx`）
  *
  * 原段里那一行 `rugG.add(crboxCol(2.2, 0.04, 1.8, 0.02, 0x7d5064));`，
  * 而 `crboxCol` 是 monolith 里 `/* 18.10 *\/` 分区开头定义的**共享工具函数**
- * （原 L4582–4588，被衣柜 / 挎包 / 坐垫 / 相框 / 镜子 … 十几处调用），
- * 它住在 IIFE 闭包里、**不在 ctx 的可用键里**（ctx 只有 `roundBoxGeo` / `rbox` / `MAT` …）。
+ * （被衣柜 / 挎包 / 坐垫 / 相框 / 镜子 … 十几处调用）。
  *
- * 因此这里做了一件必须显式声明的事：**把 `crboxCol` 逐字复刻一份到 `build()` 的私有作用域**，
- * 好让原段的调用行**一字不改**地留下来（比"把这一行拆成 5 行内联展开"更忠实于"原样搬运"）。
- * 复刻体与被搬走的实现逐字相同，且用的是**同一个** `roundBoxGeo`（ctx 注入）与**同一个** `MAT`
- * （ctx 传入的共享线材质实例）—— 输出对象（Group + Mesh + LineSegments 的层级、几何参数、
- * 材质参数、父节点）与搬迁前逐项一致，故像素零差异。
+ * 搬迁当时 `ctx` 还没有它，于是这份文件里曾**逐字复刻**了一份 —— 那是"共享工具尚未提取"造成的重复。
+ * 后来 `ctx` 改成了**惰性求值**（每个键是 getter）并补上了这批工具，复刻体随即删除：
+ * 现在调用的是 monolith 那**同一个函数本身**（装配点 L4566 晚于它的定义 L4276，getter 取得到）。
  *
- * ⚠️ 知会：这是"共享工具函数尚未提取"导致的重复。等 `cbox` / `crboxCol` / `crumpleBall` /
- * `arcPos` / `smooth` 这批工具统一提取进 `core/geometry` 并由 ctx 注入后，本段应改回用 ctx 的版本、
- * 删掉这份复刻（见报告里的"给上下游的提醒"）。
+ * 教训写在 [`world/README.md`](../../README.md) 的「共享工具：用 ctx 取，不要复制实现」一节：
+ * 复制实现会让代码库分叉，而惰性 ctx 让"装配点早晚"不再成为借口。
  *
  * 无状态、无交互、无光源、无 `update` —— 纯装饰。
  */
@@ -35,18 +31,11 @@ export default defineProp({
   id: 'floor2/rug-large',
   kind: 'decor',
 
-  build({ scene, L, rng, roundBoxGeo, MAT }) {
+  // `crboxCol` 直接取自装配环境 —— `ctx` 里的就是 monolith 那个同名函数本身
+  // （装配点 L4566 晚于它的定义 L4276，惰性 getter 取得到）。**不再复制实现**。
+  build({ scene, L, rng, crboxCol }) {
     const { RUG2_X, RUG2_Z, FY } = L
     const textureRng = rng.texture
-
-    /* `crboxCol` —— monolith（IIFE 闭包）里"圆角盒 + 彩色面 + 描边"的共享工具，逐字复刻 */
-    function crboxCol(w, h, d, r, col) {
-      const grp = new THREE.Group();
-      const g = roundBoxGeo(w, h, d, r);
-      grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-      grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 12), MAT));
-      return grp;
-    }
 
     const rugG = new THREE.Group();
     rugG.position.set(RUG2_X, FY + 0.02, RUG2_Z);

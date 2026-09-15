@@ -1,0 +1,15 @@
+{
+  "id": "floor2/witch-hat",
+  "name": "witchHat",
+  "assign": "witchHatApi",
+  "file": "src/cabin/world/floor2/witchHat.js",
+  "batch": "B4",
+  "startMarker": "            /* 魔女帽：更大帽檐 + 低弯折尖，点击飞起撒糖果 */",
+  "endMarker": "            /* 垃圾桶 */",
+  "layout": [],
+  "tick": {
+    "old": "                updateHat(time, dt);\n                updateCandies(dt);",
+    "new": "                witchHatApi.tick(dt, time);"
+  },
+  "notes": "区间 = L4732–L4959（吞掉末尾 ==== 分隔线，纯注释）。layout **留空**：本件读的 CRATE_X / CRATE_Z / CR_W / CR_D / CRATE_TOP 由 floor2/crate 的 spec 声明（同一份坐标真源，避免第二份）⇒ **必须与 floor2/crate 同批应用**；HAT_HOME_POS / HAT_HOVER_POS / HAT_TILT 是**推导量**（`V(crateX, CRATE_TOP, crateZ)` 等），留 build 里推导一次、经 parts 交出（同理不进 layout，否则箱子坐标出现第二份真源）。用到的 ctx 键：scene / L / V / put / LITMAT / MAT / crboxCol / smooth / rng.runtime（经 `const runtimeRng = rng.runtime;` 保持原调用名）。state：hatState → s.phase / s.t0，hatCandyT → s.candyT，candies → s.candies，另加 s.now（见下）。★ **clock.now 的等价替换**：tickOnce() 开头就是 `const time = clock.now;`（当前 L7609），而 clock 只在每帧的 clock.tick() 里推进 ⇒ **任何两次帧之间**（点击恰好落在这个窗口）读到的 clock.now 恒等于**上一帧**传给 update 的 time；于是 update 第一行 `s.now = time;`、onActivate 里 `s.t0 = s.now;` 与原实现是**同一个数**（不是近似）。ctx 里没有 clock，也不为此新增 ctx 键。★ 四个函数 makeCandy / spawnCandy / updateHat / updateCandies 搬到**模块作用域**（模块与 IIFE 闭包不通），签名多了显式 env 参数，**函数体逐字搬运**（只做上面那张改名表 + 从 parts 按原名解构回 HAT_HOME_POS / HAT_HOVER_POS / HAT_TILT 与 hatG）；runtimeRng 的调用**次数与顺序**未变（同一个种子随机源）⇒ 糖果外观/初速序列与搬迁前一致。regMagic(hatG, …) → interactables() 一条（mode both，锚点取 L.CRATE_X / L.CRATE_Z，与帽座同源）。★★ **tick 接线（本 spec 的 tick 字段，应用器直接代劳，无需人工）**：tickOnce() 里**相邻的两行**（当前 L8380–L8381）\n                    updateHat(time, dt);\n                    updateCandies(dt);\n整段换成**一行** `                witchHatApi.tick(dt, time);` —— ⚠️ 参数顺序是 (dt, time)，而原函数是 (time, dt)，写反动画速度完全不同；tick.old 已逐字给出这两行（含 16 空格缩进与换行，LF 行尾）且全文唯一（已用应用器的 countOf 核过）。它前面的 `                updateWobblers(dt);`（L8379）**必须留在原地**（wobblers 是 18.10 的共享工具），后面是 `candleP += ((candleLit ? 1 : 0) - candleP) * 0.03;`，每帧顺序一个字节都没变。★ 注：区间前紧邻的 `/* 可推拉小凳子… */`（L4693–L4729）本批**不搬**，本区间从它之后开始，与之无重叠。"
+}

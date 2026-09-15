@@ -1,0 +1,28 @@
+{
+  "id": "floor2/mirror",
+  "name": "mirror",
+  "assign": "mirrorApi",
+  "file": "src/cabin/world/floor2/mirror.js",
+  "batch": "B4",
+  "startMarker": "            /* 18.14 拱形全身镜（点击镜面泛起水波涟漪） */",
+  "endMarker": "            /* 18.15 毛茸茸大地毯（右前角与书桌之间） */",
+  "layout": [
+    {
+      "name": "MIRROR_X",
+      "value": "2.55",
+      "doc": "二楼拱形全身镜（18.14）中心 x"
+    },
+    {
+      "name": "MIRROR_Z",
+      "value": "3.60",
+      "doc": "二楼拱形全身镜（18.14）中心 z"
+    }
+  ],
+  "notes": "用到的 ctx 键：scene / L(MIRROR_X, MIRROR_Z, FY) / put / cbox / colEdge / MAT / LITMAT / rng.runtime（按需解构，勿展开 ctx）。私有顶层量 mirrorG / mirrorTilt / mirrorCv / mctx / mirrorTex / mirrorPane / mirrorStars / mirrorArchPath / drawMirror / spawnMirrorRipple 已 grep 核对：只在本段内出现，全部收进 build()；顶层 `const mirrorRipples = []` 与装饰段的 `let mirrorDirtyT = 0` 只在本段 + updateNewDecor 的 8 行里出现 ⇒ 收进 state（ripples / dirtyT）。边界：startMarker 取分区标题行（搬迁前 L5361），endMarker 取下一分区 18.15 的标题行（搬迁前 L5520）—— 被删掉的是两标题行之间的全部内容，其中包含两行 `/* ===== */` 分隔线（全文件几十处重复、不能当标记；纯注释，零像素影响）；区间内不含别的 spec 的 startMarker（已用 _j3-verify-mirror.mjs 自查）。rng：build 不消耗随机源；只有 spawnMirrorRipple 用 rng.runtime（同一个真随机源实例，调用次数与顺序未变）。★ 逐行核对（node scripts/oneoff/_j3-verify-mirror.mjs，17 项全过）：区间内 135 行几何/绘制代码 + updateNewDecor 里那 8 行，全部按原序、按原缩进逐字对上；改写只有 2 处（`mirrorG.position.set(2.55, FY, 3.60)` → MIRROR_X/MIRROR_Z；`const mirrorRipples = []` → 别名 state.ripples，同一个数组实例）；新增代码 22 行已逐条列出（模板 import / defineProp 字面量 / state 四项 / build 签名与 L 解构 / runtimeRng 别名 / 两行 state 交接 / return）。★★ 欠账：只还了一半 —— 自建射线（搬迁前 L5498–L5517：`let mirrorDown = null;` → `const mirrorRay/mirrorMouse` → 两个 renderer.domElement.addEventListener）**留给 J4**，理由是它拿不到三样东西：renderer.domElement、camera（mirrorRay.setFromCamera(mirrorMouse, camera)）、以及命中点的局部坐标（mirrorPane.worldToLocal(hit.point)）——而 installProp 的 ctx 只有 scene/L/rng/几何 DSL/材质/SND，没有 camera 与 renderer；installProp 补的 aim 通路（magicMeshes + userData.onClick）只传『激活』不传命中点，且镜子不能改走主射线（它不看遮挡，J2.6 §5 已拒绝『被家具挡住就点不到』这个行为变化）。⇒ 射线等价搬迁必须先改 monolith（给 ctx 补 camera/renderer，或让 aim 契约带 hit.point），超出本轮约定。还上的那一半：几何 + 状态 + 画布绘制 + 涟漪生成 + 每帧刷新，且已把 J4 需要的两样交出去（parts.pane 求交对象、state.spawnRipple 加涟漪入口；局部坐标换算仍是 spawnMirrorRipple((lp.x / 0.54 + 0.5) * 160, (0.5 - lp.y / 1.60) * 480)）。诚实后果：J3 期间镜面点不出涟漪，但**画面零差异**（镜面高光扫过与星星闪烁由 dirtyT 每 0.12 秒重绘驱动，时序与搬迁前一致；搬迁前也不在 build 时画第一帧）。★ 本件**不声明 interactables**（判断，不是遗漏）：搬迁前镜子没有 regMagic，若为它补 aim 条目，installProp 会把镜面 Mesh 加进 magicMeshes，准星/点击射线从此能命中镜子且变成『被挡住就点不到』——正是 J2.6 §5 拒绝的行为变化；故 J3 期间本件保持纯陈设，等 J4 用能带命中点的统一契约接管。★★ 需要人工在 monolith 侧做两件事（应用器只管几何段）：① 装配行接住句柄（assign 已声明 ⇒ 应用器写成 `const mirrorApi = installProp(mirror);`）；② 把 updateNewDecor() 里镜子那 8 行（搬迁前 L5534–L5541，`for (let i = mirrorRipples.length - 1; …` 起、`if (mirrorRipples.length || mirrorDirtyT > 0.12) { drawMirror(time); mirrorDirtyT = 0; }` 止）整段替换为 `mirrorApi.tick(dt, time);` —— **参数顺序是 (dt, time)**，而 updateNewDecor(time, dt) 自己的形参是反的（纸箱那件踩过同一个坑）。不做② = 立刻 ReferenceError（mirrorRipples 已随区间删除），装饰循环整条停摆（时钟/挂画 GIF/纸箱一起不跑）。③ `let mirrorDirtyT = 0;`（搬迁前 L5547）**必须留着别删**：scripts/verify-f03.mjs 的第 ⑥ 项断言 `let decorLastT = 0;` / `let mirrorDirtyT = 0;` / `// F0.3：装饰循环…` 三行连续存在，删掉静态门禁立刻变红；此后它是死变量（计数器已归 state.dirtyT）。★ 计数门禁提醒：射线那两行 renderer.domElement.addEventListener 随区间删除 ⇒ scripts/verify-migration.mjs 的 ④ 里 `addEventListener(` 会由 −1 变 −3，需同步 J25_DELTA（该脚本的 new THREE.Mesh/Group 计数不受本件影响：几何是原样搬走的，一增一减）。",
+  "tick": {
+    "at": "updateNewDecor()（时间/镜子涟漪/GIF/纸箱那一段，随手写函数体）",
+    "note": "8 行整段换成原地 tick 调用；let mirrorDirtyT = 0 的声明保留（verify-f03 第⑥项断言它在）。",
+    "old": "                for (let i = mirrorRipples.length - 1; i >= 0; i--) {\n                    const rp = mirrorRipples[i];\n                    rp.r += 62 * dt;\n                    rp.a = Math.max(0, 1 - rp.r / rp.max);\n                    if (rp.a <= 0.01) mirrorRipples.splice(i, 1);\n                }\n                mirrorDirtyT += dt;\n                if (mirrorRipples.length || mirrorDirtyT > 0.12) { drawMirror(time); mirrorDirtyT = 0; }",
+    "new": "                // J3（B4）：镜面涟漪的每帧分支已搬入 world/floor2/mirror.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 本函数 updateNewDecor(time, dt) 的形参是反的。\n                mirrorApi.tick(dt, time);"
+  }
+}

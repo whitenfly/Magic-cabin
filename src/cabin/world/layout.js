@@ -127,6 +127,48 @@ export function createLayout() {
   const TBL_TOP = FY + 0.80
 
   /* ══════════ J3 搬迁新增 ══════════ */
+  /** 左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）（floor1/book-pile） */
+  const BOOK_PILE_POS = { x: -3.62, y: 0, z: -1.4 }
+  /** 旋转星铃（12.9d）的组原点（x 与 12.9 左墙书架的 SFX 同值，y 是吊挂高度）（floor1/star-bell） */
+  const STARBELL_POS = { x: -3.72, y: 1.975, z: -3.05 }
+  /** 塔罗牌牌堆（12.12）的组原点（`tarotG.position`）（floor1/tarot） */
+  const TAROT_POS = { x: -0.75, y: 0, z: -2.8 }
+  /** 门口旁墙钩中心 x（挎包挂在它上面）（floor2/bag） */
+  const BAG_HOOK_X = 0.15
+  /** 墙钩中心高度 y（floor2/bag） */
+  const BAG_HOOK_Y = FY + 1.38
+  /** 墙钩中心 z（前墙内侧）（floor2/bag） */
+  const BAG_HOOK_Z = 3.825
+  /** 二楼垃圾桶中心 x（floor2/tissue-box 的抛纸终点也用它）（floor2/bin） */
+  const BIN_X = 1.85
+  /** 二楼垃圾桶中心 z（floor2/tissue-box 的抛纸终点也用它）（floor2/bin） */
+  const BIN_Z = -3.40
+  /** 垃圾桶高度（floor2/tissue-box 的桶口高度 FY + BIN_H + 0.10 由它推出）（floor2/bin） */
+  const BIN_H = 0.60
+  /** 二楼置物箱中心 x（floor2/crate 与 floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_X = 0.95
+  /** 二楼置物箱中心 z（floor2/crate 与 floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_Z = 3.48
+  /** 置物箱箱体宽（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_W = 0.68
+  /** 置物箱箱体深（魔女帽撒糖的落点判定也用，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_D = 0.55
+  /** 置物箱箱体高（CRATE_TOP 由它推出，floor2/witch-hat 共用）（floor2/crate） */
+  const CR_H = 0.32
+  /** 置物箱盖顶面高度（魔女帽的帽座 HAT_HOME_POS 与糖果落点判定，floor2/witch-hat 共用）（floor2/crate） */
+  const CRATE_TOP = FY + CR_H + 0.092
+  /** 二楼拱形全身镜（18.14）中心 x（floor2/mirror） */
+  const MIRROR_X = 2.55
+  /** 二楼拱形全身镜（18.14）中心 z（floor2/mirror） */
+  const MIRROR_Z = 3.60
+  /** 二楼书桌上的抽纸盒中心 x（floor2/tissue-box） */
+  const TISSUE_X = 1.42
+  /** 二楼书桌上的抽纸盒中心 z（floor2/tissue-box） */
+  const TISSUE_Z = -2.15
+  /** 二楼衣柜中心 x（floor2/wardrobe） */
+  const WD_X = -1.40
+  /** 二楼衣柜中心 z（floor2/wardrobe） */
+  const WD_Z = 3.55
   /** 小宝箱（12.9c）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）（floor1/chest） */
   const CHEST_POS = { x: -3.72, y: 0.805, z: -2.66 }
   /** 门口上方挂杆（含晴天娃娃 / 玻璃风铃）中心 x（floor1/hang-bar） */
@@ -158,5 +200,7 @@ export function createLayout() {
     FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
     // J3 搬迁新增
     CHEST_POS, HANGBAR_X, HANGBAR_Y, HANGBAR_Z, HG_POS, JUNK_X, JUNK_Z, RUG2_X, RUG2_Z,
+    // J3 搬迁新增
+    BOOK_PILE_POS, STARBELL_POS, TAROT_POS, BAG_HOOK_X, BAG_HOOK_Y, BAG_HOOK_Z, BIN_X, BIN_Z, BIN_H, CRATE_X, CRATE_Z, CR_W, CR_D, CR_H, CRATE_TOP, MIRROR_X, MIRROR_Z, TISSUE_X, TISSUE_Z, WD_X, WD_Z,
   }
 }

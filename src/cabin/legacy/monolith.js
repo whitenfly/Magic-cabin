@@ -42,6 +42,16 @@ import { createEnvironment } from '../systems/weather/environment.js'
 // J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
 // 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
 import { createPropInstaller } from '../app/installProp.js'
+import bookPile from '../world/floor1/bookPile.js'
+import starBell from '../world/floor1/starBell.js'
+import tarot from '../world/floor1/tarot.js'
+import bag from '../world/floor2/bag.js'
+import bin from '../world/floor2/bin.js'
+import crate from '../world/floor2/crate.js'
+import mirror from '../world/floor2/mirror.js'
+import tissueBox from '../world/floor2/tissueBox.js'
+import wardrobe from '../world/floor2/wardrobe.js'
+import witchHat from '../world/floor2/witchHat.js'
 import stools from '../world/floor1/stools.js'
 import nightstand from '../world/floor2/nightstand.js'
 import chest from '../world/floor1/chest.js'
@@ -1059,58 +1069,8 @@ export function installCabin(app) {
             }
 
             /* ---- 12.9a 左窗下魔法书堆 ---- */
-            const bookPileG = new THREE.Group();
-            bookPileG.position.set(-3.62, 0, -1.4);
-            scene.add(bookPileG);
-            const pileBooks = [];
-            let pileState = 'stacked', pileT = 0;
-            {
-                const DIMS = [
-                    [0.24, 0.058, 0.17], [0.21, 0.052, 0.155], [0.25, 0.062, 0.16],
-                    [0.24, 0.024, 0.17],
-                    [0.235, 0.055, 0.165], [0.22, 0.050, 0.15], [0.245, 0.060, 0.17],
-                    [0.22, 0.024, 0.155],
-                    [0.23, 0.056, 0.16], [0.20, 0.046, 0.15],
-                    [0.24, 0.024, 0.165],
-                    [0.235, 0.058, 0.16], [0.22, 0.055, 0.155]
-                ];
-                let cy = 0;
-                DIMS.forEach((dm, i) => {
-                    const [w, h, d] = dm;
-                    const b = new THREE.Group();
-                    const isOpen = (h < 0.03);
-                    if (isOpen) {
-                        const lp = box(w / 2 - 0.012, 0.010, d - 0.02); lp.rotation.z = 0.10;
-                        put(lp, -(w / 4 - 0.004), 0.006, 0, 0, 0, 0, b);
-                        const rp = box(w / 2 - 0.012, 0.010, d - 0.02); rp.rotation.z = -0.10;
-                        put(rp, (w / 4 - 0.004), 0.006, 0, 0, 0, 0, b);
-                        put(line([[-(w / 4) + 0.01, 0.013, -d * 0.36], [-(w / 4) + 0.03, 0.013, d * 0.34]]), 0, 0, 0, 0, 0, 0, b);
-                        put(line([[(w / 4) - 0.03, 0.013, -d * 0.34], [(w / 4) - 0.01, 0.013, d * 0.36]]), 0, 0, 0, 0, 0, 0, b);
-                    } else {
-                        put(box(w, h, d), 0, h / 2, 0, 0, 0, 0, b);
-                        put(line([[w / 2, h * 0.35, -d * 0.42], [w / 2, h * 0.35, d * 0.42]]), 0, 0, 0, 0, 0, 0, b);
-                        put(line([[w / 2, h * 0.65, -d * 0.42], [w / 2, h * 0.65, d * 0.42]]), 0, 0, 0, 0, 0, 0, b);
-                    }
-                    const fy = isOpen ? 0.014 : h / 2 + 0.004;
-                    b.userData = {
-                        sx: (floor1Rng() - 0.5) * 0.04, sy: cy, sz: (floor1Rng() - 0.5) * 0.04,
-                        sry: (floor1Rng() - 0.5) * 0.35,
-                        fx: 0.16 + i * 0.048 + (floor1Rng() - 0.5) * 0.04,
-                        fz: -(0.22 + i * 0.052 + (floor1Rng() - 0.5) * 0.06),
-                        fy, fry: floor1Rng() * Math.PI * 2
-                    };
-                    b.position.set(b.userData.sx, cy, b.userData.sz);
-                    b.rotation.y = b.userData.sry;
-                    cy += h + 0.003;
-                    bookPileG.add(b);
-                    pileBooks.push(b);
-                });
-            }
-            regMagic(bookPileG, () => {
-                if (pileState === 'stacked') { pileState = 'falling'; pileT = 0; }
-                else if (pileState === 'fallen') { pileState = 'rising'; pileT = 0; }
-            });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/bookPile.js，此处只留装配调用。
+            const bookPileApi = installProp(bookPile);
             /* ---- 12.9b 沙漏 ---- */
             // J3（B2）：几何已搬入 src/cabin/world/floor1/hourglass.js，此处只留装配调用。
             const hourglassApi = installProp(hourglass);
@@ -1118,27 +1078,8 @@ export function installCabin(app) {
             // J3（B2）：几何已搬入 src/cabin/world/floor1/chest.js，此处只留装配调用。
             const chestApi = installProp(chest);
             /* ---- 12.9d 旋转星铃 ---- */
-            let carOn = false, carP = 0;
-            const car = new THREE.Group();
-            car.position.set(SFX, 1.975, -3.05);
-            scene.add(car);
-            put(edge(new THREE.CylinderGeometry(0.075, 0.09, 0.05, 10)), 0, 0.025, 0, 0, 0, 0, car);
-            put(edge(new THREE.CylinderGeometry(0.012, 0.012, 0.32, 6)), 0, 0.21, 0, 0, 0, 0, car);
-            const carCanopy = new THREE.Group();
-            carCanopy.position.y = 0.38;
-            car.add(carCanopy);
-            put(edge(new THREE.ConeGeometry(0.11, 0.07, 10)), 0, 0.035, 0, 0, 0, 0, carCanopy);
-            const carStars = [];
-            for (let i = 0; i < 4; i++) {
-                const a = i * Math.PI / 2;
-                const sx = Math.cos(a) * 0.09, sz = Math.sin(a) * 0.09;
-                put(line([[sx, 0, sz], [sx, -0.06, sz]]), 0, 0, 0, 0, 0, 0, carCanopy);
-                const st = edge(new THREE.OctahedronGeometry(0.015));
-                put(st, sx, -0.072, sz, 0, 0, 0, carCanopy);
-                carStars.push(st);
-            }
-            regMagic(car, () => { carOn = !carOn; });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/starBell.js，此处只留装配调用。
+            const starBellApi = installProp(starBell);
             /* ---- 12.9e 大魔女坩埚 ---- */
             const STOVE_TOP = 0.58;
             const CAL_UP = 0.34;
@@ -1839,65 +1780,8 @@ export function installCabin(app) {
             regMagic(paperG, () => { if (paperRun <= 0) paperRun = PAPER_T; });
 
             /* ---- 12.12 塔罗牌牌堆 ---- */
-            const tarotG = new THREE.Group();
-            tarotG.position.set(-0.75, 0, -2.8);
-            scene.add(tarotG);
-            {
-                for (let i = 0; i < 3; i++) {
-                    const a = i * Math.PI * 2 / 3 + 0.9;
-                    logBetween([Math.cos(a) * 0.10, 0.44, Math.sin(a) * 0.10],
-                        [Math.cos(a) * 0.17, 0.02, Math.sin(a) * 0.17], 0.024, tarotG);
-                }
-                put(edge(new THREE.CylinderGeometry(0.24, 0.20, 0.035, 14)), 0, 0.46, 0, 0, 0, 0, tarotG);
-            }
-            const tarotCards = [];
-            let tarotState = 'stacked', tarotT = 0;
-            const TAROT_N = 9;
-            for (let i = 0; i < TAROT_N; i++) {
-                const c = new THREE.Group();
-                put(box(0.15, 0.005, 0.23), 0, 0, 0, 0, 0, 0, c);
-                put(edge(new THREE.TorusGeometry(0.034, 0.004, 4, 18)), 0, 0.004, 0, Math.PI / 2, 0, 0, c);
-                put(edge(new THREE.OctahedronGeometry(0.011)), 0, 0.0055, 0, 0, 0, 0, c);
-                for (const s of [-1, 1])
-                    put(line([[s * 0.052, 0.004, -0.075], [s * 0.052, 0.004, 0.075]]), 0, 0, 0, 0, 0, 0, c);
-                put(line([[-0.055, 0.004, -0.095], [0.055, 0.004, -0.095]]), 0, 0, 0, 0, 0, 0, c);
-                put(line([[-0.055, 0.004, 0.095], [0.055, 0.004, 0.095]]), 0, 0, 0, 0, 0, 0, c);
-                const sy = 0.482 + i * 0.0065;
-                const sry = (i % 2 ? 1 : -1) * (0.08 + i * 0.045);
-                c.userData = {
-                    sx: (floor1Rng() - 0.5) * 0.01, sy, sz: (floor1Rng() - 0.5) * 0.01, sry,
-                    fa: i * (Math.PI * 2 * 1.05 / TAROT_N),
-                    fr: 0.15 + i * 0.022,
-                    fy: 1.05 + i * 0.14,
-                    px: 0, py: 0, pz: 0, prx: 0, pry: 0, prz: 0
-                };
-                c.position.set(c.userData.sx, sy, c.userData.sz);
-                c.rotation.y = sry;
-                tarotG.add(c);
-                tarotCards.push(c);
-            }
-            function tarotPose(u, i, t) {
-                return {
-                    x: Math.cos(u.fa) * u.fr,
-                    y: u.fy + Math.sin(t * 1.6 + i * 0.9) * 0.03,
-                    z: Math.sin(u.fa) * u.fr,
-                    ry: u.fa + Math.PI / 2 + Math.sin(t * 0.8 + i * 0.7) * 0.25,
-                    rx: -0.30 + Math.sin(t * 0.6 + i) * 0.08,
-                    rz: Math.sin(t * 0.7 + i * 1.3) * 0.10
-                };
-            }
-            regMagic(tarotG, () => {
-                if (tarotState === 'stacked') { tarotState = 'flying'; tarotT = 0; }
-                else if (tarotState === 'floating') {
-                    for (const c of tarotCards) {
-                        const u = c.userData;
-                        u.px = c.position.x; u.py = c.position.y; u.pz = c.position.z;
-                        u.prx = c.rotation.x; u.pry = c.rotation.y; u.prz = c.rotation.z;
-                    }
-                    tarotState = 'returning'; tarotT = 0;
-                }
-            });
-
+            // J3（B3）：几何已搬入 src/cabin/world/floor1/tarot.js，此处只留装配调用。
+            const tarotApi = installProp(tarot);
             /* ---- 12.13 暖桌（八角桌板 + 等腰梯形垂帘 + 四角倒三角填补）+ 收音机 + 果盆橘子 + 方坐垫 ---- */
             let kotatsuOn = true;
             let kotGlowMat = null;
@@ -4436,260 +4320,14 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 衣柜 */
-            /* ========================================================== */
-            const WD_W = 1.25;
-            const WD_D = 0.58;
-            const WD_H = 1.95;
-            const WD_COL = 0xc9b391;
-            const WD_DARK = 0x9a7d55;
-            const wardrobeG = new THREE.Group();
-            wardrobeG.position.set(-1.40, FY, 3.55);
-            wardrobeG.rotation.y = Math.PI;
-            scene.add(wardrobeG);
-            {
-                put(cbox(WD_W, WD_H, 0.04, WD_COL), 0, WD_H / 2, -WD_D / 2 + 0.02, 0, 0, 0, wardrobeG);
-                put(cbox(0.04, WD_H, WD_D, WD_COL), -WD_W / 2 + 0.02, WD_H / 2, 0, 0, 0, 0, wardrobeG);
-                put(cbox(0.04, WD_H, WD_D, WD_COL), WD_W / 2 - 0.02, WD_H / 2, 0, 0, 0, 0, wardrobeG);
-                put(cbox(WD_W, 0.04, WD_D, WD_COL), 0, WD_H - 0.02, 0, 0, 0, 0, wardrobeG);
-                put(cbox(WD_W, 0.45, WD_D, WD_COL), 0, 0.225, 0, 0, 0, 0, wardrobeG);
-                const wardrobeDrawerG = new THREE.Group();
-                wardrobeDrawerG.position.set(0, 0.20, WD_D / 2 - 0.10);
-                wardrobeG.add(wardrobeDrawerG);
-                {
-                    const p = crboxCol(WD_W - 0.08, 0.35, 0.05, 0.01, WD_DARK);
-                    p.position.set(0, 0, 0.05);
-                    wardrobeDrawerG.add(p);
-                    const knob = edge(new THREE.CylinderGeometry(0.017, 0.017, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(0, 0, 0.092);
-                    wardrobeDrawerG.add(knob);
-                    const drawerInsideMat = new THREE.MeshBasicMaterial({ color: WD_DARK, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                    const insideGeo = new THREE.BoxGeometry(WD_W - 0.12, 0.25, WD_D - 0.2);
-                    const inside = new THREE.Group();
-                    inside.add(new THREE.Mesh(insideGeo, drawerInsideMat));
-                    inside.add(new THREE.LineSegments(new THREE.EdgesGeometry(insideGeo), MAT));
-                    inside.position.set(0, 0, -0.10);
-                    wardrobeDrawerG.add(inside);
-                }
-                regSlide(wardrobeDrawerG, 'z', 0.25);
-                regMagic(wardrobeDrawerG, () => {
-                    const sl = wardrobeDrawerG.userData.slide;
-                    if (!sl.open && !doorsBothOpen()) { SND.play('ui'); return; }
-                    sl.open = !sl.open;
-                });
-                const ROD_Y = 1.50;
-                const ROD_Z = -0.05;
-                for (const sx of [-1, 1]) {
-                    put(cbox(0.07, 0.07, 0.07, WD_DARK), sx * (WD_W / 2 - 0.06), ROD_Y, ROD_Z, 0, 0, 0, wardrobeG);
-                }
-                const rod = edge(new THREE.CylinderGeometry(0.016, 0.016, WD_W - 0.10, 8));
-                rod.rotation.z = Math.PI / 2;
-                rod.position.set(0, ROD_Y, ROD_Z);
-                wardrobeG.add(rod);
-
-                function makeHanger(hx, clothCol) {
-                    const hg = new THREE.Group();
-                    hg.position.set(hx, ROD_Y, ROD_Z);
-                    hg.rotation.y = Math.PI / 2;
-                    wardrobeG.add(hg);
-                    const hook = edge(new THREE.TorusGeometry(0.026, 0.005, 6, 12));
-                    hg.add(hook);
-                    put(edge(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 6)), 0, -0.04, 0, 0, 0, 0, hg);
-                    logBetween([0, -0.065, 0], [-0.15, -0.17, 0], 0.007, hg);
-                    logBetween([0, -0.065, 0], [0.15, -0.17, 0], 0.007, hg);
-                    logBetween([-0.15, -0.17, 0], [0.15, -0.17, 0], 0.007, hg);
-                    if (clothCol !== null && clothCol !== undefined) {
-                        const cl = crboxCol(0.27, 0.30, 0.03, 0.035, clothCol);
-                        cl.position.set(0, -0.34, 0);
-                        hg.add(cl);
-                        hg.add(iline([[-0.05, -0.20, 0.018], [0, -0.23, 0.018], [0.05, -0.20, 0.018]]));
-                    }
-                    regWobble(hg);
-                }
-                makeHanger(-0.40, 0xe3b3b8);
-                makeHanger(-0.12, null);
-                makeHanger(0.34, 0xa9c6e2);
-                const stackCols = [0xd9a5a0, 0xbcd4b0, 0xe6d9b8, 0xb9aede];
-                let syL = 0.45;
-                for (let i = 0; i < 4; i++) {
-                    const w = 0.35 - (i % 2) * 0.03;
-                    const d = 0.32 - (i % 2) * 0.02;
-                    const c = crboxCol(w, 0.07, d, 0.032, stackCols[i % stackCols.length]);
-                    c.position.set(-0.28, syL + 0.035, (i % 2 ? -0.012 : 0.010));
-                    c.rotation.y = (i % 2 ? 0.05 : -0.06);
-                    wardrobeG.add(c);
-                    syL += 0.07;
-                }
-                let syR = 0.45;
-                for (let i = 0; i < 4; i++) {
-                    const w = 0.35 - (i % 2) * 0.03;
-                    const d = 0.32 - (i % 2) * 0.02;
-                    const c = crboxCol(w, 0.07, d, 0.032, stackCols[(i + 2) % stackCols.length]);
-                    c.position.set(0.28, syR + 0.035, (i % 2 ? -0.012 : 0.010));
-                    c.rotation.y = (i % 2 ? 0.05 : -0.06);
-                    wardrobeG.add(c);
-                    syR += 0.07;
-                }
-                const doorW = WD_W / 2 - 0.02;
-                const doorH = WD_H - 0.10;
-                const dl = new THREE.Group();
-                dl.userData = { base: 0, delta: -1.8 };
-                dl.position.set(-WD_W / 2 + 0.02, WD_H / 2, WD_D / 2 + 0.025);
-                wardrobeG.add(dl);
-                {
-                    const p = crboxCol(doorW - 0.03, doorH, 0.035, 0.012, WD_COL);
-                    p.position.set(doorW / 2, 0, 0);
-                    dl.add(p);
-                    const hw = doorW / 2 - 0.10, hh = doorH / 2 - 0.14;
-                    dl.add(iline([
-                        [doorW / 2 - hw, -hh, 0.022], [doorW / 2 + hw, -hh, 0.022],
-                        [doorW / 2 + hw, hh, 0.022], [doorW / 2 - hw, hh, 0.022],
-                        [doorW / 2 - hw, -hh, 0.022]
-                    ]));
-                    const knob = edge(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(doorW - 0.10, 0, 0.038);
-                    dl.add(knob);
-                }
-                registerHinge(dl);
-                const dr = new THREE.Group();
-                dr.userData = { base: 0, delta: 1.8 };
-                dr.position.set(WD_W / 2 - 0.02, WD_H / 2, WD_D / 2 + 0.025);
-                wardrobeG.add(dr);
-                {
-                    const p = crboxCol(doorW - 0.03, doorH, 0.035, 0.012, WD_COL);
-                    p.position.set(-doorW / 2, 0, 0);
-                    dr.add(p);
-                    const hw = doorW / 2 - 0.10, hh = doorH / 2 - 0.14;
-                    dr.add(iline([
-                        [-doorW / 2 - hw, -hh, 0.022], [-doorW / 2 + hw, -hh, 0.022],
-                        [-doorW / 2 + hw, hh, 0.022], [-doorW / 2 - hw, hh, 0.022],
-                        [-doorW / 2 - hw, -hh, 0.022]
-                    ]));
-                    const knob = edge(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 8));
-                    knob.rotation.x = Math.PI / 2;
-                    knob.position.set(-(doorW - 0.10), 0, 0.038);
-                    dr.add(knob);
-                }
-                registerHinge(dr);
-                /* 关衣柜门时若底部抽屉还开着，先收抽屉再关门，避免穿模；抽屉必须两扇门都开才能拉出 */
-                const doorsBothOpen = () => dl.userData.spring.open && dr.userData.spring.open && !dl.userData.closing && !dr.userData.closing;
-                const closeWardrobeDoor = door => {
-                    const s = door.userData.spring;
-                    if (!s.open || !wardrobeDrawerG.userData.slide.open) { s.open = !s.open; SND.play('toggle'); return; }
-                    wardrobeDrawerG.userData.slide.open = false; SND.play('toggle');
-                    door.userData.closing = true;
-                    setTimeout(() => { door.userData.closing = false; s.open = false; SND.play('toggle'); }, 420);
-                };
-                dl.userData.onToggle = () => closeWardrobeDoor(dl);
-                dr.userData.onToggle = () => closeWardrobeDoor(dr);
-                dl.userData.aimLabel = dr.userData.aimLabel = '开 / 关衣柜门';
-                dl.userData.bounce = dr.userData.bounce = true; /* 关门回弹打到关闭位反弹，不向内穿进柜体 */
-                wardrobeDrawerG.userData.aimLabel = '开 / 关抽屉';
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/wardrobe.js，此处只留装配调用。
+            installProp(wardrobe);
             /* 18.11 墙钩挎包 / 置物箱与魔女帽 / 可推拉小凳子 */
-            /* ========================================================== */
-            const wallHookZ = 3.825;
-            const hookBaseY = FY + 1.38;
-            const bagHookX = 0.15;
-
-            // J 形墙钩：钩身向下再向上勾起，开口朝上
-            function makeWallHook(x, y, z) {
-                const g = new THREE.Group();
-                put(cbox(0.06, 0.09, 0.028, 0x9a7d55), 0, 0.03, 0.014, 0, 0, 0, g);
-                const hookCurve = new THREE.CatmullRomCurve3([
-                    V(0, 0.05, 0.012),
-                    V(0, 0.015, -0.008),
-                    V(0, -0.02, -0.038),
-                    V(0, -0.06, -0.055),
-                    V(0, -0.048, -0.078),
-                    V(0, -0.012, -0.082)
-                ]);
-                const tubeGeo = new THREE.TubeGeometry(hookCurve, 32, 0.008, 6, false);
-                const hookMat = LITMAT(0x5a4128, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                g.add(new THREE.Mesh(tubeGeo, hookMat));
-                g.add(new THREE.LineSegments(new THREE.EdgesGeometry(tubeGeo, 20), MAT));
-                const tip = edge(new THREE.SphereGeometry(0.011, 8, 6));
-                tip.position.set(0, -0.012, -0.082);
-                g.add(tip);
-                g.position.set(x, y, z);
-                scene.add(g);
-                return g;
-            }
-
-            makeWallHook(bagHookX, hookBaseY, wallHookZ);
-
-            /* —— 挎包：两条绷紧的背带从包顶两角拉向钩上挂环，构成三角 —— */
-            const bagG = new THREE.Group();
-            const bagHookPt = V(bagHookX, hookBaseY - 0.055, wallHookZ - 0.05);
-            const BAG_DROP = 0.50;
-            bagG.position.set(bagHookPt.x, bagHookPt.y - BAG_DROP, bagHookPt.z + 0.02);
-            scene.add(bagG);
-            {
-                const strapMat = LITMAT(0x4a2a1a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-
-                // 包身
-                bagG.add(crboxCol(0.24, 0.24, 0.10, 0.03, 0x8a5a3a));
-                // 包盖
-                const flap = crboxCol(0.245, 0.018, 0.108, 0.012, 0x6a3a2a);
-                flap.position.y = 0.125;
-                bagG.add(flap);
-                const front = crboxCol(0.245, 0.095, 0.016, 0.012, 0x6a3a2a);
-                front.position.set(0, 0.072, 0.051);
-                bagG.add(front);
-                // 金色搭扣
-                put(cbox(0.048, 0.03, 0.014, 0xc9a05a), 0, 0.052, 0.062, 0, 0, 0, bagG);
-                // 缝线装饰
-                bagG.add(iline([[-0.10, -0.11, 0.052], [0.10, -0.11, 0.052]]));
-                bagG.add(iline([[-0.10, -0.02, 0.052], [0.10, -0.02, 0.052]]));
-
-                // 顶部挂环
-                const hookLocal = V(0, BAG_DROP, -0.02);
-                const ringGeo = new THREE.TorusGeometry(0.022, 0.006, 6, 14);
-                const ring = new THREE.Mesh(ringGeo, strapMat);
-                ring.add(new THREE.LineSegments(new THREE.EdgesGeometry(ringGeo), MAT));
-                ring.rotation.y = Math.PI / 2;
-                ring.position.copy(hookLocal);
-                bagG.add(ring);
-
-                // 两条绷紧的背带
-                const strapTop = V(0, hookLocal.y - 0.02, hookLocal.z);
-                function tautStrapGeo(x0) {
-                    const from = V(x0, 0.115, 0.015);
-                    const mid = from.clone().lerp(strapTop, 0.5);
-                    mid.y -= 0.005;
-                    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([from, mid, strapTop]), 24, 0.008, 6, false);
-                }
-                const strapLGeo = tautStrapGeo(-0.095);
-                bagG.add(new THREE.Mesh(strapLGeo, strapMat));
-                bagG.add(new THREE.LineSegments(new THREE.EdgesGeometry(strapLGeo, 20), MAT));
-                const strapRGeo = tautStrapGeo(0.095);
-                bagG.add(new THREE.Mesh(strapRGeo, strapMat));
-                bagG.add(new THREE.LineSegments(new THREE.EdgesGeometry(strapRGeo, 20), MAT));
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/bag.js，此处只留装配调用。
+            installProp(bag);
             /* 置物箱（挎包旁边地上）：加宽 + 简化 + 颜色统一 */
-            /* ========================================================== */
-            const crateX = 0.95, crateZ = 3.48;
-            const CR_W = 0.68, CR_D = 0.55, CR_H = 0.32;
-            const CRATE_TOP = FY + CR_H + 0.092;
-            {
-                const CR_COL = 0xa07850;
-                const CR_DARK = 0x8a6238;
-                // 箱体
-                put(cbox(CR_W, CR_H, CR_D, CR_COL), crateX, FY + CR_H / 2, crateZ, 0, 0, 0);
-                // 箱盖沿（略大一圈）
-                put(cbox(CR_W + 0.04, 0.07, CR_D + 0.04, CR_DARK), crateX, FY + CR_H + 0.035, crateZ, 0, 0, 0);
-                // 盖顶面板
-                put(cbox(CR_W - 0.10, 0.022, CR_D - 0.10, CR_COL), crateX, FY + CR_H + 0.081, crateZ, 0, 0, 0);
-                // 正面搭扣（朝向房间一侧）
-                put(cbox(0.10, 0.11, 0.02, CR_DARK), crateX, FY + CR_H / 2, crateZ - CR_D / 2 - 0.006, 0, 0, 0);
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/crate.js，此处只留装配调用。
+            installProp(crate);
             /* 可推拉小凳子（挎包下方、箱子旁的地上，点击拉出/推回） */
             /* ========================================================== */
             const stoolG = new THREE.Group();
@@ -4729,452 +4367,14 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 魔女帽：更大帽檐 + 低弯折尖，点击飞起撒糖果 */
-            /* ========================================================== */
-            const hatG = new THREE.Group();
-            const HAT_HOME_POS = V(crateX, CRATE_TOP, crateZ);
-            const HAT_HOVER_POS = V(crateX - 0.05, FY + 1.45, crateZ - 0.10);
-            const HAT_TILT = 1.35;
-            hatG.position.copy(HAT_HOME_POS);
-            hatG.rotation.z = 0.05;
-            scene.add(hatG);
-            {
-                const hatMat = LITMAT(0x2a1a3a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const ribbonMat = LITMAT(0x5a2a4a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const buckleMat = LITMAT(0xc9a05a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-
-                // 超大帽檐
-                const brimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.022, 22);
-                const brim = new THREE.Mesh(brimGeo, hatMat);
-                brim.add(new THREE.LineSegments(new THREE.EdgesGeometry(brimGeo, 20), MAT));
-                brim.position.y = 0.011;
-                hatG.add(brim);
-
-                // 帽身（锥台，底接帽檐）
-                const bodyGeo = new THREE.CylinderGeometry(0.052, 0.16, 0.30, 18);
-                const body = new THREE.Mesh(bodyGeo, hatMat);
-                body.add(new THREE.LineSegments(new THREE.EdgesGeometry(bodyGeo, 20), MAT));
-                body.position.y = 0.17;
-                hatG.add(body);
-
-                // 弯折关节球（弯折点 y = 0.32）
-                const jointGeo = new THREE.SphereGeometry(0.052, 10, 8);
-                const joint = new THREE.Mesh(jointGeo, hatMat);
-                joint.add(new THREE.LineSegments(new THREE.EdgesGeometry(jointGeo, 15), MAT));
-                joint.position.y = 0.32;
-                hatG.add(joint);
-
-                // 弯折帽尖（从低处关节向侧上方伸出并微微下垂）
-                const tipGeo = new THREE.ConeGeometry(0.052, 0.17, 12);
-                const tip = new THREE.Mesh(tipGeo, hatMat);
-                tip.add(new THREE.LineSegments(new THREE.EdgesGeometry(tipGeo, 15), MAT));
-                tip.rotation.z = -1.0;
-                tip.position.set(0.072, 0.366, 0);
-                hatG.add(tip);
-
-                // 缎带环
-                const bandGeo = new THREE.TorusGeometry(0.136, 0.015, 6, 20);
-                const band = new THREE.Mesh(bandGeo, ribbonMat);
-                band.add(new THREE.LineSegments(new THREE.EdgesGeometry(bandGeo), MAT));
-                band.rotation.x = Math.PI / 2;
-                band.position.y = 0.075;
-                hatG.add(band);
-
-                // 金色带扣
-                const buckleGeo = new THREE.BoxGeometry(0.04, 0.03, 0.012);
-                const buckle = new THREE.Mesh(buckleGeo, buckleMat);
-                buckle.add(new THREE.LineSegments(new THREE.EdgesGeometry(buckleGeo), MAT));
-                buckle.position.set(0, 0.075, 0.157);
-                hatG.add(buckle);
-            }
-
-            /* —— 魔女帽交互：飞起悬浮撒糖果后落回 —— */
-            const hatState = { phase: 'idle', t0: 0 };
-            let hatCandyT = 0;
-            const candies = [];
-            const CANDY_COLORS = [0xe05555, 0xf0973c, 0xf0d355, 0x66c266, 0x5a9ad8, 0xa86ac9, 0xe07ab0, 0x8adfcb];
-
-            function makeCandy() {
-                const g = new THREE.Group();
-                const col = CANDY_COLORS[Math.floor(runtimeRng() * CANDY_COLORS.length)];
-                const mat = new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const type = Math.floor(runtimeRng() * 3);
-                if (type === 0) {
-                    // 包裹糖：圆球 + 两侧糖纸角
-                    const sg = new THREE.SphereGeometry(0.02, 10, 8);
-                    const s = new THREE.Mesh(sg, mat);
-                    s.add(new THREE.LineSegments(new THREE.EdgesGeometry(sg, 15), MAT));
-                    g.add(s);
-                    for (const sd of [-1, 1]) {
-                        const cg = new THREE.ConeGeometry(0.012, 0.022, 6);
-                        cg.rotateZ(sd * Math.PI / 2);
-                        cg.translate(sd * 0.03, 0, 0);
-                        const cm = new THREE.Mesh(cg, mat);
-                        cm.add(new THREE.LineSegments(new THREE.EdgesGeometry(cg, 20), MAT));
-                        g.add(cm);
-                    }
-                } else if (type === 1) {
-                    // 方块糖
-                    g.add(crboxCol(0.036, 0.036, 0.036, 0.008, col));
-                } else {
-                    // 圆环糖
-                    const tg = new THREE.TorusGeometry(0.018, 0.009, 6, 14);
-                    const tm = new THREE.Mesh(tg, mat);
-                    tm.add(new THREE.LineSegments(new THREE.EdgesGeometry(tg), MAT));
-                    g.add(tm);
-                }
-                scene.add(g);
-                return g;
-            }
-
-            function spawnCandy() {
-                const obj = makeCandy();
-                const mouth = V(Math.sin(hatG.rotation.z), -Math.cos(hatG.rotation.z), 0);
-                const p = hatG.position.clone().addScaledVector(mouth, 0.03);
-                p.x += (runtimeRng() - 0.5) * 0.06;
-                p.y += (runtimeRng() - 0.5) * 0.04;
-                p.z += (runtimeRng() - 0.5) * 0.06;
-                obj.position.copy(p);
-                obj.rotation.set(runtimeRng() * 6.28, runtimeRng() * 6.28, runtimeRng() * 6.28);
-                candies.push({
-                    obj: obj,
-                    v: mouth.clone().multiplyScalar(0.35 + runtimeRng() * 0.35)
-                        .add(V((runtimeRng() - 0.5) * 0.3, 0.1 + runtimeRng() * 0.3, (runtimeRng() - 0.62) * 0.5)),
-                    av: V((runtimeRng() - 0.5) * 10, (runtimeRng() - 0.5) * 10, (runtimeRng() - 0.5) * 10),
-                    r: 0.024,
-                    onCrate: false,
-                    resting: false, restT: 0,
-                    dying: false, dieT: 0
-                });
-            }
-
-            function updateHat(time, dt) {
-                const s = hatState;
-                if (s.phase === 'idle') return;
-                const e = time - s.t0;
-                if (s.phase === 'rising') {
-                    const D = 0.9;
-                    const k = smooth(Math.min(e / D, 1));
-                    hatG.position.lerpVectors(HAT_HOME_POS, HAT_HOVER_POS, k);
-                    hatG.position.y += Math.sin(k * Math.PI) * 0.18;
-                    hatG.rotation.z = 0.05 + (HAT_TILT - 0.05) * k;
-                    if (e >= D) {
-                        s.phase = 'floating';
-                        s.t0 = time;
-                        hatCandyT = 0.3;
-                    }
-                } else if (s.phase === 'floating') {
-                    const D = 3.4;
-                    hatG.position.copy(HAT_HOVER_POS);
-                    hatG.position.y += Math.sin(time * 2.6) * 0.03;
-                    hatG.rotation.z = HAT_TILT + Math.sin(time * 2.0) * 0.10;
-                    hatG.rotation.x = Math.sin(time * 1.5) * 0.07;
-                    hatCandyT -= dt;
-                    if (e < 2.1 && hatCandyT <= 0) {
-                        hatCandyT = 0.13;
-                        spawnCandy();
-                    }
-                    if (e >= D) {
-                        s.phase = 'returning';
-                        s.t0 = time;
-                    }
-                } else if (s.phase === 'returning') {
-                    const D = 0.9;
-                    const k = smooth(Math.min(e / D, 1));
-                    hatG.position.lerpVectors(HAT_HOVER_POS, HAT_HOME_POS, k);
-                    hatG.position.y += Math.sin(k * Math.PI) * 0.12;
-                    hatG.rotation.z = HAT_TILT + (0.05 - HAT_TILT) * k;
-                    hatG.rotation.x = Math.sin(time * 1.5) * 0.07 * (1 - k);
-                    if (e >= D) {
-                        hatG.position.copy(HAT_HOME_POS);
-                        hatG.rotation.set(0, 0, 0.05);
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
-            function updateCandies(dt) {
-                for (let i = candies.length - 1; i >= 0; i--) {
-                    const c = candies[i];
-                    if (c.dying) {
-                        c.dieT += dt;
-                        const k = Math.min(c.dieT / 0.5, 1);
-                        c.obj.scale.setScalar(Math.max(0.001, 1 - k));
-                        if (k >= 1) {
-                            scene.remove(c.obj);
-                            c.obj.traverse(o => {
-                                if (o.geometry) o.geometry.dispose();
-                                if (o.material) o.material.dispose();
-                            });
-                            candies.splice(i, 1);
-                        }
-                        continue;
-                    }
-                    if (c.resting) {
-                        c.restT += dt;
-                        if (c.restT > (c.onCrate ? 0.8 : 3.2)) {
-                            c.dying = true;
-                            c.dieT = 0;
-                        }
-                        continue;
-                    }
-                    c.v.y -= 3.0 * dt;
-                    c.obj.position.addScaledVector(c.v, dt);
-                    c.obj.rotation.x += c.av.x * dt;
-                    c.obj.rotation.y += c.av.y * dt;
-                    c.obj.rotation.z += c.av.z * dt;
-                    let floorY = FY;
-                    if (Math.abs(c.obj.position.x - crateX) < CR_W / 2 + 0.02 &&
-                        Math.abs(c.obj.position.z - crateZ) < CR_D / 2 + 0.02) {
-                        floorY = CRATE_TOP;
-                    }
-                    if (c.obj.position.y < floorY + c.r) {
-                        c.obj.position.y = floorY + c.r;
-                        c.onCrate = (floorY > FY + 0.1);
-                        if (Math.abs(c.v.y) > 0.55) {
-                            c.v.y = -c.v.y * 0.42;
-                            c.v.x *= 0.72;
-                            c.v.z *= 0.72;
-                            c.av.multiplyScalar(0.6);
-                        } else {
-                            c.v.y = 0;
-                            c.v.x *= 0.8;
-                            c.v.z *= 0.8;
-                            c.av.multiplyScalar(0.6);
-                            if (c.v.length() < 0.05) {
-                                c.resting = true;
-                                c.restT = 0;
-                                c.v.set(0, 0, 0);
-                            }
-                        }
-                    }
-                }
-            }
-
-            regMagic(hatG, () => {
-                if (hatState.phase !== 'idle') return;
-                hatState.phase = 'rising';
-                hatState.t0 = clock.now;
-            });
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/witchHat.js，此处只留装配调用。
+            const witchHatApi = installProp(witchHat);
             /* 垃圾桶 */
-            /* ========================================================== */
-            const BIN_X = 1.85;
-            const BIN_Z = -3.40;
-            const BIN_H = 0.60;
-            const BIN_R = 0.26;
-            const binG = new THREE.Group();
-            binG.position.set(BIN_X, FY, BIN_Z);
-            scene.add(binG);
-            {
-                const wallG = new THREE.CylinderGeometry(BIN_R, BIN_R - 0.03, BIN_H, 16, 1, true);
-                const wall = new THREE.Mesh(wallG, LITMAT(0xeef0ec, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                wall.position.y = BIN_H / 2;
-                binG.add(wall);
-                const bottomGeo = new THREE.CircleGeometry(BIN_R - 0.026, 16);
-                const bottom = new THREE.Mesh(bottomGeo, LITMAT(0xe3e6e3, { side: THREE.DoubleSide }));
-                bottom.rotation.x = -Math.PI / 2;
-                bottom.position.y = 0.008;
-                binG.add(bottom);
-                const bottomEdgeGeo = new THREE.EdgesGeometry(bottomGeo);
-                const bottomEdge = new THREE.LineSegments(bottomEdgeGeo, MAT);
-                bottomEdge.rotation.x = -Math.PI / 2;
-                bottomEdge.position.y = 0.008;
-                binG.add(bottomEdge);
-                const rim = edge(new THREE.TorusGeometry(BIN_R + 0.003, 0.014, 6, 20));
-                rim.rotation.x = Math.PI / 2;
-                rim.position.y = BIN_H;
-                binG.add(rim);
-                for (let i = 0; i < 6; i++) {
-                    const a = i * Math.PI / 3;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.13, 0.065, Math.sin(a) * 0.13);
-                    pb.rotation.y = a;
-                    binG.add(pb);
-                }
-                for (let i = 0; i < 6; i++) {
-                    const a = i * Math.PI / 3 + Math.PI / 6;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.13, 0.16, Math.sin(a) * 0.13);
-                    pb.rotation.y = a + 0.7;
-                    binG.add(pb);
-                }
-                for (let i = 0; i < 3; i++) {
-                    const a = i * Math.PI * 2 / 3;
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(Math.cos(a) * 0.105, 0.26, Math.sin(a) * 0.105);
-                    pb.rotation.y = a + 1.3;
-                    binG.add(pb);
-                }
-                {
-                    const pb = crumpleBall(0.05);
-                    pb.position.set(0, 0.26, 0);
-                    pb.rotation.y = 0.8;
-                    binG.add(pb);
-                }
-                const boxA = cbox(0.09, 0.05, 0.07, 0xcf8a76);
-                boxA.position.set(0.11, 0.34, 0.02);
-                boxA.rotation.y = 0.5;
-                binG.add(boxA);
-                const boxB = cbox(0.09, 0.05, 0.07, 0x8fb4c9);
-                boxB.position.set(-0.10, 0.34, -0.06);
-                boxB.rotation.y = -0.4;
-                binG.add(boxB);
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/bin.js，此处只留装配调用。
+            installProp(bin);
             /* 抽纸盒 */
-            /* ========================================================== */
-            const TISSUE_X = 1.42;
-            const TISSUE_Z = -2.15;
-            const tissueBoxG = new THREE.Group();
-            tissueBoxG.position.set(TISSUE_X, TBL_TOP, TISSUE_Z);
-            tissueBoxG.rotation.y = 0.22;
-            scene.add(tissueBoxG);
-            let standbyPaper = null;
-            {
-                const body = crboxCol(0.22, 0.13, 0.16, 0.015, 0xa9c29b);
-                body.position.y = 0.065;
-                tissueBoxG.add(body);
-                const slot = cbox(0.13, 0.008, 0.03, 0x4e5a4e);
-                slot.position.y = 0.132;
-                tissueBoxG.add(slot);
-                standbyPaper = new THREE.Group();
-                const sb = crboxCol(0.10, 0.07, 0.005, 0.004, 0xfdfdf6);
-                standbyPaper.add(sb);
-                standbyPaper.add(iline([[-0.03, -0.028, 0.004], [0.032, -0.028, 0.004]]));
-                standbyPaper.position.set(0, 0.168, 0);
-                standbyPaper.rotation.x = 0.06;
-                tissueBoxG.add(standbyPaper);
-            }
-            const SLOT_POS = V(TISSUE_X, TBL_TOP + 0.135, TISSUE_Z);
-            const DESK_REST = V(2.05, TBL_TOP + 0.008, -2.00);
-            const BIN_MOUTH = V(BIN_X, FY + BIN_H + 0.10, BIN_Z);
-            const BIN_FALL = V(BIN_X, FY + 0.18, BIN_Z);
-            const tissuePaperG = new THREE.Group();
-            tissuePaperG.visible = false;
-            scene.add(tissuePaperG);
-            const paperFlat = new THREE.Group();
-            {
-                const sheet = crboxCol(0.10, 0.15, 0.005, 0.004, 0xfdfdf6);
-                sheet.position.y = 0.075;
-                paperFlat.add(sheet);
-                paperFlat.add(iline([[-0.025, 0.03, 0.004], [-0.032, 0.12, 0.004]]));
-                paperFlat.add(iline([[0.025, 0.03, 0.004], [0.018, 0.12, 0.004]]));
-            }
-            tissuePaperG.add(paperFlat);
-            const paperBallFly = crumpleBall(0.05);
-            paperBallFly.visible = false;
-            tissuePaperG.add(paperBallFly);
-            const tissueState = { phase: 'idle', t: 0 };
-            let standbyAnimT = -1;
-            regMagic(tissueBoxG, function () {
-                if (tissueState.phase !== 'idle') return;
-                tissueState.phase = 'rise';
-                tissueState.t = 0;
-                standbyAnimT = 0;
-                paperFlat.visible = true;
-                paperFlat.scale.set(1, 0.15, 1);
-                paperFlat.rotation.set(0, 0, 0);
-                paperFlat.position.set(0, 0, 0);
-                paperBallFly.visible = false;
-                paperBallFly.scale.setScalar(1);
-                tissuePaperG.rotation.set(0, 0.22, 0);
-                tissuePaperG.position.copy(SLOT_POS);
-                tissuePaperG.visible = true;
-            });
-            regMagic(tissuePaperG, function () {
-                if (tissueState.phase !== 'rest') return;
-                tissueState.phase = 'crumple';
-                tissueState.t = 0;
-            });
-
-            function updateTissue(time, dt) {
-                const s = tissueState;
-                if (standbyAnimT >= 0) {
-                    standbyAnimT += dt;
-                    const e = standbyAnimT;
-                    if (e < 0.35) {
-                        standbyPaper.scale.y = 1 - 0.78 * smooth(e / 0.35);
-                    } else if (e < 0.75) {
-                        standbyPaper.scale.y = 0.22 + 0.78 * smooth((e - 0.35) / 0.40);
-                    } else {
-                        standbyPaper.scale.y = 1;
-                        standbyAnimT = -1;
-                    }
-                }
-                if (s.phase === 'idle') return;
-                s.t += dt;
-                const e = s.t;
-                if (s.phase === 'rise') {
-                    const k = smooth(Math.min(e / 0.50, 1));
-                    paperFlat.scale.y = 0.15 + 0.85 * k;
-                    if (e >= 0.50) {
-                        paperFlat.scale.y = 1;
-                        s.phase = 'lift';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'lift') {
-                    const k = smooth(Math.min(e / 0.30, 1));
-                    tissuePaperG.position.y = SLOT_POS.y + 0.10 * k;
-                    if (e >= 0.30) {
-                        s.phase = 'lay';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'lay') {
-                    const k = smooth(Math.min(e / 0.45, 1));
-                    const from = V(SLOT_POS.x, SLOT_POS.y + 0.10, SLOT_POS.z);
-                    tissuePaperG.position.copy(arcPos(from, DESK_REST, k, 0.03));
-                    paperFlat.rotation.x = -Math.PI / 2 * k;
-                    if (e >= 0.45) {
-                        tissuePaperG.position.copy(DESK_REST);
-                        paperFlat.rotation.x = -Math.PI / 2;
-                        s.phase = 'rest';
-                    }
-                } else if (s.phase === 'crumple') {
-                    const k = smooth(Math.min(e / 0.70, 1));
-                    const sc = 1 - 0.85 * k;
-                    paperFlat.scale.set(sc, sc, 1);
-                    paperFlat.rotation.z = Math.sin(e * 22) * 0.30 * k;
-                    paperFlat.position.x = Math.sin(e * 31) * 0.012 * k;
-                    paperFlat.position.y = Math.sin(e * 27) * 0.006 * k;
-                    paperBallFly.visible = true;
-                    paperBallFly.scale.setScalar(0.15 + 0.85 * k);
-                    paperBallFly.rotation.y += dt * 7;
-                    paperBallFly.rotation.x += dt * 4;
-                    if (e >= 0.70) {
-                        paperFlat.visible = false;
-                        paperFlat.scale.set(1, 1, 1);
-                        paperFlat.rotation.set(-Math.PI / 2, 0, 0);
-                        paperFlat.position.set(0, 0, 0);
-                        s.phase = 'toss';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'toss') {
-                    const k = smooth(Math.min(e / 1.15, 1));
-                    tissuePaperG.position.copy(arcPos(DESK_REST, BIN_MOUTH, k, 1.2));
-                    paperBallFly.rotation.x += dt * 9;
-                    paperBallFly.rotation.y += dt * 6;
-                    if (e >= 1.15) {
-                        s.phase = 'drop';
-                        s.t = 0;
-                    }
-                } else if (s.phase === 'drop') {
-                    const k = smooth(Math.min(e / 0.5, 1));
-                    tissuePaperG.position.lerpVectors(BIN_MOUTH, BIN_FALL, k);
-                    paperBallFly.rotation.x += dt * 6;
-                    if (k > 0.7) {
-                        paperBallFly.scale.setScalar(Math.max(0.001, 1 - (k - 0.7) / 0.3));
-                    }
-                    if (e >= 0.5) {
-                        tissuePaperG.visible = false;
-                        paperBallFly.scale.setScalar(1);
-                        s.phase = 'idle';
-                    }
-                }
-            }
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/tissueBox.js，此处只留装配调用。
+            const tissueBoxApi = installProp(tissueBox);
             /* 18.12 烟囱墙：魔法时钟（与现实时间同步） */
             /* ========================================================== */
             function colEdge(g, col, th) {
@@ -5359,164 +4559,8 @@ export function installCabin(app) {
 
             /* ========================================================== */
             /* 18.14 拱形全身镜（点击镜面泛起水波涟漪） */
-            /* ========================================================== */
-            const mirrorG = new THREE.Group();
-            mirrorG.position.set(2.55, FY, 3.60);
-            mirrorG.rotation.y = Math.PI;
-            scene.add(mirrorG);
-            const mirrorTilt = new THREE.Group();
-            mirrorTilt.rotation.x = -0.09;
-            mirrorG.add(mirrorTilt);
-            const mirrorCv = document.createElement('canvas');
-            mirrorCv.width = 160;
-            mirrorCv.height = 480;
-            const mctx = mirrorCv.getContext('2d');
-            const mirrorTex = new THREE.CanvasTexture(mirrorCv);
-            const mirrorRipples = [];
-            let mirrorPane;
-            {
-                // ---- 拱形木框：外拱形轮廓挖内拱形孔，挤出厚度 ----
-                const OUT_W = 0.66, OUT_H = 1.80;
-                const IN_W = 0.54, IN_H = 1.66, IN_Y0 = 0.07;
-                const frameShape = new THREE.Shape();
-                const oR = OUT_W / 2, oTop = OUT_H - oR;
-                frameShape.moveTo(-oR, 0);
-                frameShape.lineTo(-oR, oTop);
-                frameShape.absarc(0, oTop, oR, Math.PI, 0, true);
-                frameShape.lineTo(oR, 0);
-                frameShape.closePath();
-                const holePath2 = new THREE.Path();
-                const iR = IN_W / 2, iBot = IN_Y0, iTop = IN_Y0 + IN_H - iR;
-                holePath2.moveTo(-iR, iBot);
-                holePath2.lineTo(-iR, iTop);
-                holePath2.absarc(0, iTop, iR, Math.PI, 0, true);
-                holePath2.lineTo(iR, iBot);
-                holePath2.closePath();
-                frameShape.holes.push(holePath2);
-                const frameGeo = new THREE.ExtrudeGeometry(frameShape, { depth: 0.05, bevelEnabled: false, curveSegments: 20 });
-                const frameMesh = new THREE.Mesh(frameGeo, LITMAT(0x7a5a3a, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                frameMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(frameGeo, 8), MAT));
-                frameMesh.position.z = -0.025;
-                mirrorTilt.add(frameMesh);
-                // ---- 镜面（拱形绘制在 canvas 上，嵌入框内 ----
-                mirrorPane = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 1.60), new THREE.MeshBasicMaterial({ map: mirrorTex }));
-                mirrorPane.position.set(0, IN_Y0 + IN_H / 2, 0.018);
-                mirrorTilt.add(mirrorPane);
-                // ---- 框顶金色月牙 ----
-                const moonShape = new THREE.Shape();
-                moonShape.absarc(0, 0, 0.058, Math.PI / 2, Math.PI * 1.5, false);
-                moonShape.absarc(0.024, 0, 0.046, Math.PI * 1.5, Math.PI / 2, true);
-                const moonGeo = new THREE.ExtrudeGeometry(moonShape, { depth: 0.012, bevelEnabled: false, curveSegments: 14 });
-                const moon = new THREE.Mesh(moonGeo, LITMAT(0xc9a227, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-                moon.add(new THREE.LineSegments(new THREE.EdgesGeometry(moonGeo, 8), MAT));
-                moon.position.set(0, 1.87, 0);
-                mirrorTilt.add(moon);
-                // ---- 月牙两侧小星（拉长八面体） ----
-                for (const sxy of [[-0.20, 1.74], [0.20, 1.74]]) {
-                    const st = colEdge(new THREE.OctahedronGeometry(0.026), 0xc9a227);
-                    st.scale.set(0.7, 1.4, 0.7);
-                    st.position.set(sxy[0], sxy[1], 0.01);
-                    mirrorTilt.add(st);
-                }
-                // ---- 底部横木底座 ----
-                put(cbox(0.58, 0.06, 0.11, 0x5a4128), 0, 0.02, 0.01, 0, 0, 0, mirrorTilt);
-            }
-            const mirrorStars = [];
-            for (let i = 0; i < 16; i++) {
-                mirrorStars.push({ x: 12 + (i * 53 + 23) % 136, y: 120 + (i * 97 + 41) % 340, s: i % 3 === 0 ? 1.8 : 1.1 });
-            }
-            function mirrorArchPath(c) {
-                c.beginPath();
-                c.moveTo(2, 480);
-                c.lineTo(2, 72);
-                c.arc(80, 72, 78, Math.PI, 0, false);
-                c.lineTo(158, 480);
-                c.closePath();
-            }
-            function drawMirror(time) {
-                const c = mctx;
-                c.fillStyle = '#4a3a2c';
-                c.fillRect(0, 0, 160, 480);
-                c.save();
-                mirrorArchPath(c);
-                c.clip();
-                const g = c.createLinearGradient(0, 0, 0, 480);
-                g.addColorStop(0, '#eef5f8');
-                g.addColorStop(0.5, '#d8e9f0');
-                g.addColorStop(1, '#c6dbe6');
-                c.fillStyle = g;
-                c.fillRect(0, 0, 160, 480);
-                const sx = 45 + Math.sin(time * 0.45) * 55;
-                const g2 = c.createLinearGradient(sx - 40, 0, sx + 40, 0);
-                g2.addColorStop(0, 'rgba(255,255,255,0)');
-                g2.addColorStop(0.5, 'rgba(255,255,255,0.4)');
-                g2.addColorStop(1, 'rgba(255,255,255,0)');
-                c.fillStyle = g2;
-                c.fillRect(0, 0, 160, 480);
-                c.fillStyle = 'rgba(250,244,214,0.5)';
-                c.beginPath(); c.arc(106, 150, 27, 0, 7); c.fill();
-                c.fillStyle = 'rgba(214,232,240,0.6)';
-                c.beginPath(); c.arc(114, 142, 23, 0, 7); c.fill();
-                for (let i = 0; i < mirrorStars.length; i++) {
-                    const st = mirrorStars[i];
-                    const tw = 0.3 + 0.3 * Math.abs(Math.sin(time * 1.8 + i * 1.7));
-                    c.fillStyle = 'rgba(255,255,255,' + tw.toFixed(2) + ')';
-                    c.beginPath(); c.arc(st.x, st.y, st.s, 0, 7); c.fill();
-                }
-                for (const rp of mirrorRipples) {
-                    for (let k = 0; k < 3; k++) {
-                        const rr = rp.r * (1 - k * 0.18);
-                        if (rr < 2) continue;
-                        c.strokeStyle = 'rgba(255,255,255,' + (rp.a * (1 - k * 0.28)).toFixed(3) + ')';
-                        c.lineWidth = 2.6 - k * 0.8;
-                        c.beginPath();
-                        c.ellipse(rp.x, rp.y, rr, rr * 0.62, 0, 0, 7);
-                        c.stroke();
-                        c.strokeStyle = 'rgba(90,130,155,' + (rp.a * 0.35 * (1 - k * 0.28)).toFixed(3) + ')';
-                        c.beginPath();
-                        c.ellipse(rp.x, rp.y, rr * 0.9, rr * 0.62 * 0.9, 0, 0, 7);
-                        c.stroke();
-                    }
-                }
-                c.restore();
-                mirrorArchPath(c);
-                c.strokeStyle = 'rgba(70,52,36,0.6)';
-                c.lineWidth = 3;
-                c.stroke();
-                mirrorTex.needsUpdate = true;
-            }
-            function spawnMirrorRipple(x, y) {
-                mirrorRipples.push({ x: x, y: y, r: 3, a: 1, max: 130 + runtimeRng() * 40 });
-                for (let i = 0; i < 3; i++) {
-                    mirrorRipples.push({
-                        x: x + (runtimeRng() - 0.5) * 46,
-                        y: y + (runtimeRng() - 0.5) * 90,
-                        r: 2, a: 0.7, max: 40 + runtimeRng() * 30
-                    });
-                }
-            }
-            let mirrorDown = null;
-            const mirrorRay = new THREE.Raycaster();
-            const mirrorMouse = new THREE.Vector2();
-            renderer.domElement.addEventListener('pointerdown', function (e) {
-                mirrorDown = { x: e.clientX, y: e.clientY };
-            });
-            renderer.domElement.addEventListener('pointerup', function (e) {
-                if (!mirrorDown) return;
-                const moved = Math.abs(e.clientX - mirrorDown.x) + Math.abs(e.clientY - mirrorDown.y);
-                mirrorDown = null;
-                if (moved >= 6) return;
-                mirrorMouse.x = (e.clientX / innerWidth) * 2 - 1;
-                mirrorMouse.y = -(e.clientY / innerHeight) * 2 + 1;
-                mirrorRay.setFromCamera(mirrorMouse, camera);
-                const hits = mirrorRay.intersectObject(mirrorPane, false);
-                if (hits.length) {
-                    const lp = mirrorPane.worldToLocal(hits[0].point.clone());
-                    spawnMirrorRipple((lp.x / 0.54 + 0.5) * 160, (0.5 - lp.y / 1.60) * 480);
-                }
-            });
-
-            /* ========================================================== */
+            // J3（B4）：几何已搬入 src/cabin/world/floor2/mirror.js，此处只留装配调用。
+            const mirrorApi = installProp(mirror);
             /* 18.15 毛茸茸大地毯（右前角与书桌之间） */
             // J3（B1）：几何已搬入 src/cabin/world/floor2/rugLarge.js，此处只留装配调用。
             installProp(rugLarge);
@@ -5531,14 +4575,9 @@ export function installCabin(app) {
                     drawPicImage();
                     picState.lastT = time;
                 }
-                for (let i = mirrorRipples.length - 1; i >= 0; i--) {
-                    const rp = mirrorRipples[i];
-                    rp.r += 62 * dt;
-                    rp.a = Math.max(0, 1 - rp.r / rp.max);
-                    if (rp.a <= 0.01) mirrorRipples.splice(i, 1);
-                }
-                mirrorDirtyT += dt;
-                if (mirrorRipples.length || mirrorDirtyT > 0.12) { drawMirror(time); mirrorDirtyT = 0; }
+                // J3（B4）：镜面涟漪的每帧分支已搬入 world/floor2/mirror.js（原地 tick）
+                // ⚠️ 参数顺序是 (dt, time) —— 本函数 updateNewDecor(time, dt) 的形参是反的。
+                mirrorApi.tick(dt, time);
                 // J3（B3）：右前角杂物纸箱的开合分支已搬入 world/floor2/junkBoxes.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 而本函数 `updateNewDecor` 自己的形参是 (time, dt)，写反会改变开合速度。
                 junkApi.tick(dt, time);
@@ -7721,42 +6760,9 @@ export function installCabin(app) {
                     }
                 }
 
-                /* ---- 书堆 ---- */
                 {
-                    const n = pileBooks.length;
-                    if (pileState === 'falling') {
-                        pileT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const b = pileBooks[i], u = b.userData;
-                            const delay = (n - 1 - i) * 0.075;
-                            const p = Math.min(Math.max((pileT - delay) / 0.55, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p;
-                            b.position.x = u.sx + (u.fx - u.sx) * e;
-                            b.position.z = u.sz + (u.fz - u.sz) * e;
-                            b.position.y = u.sy + (u.fy - u.sy) * e + Math.sin(p * Math.PI) * 0.05;
-                            b.rotation.y = u.sry + (u.fry - u.sry) * e;
-                            b.rotation.z = Math.sin(p * Math.PI) * 0.45;
-                        }
-                        if (done) pileState = 'fallen';
-                    } else if (pileState === 'rising') {
-                        pileT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const b = pileBooks[i], u = b.userData;
-                            const delay = i * 0.11;
-                            const p = Math.min(Math.max((pileT - delay) / 0.65, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            b.position.x = u.fx + (u.sx - u.fx) * e;
-                            b.position.z = u.fz + (u.sz - u.fz) * e;
-                            b.position.y = u.fy + (u.sy - u.fy) * e + Math.sin(p * Math.PI) * 0.24;
-                            b.rotation.y = u.fry + (u.sry - u.fry) * e + Math.sin(p * Math.PI * 2) * 0.4;
-                            b.rotation.z = Math.sin((1 - p) * Math.PI) * 0.3;
-                        }
-                        if (done) pileState = 'stacked';
-                    }
+                    // J3（B3）：左窗下魔法书堆的每帧分支已搬入 world/floor1/bookPile.js（原地 tick）
+                    bookPileApi.tick(dt, time);
                 }
 
                 lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;
@@ -8045,52 +7051,9 @@ export function installCabin(app) {
                     }
                 }
 
-                /* ---- 塔罗牌 ---- */
                 {
-                    const n = tarotCards.length;
-                    if (tarotState === 'flying') {
-                        tarotT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const delay = i * 0.08;
-                            const p = Math.min(Math.max((tarotT - delay) / 0.75, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            const fp = tarotPose(u, i, time);
-                            c.position.x = u.sx + (fp.x - u.sx) * e;
-                            c.position.y = u.sy + (fp.y - u.sy) * e + Math.sin(p * Math.PI) * 0.18;
-                            c.position.z = u.sz + (fp.z - u.sz) * e;
-                            c.rotation.y = u.sry + (fp.ry - u.sry) * e;
-                            c.rotation.x = fp.rx * e;
-                            c.rotation.z = fp.rz * e;
-                        }
-                        if (done) tarotState = 'floating';
-                    } else if (tarotState === 'floating') {
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const fp = tarotPose(u, i, time);
-                            c.position.set(fp.x, fp.y, fp.z);
-                            c.rotation.set(fp.rx, fp.ry, fp.rz);
-                        }
-                    } else if (tarotState === 'returning') {
-                        tarotT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const c = tarotCards[i], u = c.userData;
-                            const delay = (n - 1 - i) * 0.07;
-                            const p = Math.min(Math.max((tarotT - delay) / 0.65, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            c.position.x = u.px + (u.sx - u.px) * e;
-                            c.position.y = u.py + (u.sy - u.py) * e + Math.sin(p * Math.PI) * 0.15;
-                            c.position.z = u.pz + (u.sz - u.pz) * e;
-                            c.rotation.y = u.pry + (u.sry - u.pry) * e;
-                            c.rotation.x = u.prx * (1 - e);
-                            c.rotation.z = u.prz * (1 - e);
-                        }
-                        if (done) tarotState = 'stacked';
-                    }
+                    // J3（B3）：塔罗牌阵的每帧分支已搬入 world/floor1/tarot.js（原地 tick）
+                    tarotApi.tick(dt, time);
                 }
 
                 for (const f of candleWavy) {
@@ -8190,11 +7153,8 @@ export function installCabin(app) {
                 }
 
                 {
-                    carP += ((carOn ? 1 : 0) - carP) * 0.015;
-                    carCanopy.rotation.y += 0.05 * carP;
-                    for (let i = 0; i < carStars.length; i++) {
-                        carStars[i].position.y = -0.072 + Math.sin(time * 3 + i * 1.57) * 0.01 * carP;
-                    }
+                    // J3（B3）：旋转星铃的每帧分支已搬入 world/floor1/starBell.js（原地 tick）
+                    starBellApi.tick(dt, time);
                 }
 
                 /* ---- 大魔女坩埚 ---- */
@@ -8375,10 +7335,9 @@ export function installCabin(app) {
                 updateCal(dt);
                 updateGlyphs(time, dt);
                 for (const tg of toppleGroups) updateTopple(tg);
-                updateTissue(time, dt);
+                tissueBoxApi.tick(dt, time);
                 updateWobblers(dt);
-                updateHat(time, dt);
-                updateCandies(dt);
+                witchHatApi.tick(dt, time);
 
                 candleP += ((candleLit ? 1 : 0) - candleP) * 0.03;
                 const candleVisible = candleP > 0.02;

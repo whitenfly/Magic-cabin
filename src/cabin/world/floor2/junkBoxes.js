@@ -14,19 +14,17 @@
  * | `regMagic`（箱体一处） | `interactables()`（`label` 语义化 + `mode: 'both'`，消解风险 `R1`） |
  * | `updateNewDecor()` 里的 6 行 | `update()`（逐字搬运，`junkT/junkOpen` → `s.t/s.open`，`junkFlaps/junkInside` → `parts`） |
  *
- * ## ★ 关于本文件里的三份"复刻工具"（唯一多出来的代码，务必知情）
+ * ## ★ 关于 `cbox` / `colEdge` / `smooth`（曾经的"复刻"，已改为取 `ctx`）
  *
- * `cbox` / `colEdge` 是 monolith 里的**共享工具函数**（分别住在原 `18.10` 与 `18.12` 分区开头，
+ * `cbox` / `colEdge` 是 monolith 里的**共享工具函数**（分别住在 18.10 与 18.12 分区开头，
  * 被衣柜 / 垃圾桶 / 抽纸盒 / 魔法时钟 / 挂画 / 镜子 … 几十处调用），
- * `smooth` 是 IIFE 里的缓动（`const smooth = k => k * k * (3 - 2 * k)`）；
- * 三者都**不在 ctx 的可用键里**。若在模块里直接调用它们，得到的是 `ReferenceError`
- * （模块作用域与 IIFE 闭包不通）；而这三段代码的调用行必须**一字不改**，
- * 所以这里把三个纯函数**逐字复刻**进本文件（`cbox` / `colEdge` 复刻进 `build()`，
- * `smooth` 复刻进 `update()`），用的都是 ctx 注入的同一个 `MAT`。
- * 输出对象（Group + Mesh + LineSegments 的层级、几何参数、材质参数、父节点）与搬迁前逐项一致。
+ * `smooth` 是 IIFE 里的缓动（`const smooth = k => k * k * (3 - 2 * k)`）。
  *
- * ⚠️ 知会：这是"共享工具尚未提取"导致的重复。这批工具（`cbox` / `crboxCol` / `colEdge` /
- * `crumpleBall` / `arcPos` / `smooth`）提取进 `core/geometry` 并由 ctx 注入后，本段应改回用 ctx 版本。
+ * 搬迁当时 `ctx` 还没有它们，本文件因此**逐字复刻**过 `cbox` / `colEdge`（进 `build()`）。
+ * 后来 `ctx` 改成**惰性求值**并补上了这批工具，复刻体随即删除 ——
+ * 现在调用的是 monolith 那**同一个函数本身**（装配点 L4569 晚于它们的定义 L4268 / L4380）。
+ * `smooth` 仍取自 `ctx`。教训见 [`world/README.md`](../../README.md)
+ * 的「共享工具：用 ctx 取，不要复制实现」一节。
  *
  * ## ⚠️ 需要人工在 monolith 侧做两件事（应用器只管几何段）
  *
@@ -46,25 +44,10 @@ export default defineProp({
 
   state: () => ({ open: false, t: 0 }),
 
-  build({ scene, L, put, MAT }) {
+  // `cbox` / `colEdge` 直接取自装配环境 —— `ctx` 里的就是 monolith 那两个同名函数本身
+  // （装配点 L4569 晚于它们的定义 L4268 / L4380，惰性 getter 取得到）。**不再复制实现**。
+  build({ scene, L, put, cbox, colEdge }) {
     const { JUNK_X, JUNK_Z, FY } = L
-
-    /* `cbox` —— monolith（IIFE 闭包）里"彩色盒 + 描边"的共享工具，逐字复刻 */
-    function cbox(w, h, d, col) {
-      const grp = new THREE.Group();
-      const g = new THREE.BoxGeometry(w, h, d);
-      grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-      grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), MAT));
-      return grp;
-    }
-
-    /* `colEdge` —— 同上，阈值默认 20 的版本，逐字复刻 */
-    function colEdge(g, col, th) {
-      const grp = new THREE.Group();
-      grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-      grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, th === undefined ? 20 : th), MAT));
-      return grp;
-    }
 
     const junkG = new THREE.Group();
     junkG.position.set(JUNK_X, FY, JUNK_Z);

@@ -18,7 +18,7 @@
  *
  * 几何段与每帧分支**逐行相同**（只改缩进）：状态变量只加 `s.` 前缀（名字一个没改）、
  * 书堆数组经 `parts.books` 取回同名局部量、`regMagic` 的回调体原样搬进 `onActivate`。
- * `floor1Rng()` 每本书调 4 次、共 13 本 —— **次数与顺序都没变** ⇒ 后续随机数序列与画面不变。
+ * `floor1Rng()` 每本书调 6 次（`userData` 里共 6 处）共 13 本 = 78 次 —— **次数与顺序都没变** ⇒ 后续随机数序列与画面不变。
  *
  * 本件只按需解构 ctx 的 `scene / L / put / box / line / rng`（未用 `cbox` / `crboxCol` /
  * `colEdge` / `crumpleBall` / `arcPos` / `jitterGeo` / `hash01` / `smooth` / `regSlide` /

@@ -1,0 +1,13 @@
+{
+  "id": "floor2/wardrobe",
+  "name": "wardrobe",
+  "file": "src/cabin/world/floor2/wardrobe.js",
+  "batch": "B4",
+  "startMarker": "            /* 衣柜 */",
+  "endMarker": "            /* 18.11 墙钩挎包 / 置物箱与魔女帽 / 可推拉小凳子 */",
+  "layout": [
+    { "name": "WD_X", "value": "-1.40", "doc": "二楼衣柜中心 x" },
+    { "name": "WD_Z", "value": "3.55", "doc": "二楼衣柜中心 z" }
+  ],
+  "notes": "★ startMarker 刻意**不是** 18.10 的分区标题行（`/* 18.10 垃圾桶 / 抽纸盒 / 衣柜（二楼） */`），而是它内部的 `/* 衣柜 */`（两者都全文唯一，已用应用器的 lineIndexOf 逐字核过）。原因：18.10 标题行之后紧跟**共享工具** cbox / crboxCol / crumpleBall / arcPos / wobblers / regWobble / updateWobblers（当前 L4384–4435），它们被 18.12 时钟 / 18.13 挂画 / 18.14 镜子 / 18.16 纸箱以及 tickOnce() 的 `updateWobblers(dt);`（L8379）引用，**必须留在 monolith**；若拿 18.10 标题行当起点，这段工具会被一并删掉 ⇒ ctx 的 cbox / crboxCol / regWobble 与 L8379 立即 ReferenceError（不是像素差异，是直接崩）。区间 = L4439–L4591（吞掉两行 ==== 分隔线，纯注释、零像素影响）。用到的 ctx 键：scene / L(WD_X, WD_Z, FY) / put / edge / logBetween / iline / cbox / crboxCol / regSlide / registerHinge / regWobble / MAT / SND。regWobble 是 18.10 段自己声明的函数（装配点 L4438 晚于 `const wobblers = []` 的 L4413 ⇒ 读 ctx.regWobble 无 TDZ；wobblers / updateWobblers 仍住 monolith）。layout：只提衣柜中心 WD_X/WD_Z（-1.40 / 3.55，与 `wardrobeG.position.set(WD_X, FY, WD_Z)` 同源，N9）；`rotation.y = Math.PI` 不是坐标，留在原地。**无 update ⇒ 无 assign**，monolith 侧不需要任何人工改动。唯一改写的语句：抽屉的 onActivate 把 build 闭包里的 `doorsBothOpen()` 三项判据展开（interactables 看不到 build 的局部量），语义逐字等价；build 内的 doorsBothOpen / closeWardrobeDoor / dl.dr 的 userData.onToggle / aimLabel / bounce / `wardrobeDrawerG.userData.aimLabel` 一字未改。原来的裸块 `{ }` 展开到 build 顶层（只为把 wardrobeDrawerG / dl / dr 交给 parts；`p` / `knob` / `hw` / `hh` 各自住在更内层子块，无重名冲突）。两扇门的交互**不重复声明**：仍走 monolith 既有 hinge 通路（registerHinge + userData.onToggle），且 registerAimSource 的 'hinges' 先于 'magic' 注册 ⇒ 门上的准星/点击仍解析为「开 / 关衣柜门」，与搬迁前一致；若再声明两条同锚点的近距条目，第三人称提示会变。"
+}

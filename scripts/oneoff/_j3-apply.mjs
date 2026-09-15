@@ -76,6 +76,19 @@ const problems = []
 const applied = []
 const already = []
 const newImports = []
+const ticked = []
+
+/** 子串出现次数（用于"标记必须逐字唯一"的自检） */
+function countOf(hay, needle) {
+  let n = 0
+  let from = 0
+  for (;;) {
+    const i = hay.indexOf(needle, from)
+    if (i === -1) return n
+    n++
+    from = i + needle.length
+  }
+}
 
 /** 找出标记行的**行首下标**（确保匹配的是整行） */
 function lineIndexOf(text, marker) {
@@ -154,6 +167,29 @@ for (const spec of todo) {
     `${IND}${callExpr}\n`
 
   mono = mono.slice(0, startAt) + replaceWith + mono.slice(endAt)
+
+  // ── tick 接线（可选）──────────────────────────────────────────────────────
+  // `J3` 期间 `UpdateScheduler` **不被执行**（`animate()` 仍直接调 `tickOnce()`），
+  // 所以搬进 `update()` 的每帧分支必须由 monolith 在**原位置**调用 —— 见
+  // `src/cabin/app/installProp.js` 文件头「原地 tick」。spec 用 `tick.old`（原文）
+  // 与 `tick.new`（替换文）声明这次替换，两边都要求**逐字**给出。
+  if (spec.tick && spec.tick.old && spec.tick.new) {
+    if (mono.includes(spec.tick.new)) {
+      ticked.push(`${spec.id}（已接线）`)
+    } else {
+      const n = countOf(mono, spec.tick.old)
+      if (n !== 1) {
+        problems.push(`${where} tick.old 在 monolith 中出现 ${n} 次（必须恰好 1 次 —— 原文要逐字唯一）`)
+        continue
+      }
+      mono = mono.replace(spec.tick.old, spec.tick.new)
+      ticked.push(spec.id)
+    }
+  } else if (spec.assign && !spec.tick) {
+    problems.push(`${where} 有 assign 却没有 tick 声明 —— 每帧分支会没人调用（ReferenceError 或动画停摆）`)
+    continue
+  }
+
   newImports.push(spec)
   applied.push({ id: spec.id, removed: bodyLines.length - 1, file: spec.file })
 }
@@ -198,6 +234,7 @@ if (applied.length) {
   for (const a of applied) console.log(`  · ${a.id.padEnd(32)} 删 ${String(a.removed).padStart(4)} 行  →  ${a.file}`)
 }
 if (already.length) console.log(`已应用（跳过）：${already.join(' / ')}`)
+if (ticked.length) console.log(`原地 tick 接线：${ticked.join(' / ')}`)
 if (!applied.length && !problems.length) console.log('没有需要应用的内容。')
 
 if (problems.length) {
