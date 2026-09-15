@@ -344,9 +344,32 @@ section('CF-4 config 是叶子 + 实现里没有第二份清单（N11 / R29）')
   {
     // 3D 实现不得自己读 config/**（它只能通过 store 拿值）——
     // 否则"面板改了值"与"场景读到的值"会成为两条路
-    const mono = codeOnly(read('src/cabin/legacy/monolith.js'))
-    const direct = [...mono.matchAll(/from\s+['"]([^'"]*config\/[^'"]*)['"]/g)].map((m) => m[1])
-    check('legacy/monolith.js 不直接 import config/**（设置值一律经 store）', direct.length === 0, direct.join(' / ') || '零直接依赖')
+    // ★ J4.7：monolith 已删除 —— 判据的**语义没变**（3D 实现不得自己读 config/**），
+    //   范围从"一个文件"变成"整个 src/cabin/**"（实现现在散在 21 个段模块里）。
+    const all = []
+    const gather = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name)
+        if (e.isDirectory()) gather(p)
+        else if (p.endsWith('.js')) all.push(p)
+      }
+    }
+    gather(path.join(ROOT, 'src/cabin'))
+    // ★ 两处**合法**的 config 消费者 —— 它们是 `J2.5` 配置编排层刻意留下的接缝，
+    //   不是"场景自己读配置"：
+    //     · `app/settings.js`           —— 把 `settingsSchema` 派生成 `SETTINGS`（store 的默认值来源）
+    //     · `systems/ui/SettingsForm.js` —— 由 schema **自动生成**设置面板控件（验收 CF2 的落点）
+    //   判据的语义不变：**场景实现**一律经 store 取值，不得直接读 config。
+    const CONFIG_ADAPTERS = ['src/cabin/app/settings.js', 'src/cabin/systems/ui/SettingsForm.js']
+    const direct = []
+    for (const p of all) {
+      const r = path.relative(ROOT, p).replace(/\\/g, '/')
+      if (CONFIG_ADAPTERS.includes(r)) continue
+      for (const m of codeOnly(fs.readFileSync(p, 'utf8')).matchAll(/from\s+['"]([^'"]*config\/[^'"]*)['"]/g)) {
+        direct.push(`${r} → ${m[1]}`)
+      }
+    }
+    check('src/cabin/** 不直接 import config/**（设置值一律经 store）', direct.length === 0, direct.join(' / ') || `零直接依赖（扫 ${all.length} 个文件）`)
   }
 }
 

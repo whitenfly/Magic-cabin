@@ -554,7 +554,12 @@ function move() {
   if (startIdx === -1) { console.error(`\n✗ monolith 里找不到段标记 ${MARK(seg.id)}（先跑 --ctxify）\n`); process.exit(1) }
   let endIdx = lines.length
   for (let i = startIdx + 1; i < lines.length; i++) if (/\[J4:seg [\w-]+\]/.test(lines[i])) { endIdx = i; break }
-  const segBody = lines.slice(startIdx + 1, endIdx)
+  const segBodyRaw = lines.slice(startIdx + 1, endIdx)
+  // ★ 最后一个段（`endIdx === lines.length`）的段体会**连 IIFE 的收尾一起**被切进来
+  //   （`})(ctx);` 与函数结束的 `}`）—— 搬进模块后就是语法错误（实测：`SceneLoop.js` 尾部多两行）。
+  let segBody = endIdx >= lines.length
+    ? segBodyRaw.slice(0, (() => { const i = segBodyRaw.findIndex((l) => /^\s*\}\)\(ctx\);\s*$/.test(l)); return i === -1 ? segBodyRaw.length : i })())
+    : segBodyRaw
   while (segBody.length && !segBody[segBody.length - 1].trim()) segBody.pop()
 
   // 幂等：已经搬过（段体只剩一行调用）就跳过
@@ -565,7 +570,11 @@ function move() {
   }
 
   const bodyStart = lineStartOffset(src, startIdx + 2)
-  const bodyEnd = lineStartOffset(src, endIdx + 1)
+  // ★ `endIdx === lines.length` ⇒ 这是**最后一个段**。此时不能算 `lineStartOffset(src, endIdx + 1)`：
+  //   那个行号不存在，`indexOf('\n', …)` 返回 -1 ⇒ 偏移回绕到 0 ⇒ `src.slice(bodyEnd)` 变成
+  //   **整个文件**，结果是把文件尾部复制了一份（实测：`--move=boot` 产出了 476 行、含两个
+  //   `export function installCabin`）。最后一个段的 bodyEnd 就是文件末尾。
+  const bodyEnd = endIdx >= lines.length ? src.length : lineStartOffset(src, endIdx + 1)
 
   // ── monolith 的模块级绑定表 ─────────────────────────────────────────────
   //
@@ -578,7 +587,7 @@ function move() {
     const spec = st.moduleSpecifier.text
     const cl = st.importClause
     if (!cl) continue
-    if (cl.name) importByName.set(cl.name.text, { spec, name: cl.name.text, kind: 'namespace' })
+    if (cl.name) importByName.set(cl.name.text, { spec, name: cl.name.text, kind: 'default' })
     if (cl.namedBindings) {
       if (ts.isNamespaceImport(cl.namedBindings)) {
         importByName.set(cl.namedBindings.name.text, { spec, name: cl.namedBindings.name.text, kind: 'namespace' })
@@ -630,6 +639,10 @@ function move() {
     if (s >= bodyStart && s < bodyEnd && ts.isIdentifier(node)) {
       const p = node.parent
       const skip =
+        // ★ `ctx` / `app` 是段模块函数**自己的形参** —— 段内引用它们不需要任何 import。
+        //   它们的符号声明在 IIFE 之外（`installCabin(app)` 的参数、`const ctx = …`），
+        //   会被下面的 `unknown` 判据误报（实测：`installer` 段一次报出 8 个，其中就有 `app`）。
+        node.text === 'ctx' || node.text === 'app' ||
         (ts.isPropertyAccessExpression(p) && p.name === node) ||
         (ts.isPropertyAssignment(p) && p.name === node) ||
         (ts.isMethodDeclaration(p) && p.name === node) ||
@@ -707,9 +720,21 @@ function move() {
       out = path.relative(modDir, abs).replace(/\\/g, '/')
       if (!out.startsWith('.')) out = './' + out
     }
-    const list = [...names]
-    const ns = list.find((n) => importByName.get(n)?.kind === 'namespace' && importByName.get(n)?.spec === spec)
-    importLines.push(ns ? `import * as ${ns} from '${out}'` : `import { ${list.sort().join(', ')} } from '${out}'`)
+    // ★ 三种 import 形态必须分开生成，否则**语法合法但语义完全不同**：
+    //    · `default`   → `import x from '…'`   （物件模块就是这种：`export default defineProp({…})`）
+    //    · `namespace` → `import * as x from '…'`
+    //    · `named`     → `import { x } from '…'`
+    //   第一版把所有非 named 都当 namespace，于是 `import * as diningTable from './diningTable.js'`
+    //   拿到的是**模块命名空间对象**而不是 default 导出 —— `installProp()` 直接抛
+    //   「需要一份 defineProp 声明」，页面起不来。floor1/floor2 的 35 件物件全是这种形态。
+    const kinds = new Map()
+    for (const n of names) kinds.set(n, importByName.get(n)?.kind || 'named')
+    const def = [...names].filter((n) => kinds.get(n) === 'default').sort()
+    const ns = [...names].filter((n) => kinds.get(n) === 'namespace').sort()
+    const named = [...names].filter((n) => kinds.get(n) === 'named').sort()
+    if (def.length) importLines.push(`import ${def.join(', ')} from '${out}'`)
+    if (ns.length) importLines.push(`import * as ${ns.join(', ')} from '${out}'`)
+    if (named.length) importLines.push(`import { ${named.join(', ')} } from '${out}'`)
   }
   importLines.sort()
 

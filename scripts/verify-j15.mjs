@@ -322,15 +322,27 @@ section('3D 那一半（src/cabin/**）—— J1.5 要求「一行不改」')
   }
 
   // 与 J1 的既有护栏一致的两项统计（路线图 §5.3 的进度可视化读它们）
-  const monolith = path.join(dir, 'legacy/monolith.js')
-  if (exists(monolith)) {
-    const src = read(monolith)
-    const lines = src.split('\n').length
-    console.log(`  legacy/monolith.js  ${lines} 行（J4 的目标是删掉它）`)
-    check('legacy/monolith.js 仍存在（J3/J4 之前不许动）', true, `${lines} 行`)
-    const bareRandom = (src.match(/Math\.random\(/g) ?? []).length
-    check('裸 Math.random() 数为 0（F0.2 的成果不许回退）', bareRandom === 0, `${bareRandom} 处`)
+  // ★ J4.7：`legacy/` 已删除 —— 判据**跟着阶段目标反转**，而不是被删掉。
+  //   原来守的是"搬迁期不许偷偷动 monolith"，现在守的是"J4 的 DoD 必须达成"。
+  const legacyDir = path.join(dir, 'legacy')
+  check('legacy/ 已删除（J4.7 的 DoD：整目录消失）', !exists(legacyDir), exists(legacyDir) ? '仍然存在 ✗' : '整目录已清零')
+  // F0.2 的成果（裸 Math.random() 归零）现在必须扫**整个** `src/cabin/**` ——
+  // 实现已经不住在一个文件里了，只看 monolith 等于不再检查。
+  const cabinJs = []
+  const collectJs = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) collectJs(p)
+      else if (p.endsWith('.js')) cabinJs.push(p)
+    }
   }
+  collectJs(dir)
+  // `app/rng.js` 是**随机源的实现本身** —— `Math.random()` 在那里是唯一合法出处（N8 禁的是
+  // "场景生成代码里的裸随机"，不是"禁止实现随机源"）。
+  const bare = cabinJs
+    .filter((p) => !p.endsWith(path.join('app', 'rng.js')))
+    .reduce((n, p) => n + (read(p).match(/Math\.random\(/g) ?? []).length, 0)
+  check('裸 Math.random() 数为 0（F0.2 的成果不许回退）', bare === 0, `${bare} 处 / 扫 ${cabinJs.length} 个文件`)
 }
 
 // ── ⑧ 产物（可选）─────────────────────────────────────────────────────────

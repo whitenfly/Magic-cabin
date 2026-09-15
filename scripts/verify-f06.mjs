@@ -33,6 +33,16 @@ const check = (name, ok, detail = '') => {
 // ★ 先查前置再读文件（顺序很关键）：否则快照缺失会直接抛 ENOENT
 requireEnv({ files: [SNAPSHOT] })
 
+// ★ J4.7：`legacy/monolith.js` 已删除 —— 本脚本**整体退役**。
+//   它原来证明的是"J0.6 只在 monolith 里加了渲染统计钩子这一件事"（用"撤销 J0.6 后与 F0.4
+//   快照逐字节一致"来证），而那条历史链条随 monolith 一起结束。
+//   钩子本身没有失去守护：`tests/e2e/perf.mjs` 每轮都实跑 `?stats=1` 并读
+//   `window.__cabinRenderStats()`，渲染统计全项 +0.0% 就是它给出的判据。
+if (!fs.existsSync(TARGET)) {
+  console.log('\n【J0.6 · 渲染统计钩子】legacy/monolith.js 已删除（J4.7）—— 本脚本整体退役')
+  console.log('  钩子仍由 tests/e2e/perf.mjs 每轮实跑守住（渲染统计全项对比）。\n')
+  process.exit(0)
+}
 const cur = fs.readFileSync(TARGET, 'utf8')
 const boot = fs.readFileSync(BOOT, 'utf8')
 

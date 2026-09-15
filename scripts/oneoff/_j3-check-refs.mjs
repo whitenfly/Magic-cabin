@@ -32,6 +32,21 @@ import path from 'node:path'
 const ROOT = path.resolve(import.meta.dirname, '../..')
 const QUIET = process.argv.includes('--quiet')
 
+// ★ J4.7：`legacy/monolith.js` 已删除 —— 本脚本**整体退役**。
+//   它原来回答的是"像素回归报超时（data-cabin === ready）时，静态查一下
+//   '用了但没拿到的 layout 常量 / ctx 键'"。那个问题的对象（monolith 里手写解构的
+//   layout 常量、手写的 `propCtx`）随段切片消失了 —— 现在这两件事分别由
+//   `_j4-apply.mjs --check`（段间通信完整性）与 `tests/unit/segments.test.mjs`（段序 =
+//   执行序 / 模块契约）守着，而且粒度更细（逐引用 vs 逐文件）。
+if (!fs.existsSync(path.join(ROOT, 'src/cabin/legacy/monolith.js'))) {
+  console.log('')
+  console.log('  _j3-check-refs：legacy/monolith.js 已删除（J4.7）—— 本脚本整体退役')
+  console.log('    替代判据：node scripts/oneoff/_j4-apply.mjs --check')
+  console.log('              node --test tests/unit/segments.test.mjs')
+  console.log('')
+  process.exit(0)
+}
+
 /** 剥掉块注释、行注释与字符串字面量（搬迁对照表与文案里会出现这些名字，不能算"使用"） */
 const stripComments = (s) =>
   s

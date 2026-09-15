@@ -60,8 +60,14 @@ console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–980
   check('裸 Math.random() 已归零', left === 0, left ? `残留 ${left} 处` : '')
 
   // 当前文件侧：时钟注入（F0.3）
-  const live = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
-  check('当前文件已注入时钟（F0.3）', /from '\.\.\/app\/clock\.js'/.test(live))
+  // ★ J4.7：monolith 已删除 —— 判据的**语义没变**（"时间来自注入的 clock"），
+  //   但范围必须跟着实现走：主循环现在住在 app/scene/ 的三个文件里。
+  const clockScope = ['app/scene/installCabin.js', 'app/scene/SceneLoop.js', 'app/scene/FrameBody.js']
+    .map((f) => path.join(ROOT, 'src/cabin', f))
+    .filter((p) => fs.existsSync(p))
+    .map((p) => fs.readFileSync(p, 'utf8'))
+    .join('\n')
+  check('主循环已注入时钟（F0.3）', /from '\.\.\/clock\.js'/.test(clockScope), `扫 ${clockScope ? '3' : '0'} 个文件`)
 }
 
 console.log('\n【② 样式 src/styles/cabin.css  ←  源 10–748 行】')
@@ -136,7 +142,11 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
       return e.isFile() && p.endsWith('.js') ? [p] : []
     })
   const cabinRoot = path.join(ROOT, 'src/cabin')
-  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props']
+  // ★ J4.7：`app/` 也必须在范围内 —— 段切片把"源自 monolith 的实现"搬进了
+  //   `app/scene/**`（SceneCore / PropInstaller / FrameBody / SceneLoop / installCabin）。
+  //   不收进来的话，下面那批"与源文件对比"的计数会因为**实现搬家**而减少，
+  //   看起来像"代码变少了"，实际上只是没被扫到。
+  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props', 'app']
   const cabinFiles = [
     ...MIGRATED_DIRS.flatMap((d) => (fs.existsSync(path.join(cabinRoot, d)) ? walkJs(path.join(cabinRoot, d)) : [])),
     path.join(cabinRoot, 'dom.js'),
@@ -220,7 +230,18 @@ console.log('\n【⑤ 资源与依赖】')
 
 console.log('\n【⑥ 外部依赖未新增（与源文件对比）】')
 {
-  const mono = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
+  // ★ J4.7：monolith 已删除 —— 这一节（外部依赖 / three.min.js / 静态资源字面量）
+  //   的**语义没变**，但扫描范围必须从"一个文件"变成"整个 src/cabin/**"。
+  const cabinAll = []
+  const gather = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) gather(p)
+      else if (p.endsWith('.js')) cabinAll.push(p)
+    }
+  }
+  gather(path.join(ROOT, 'src/cabin'))
+  const mono = cabinAll.map((p) => fs.readFileSync(p, 'utf8')).join('\n')
   // 去掉块注释与行注释后再检查，避免把说明文字当成代码
   const codeOnly = mono.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
