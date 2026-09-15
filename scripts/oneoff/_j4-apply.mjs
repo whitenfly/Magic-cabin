@@ -113,24 +113,43 @@ const MARK = (id) => `[J4:seg ${id}]`
 const markLine = (id) => `${IND}/* ==================== ${MARK(id)} ==================== */`
 
 /**
+ * 一个标识符**真正指向**的符号 —— 简写属性必须走 `getShorthandAssignmentValueSymbol`。
+ *
+ * ★ 这是本文件**第三次**踩同一个坑（`ctxify` 的改写、`--check` 的复算、`--move` 的收集）：
+ *   `checker.getSymbolAtLocation(简写属性的 name)` 返回的是 **`ShorthandPropertyAssignment`
+ *   节点自身**的属性符号（`declName` 就是它自己），**不是**被引用的那个变量。
+ *   后果是**静默失配**：所有"符号 → 声明位置"的判断都不成立，既不报错也不生效。
+ *   实测代价两次：`createRoundBox({ edge })` 拿到 `undefined`；`createEnvironment({ bus })`
+ *   让生成的模块里 `bus` 成了自由变量（页面起不来）。
+ *   ⇒ **凡是"按符号找声明"的地方，一律经这个函数。**
+ */
+function symbolOf(checker, node) {
+  // ⚠️ **不要**在这里做 alias 解析：调用方需要看到"这就是一个 import 符号"
+  //    （判据是 `declarations[0]` 是不是 `ImportSpecifier` / `NamespaceImport`），
+  //    而 `getAliasedSymbol()` 会把它解析成**被 import 的那个模块里的**符号 ——
+  //    于是 `declarations[0]` 变成目标文件里的 `FunctionDeclaration`，
+  //    `isImportSym` 判据失配，**该补的 import 一条都补不上**（且不报 unknown，
+  //    因为符号解析成功了，只是落在别的文件里）。
+  //    实测代价：`createEnvironment` / `THREE` 没被补进 import ⇒ 页面
+  //    `ReferenceError: createEnvironment is not defined`。
+  const p = node.parent
+  return ts.isShorthandPropertyAssignment(p) && p.name === node
+    ? checker.getShorthandAssignmentValueSymbol(p)
+    : checker.getSymbolAtLocation(node)
+}
+
+/**
  * 一个标识符引用指向的 **body 顶层声明**（没有则 null）。
  *
- * ★ 简写属性 `{ edge }` 是个必须绕开的坑（实测踩过）：
- *   `checker.getSymbolAtLocation(name)` 对简写属性返回的是
- *   **ShorthandPropertyAssignment 这个节点自身的属性符号**（`declName` 就是 `edge` 自己），
- *   而不是被引用的那个变量 —— 于是它永远匹配不上任何顶层声明，改写被**静默跳过**。
- *   `ctxify` 第一版就这样漏掉了 88 处中的 5 处真漏网（`{ edge }` / `{ V, geo, scene }`），
- *   而它们住的都是 `createRoundBox` / `createSolid` 的参数对象 —— 结果是运行时 `ReferenceError`。
- *   正确 API：`getShorthandAssignmentValueSymbol()`。
+ * 简写属性的坑见 `symbolOf()`；这里**才**需要 alias 兜底（顶层声明本身不会是 import）。
  */
 function resolveTopDecl(checker, sf, declSeg, node) {
-  const p = node.parent
-  let sym =
-    ts.isShorthandPropertyAssignment(p) && p.name === node
-      ? checker.getShorthandAssignmentValueSymbol(p)
-      : checker.getSymbolAtLocation(node)
-  if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym)
-  const d = sym?.declarations?.[0]
+  let sym = symbolOf(checker, node)
+  let d = sym?.declarations?.[0]
+  if ((!d || !d.name || !ts.isIdentifier(d.name)) && sym && sym.flags & ts.SymbolFlags.Alias) {
+    sym = checker.getAliasedSymbol(sym)
+    d = sym?.declarations?.[0]
+  }
   if (!d || !d.name || !ts.isIdentifier(d.name)) return null
   const off = d.name.getStart(sf)
   return declSeg.has(off) ? declSeg.get(off) : null
@@ -549,18 +568,22 @@ function move() {
   const bodyEnd = lineStartOffset(src, endIdx + 1)
 
   // ── monolith 的模块级绑定表 ─────────────────────────────────────────────
-  const importOf = new Map() // declOffset -> {spec, name, kind}
+  //
+  // ★ 按**名字**索引，不按声明偏移：`import * as THREE from 'three'` 的符号
+  //   `declarations[0]` 是 `NamespaceImport` 节点，它的 `getStart()` 指向 `*` 而不是 `THREE` ——
+  //   用偏移匹配会漏掉**每一个 namespace import**（实测：`THREE` 被误报成"搬出去没人给"）。
+  const importByName = new Map() // name -> {spec, kind}
   for (const st of sf.statements) {
     if (!ts.isImportDeclaration(st)) continue
     const spec = st.moduleSpecifier.text
     const cl = st.importClause
     if (!cl) continue
-    if (cl.name) importOf.set(cl.name.getStart(sf), { spec, name: cl.name.text, kind: 'namespace' })
+    if (cl.name) importByName.set(cl.name.text, { spec, name: cl.name.text, kind: 'namespace' })
     if (cl.namedBindings) {
       if (ts.isNamespaceImport(cl.namedBindings)) {
-        importOf.set(cl.namedBindings.name.getStart(sf), { spec, name: cl.namedBindings.name.text, kind: 'namespace' })
+        importByName.set(cl.namedBindings.name.text, { spec, name: cl.namedBindings.name.text, kind: 'namespace' })
       } else {
-        for (const el of cl.namedBindings.elements) importOf.set(el.name.getStart(sf), { spec, name: el.name.text, kind: 'named' })
+        for (const el of cl.namedBindings.elements) importByName.set(el.name.text, { spec, name: el.name.text, kind: 'named' })
       }
     }
   }
@@ -580,6 +603,24 @@ function move() {
     }
   }
 
+  // ── 段表声明的"模块级绑定"（`bind`）────────────────────────────────────
+  //
+  // 有些名字住在 `installCabin` **之外**的 monolith 模块顶层（`skyRng` 来自
+  // `const { sky: skyRng } = scene`、`runtimeRng` 来自 `const runtimeRng = runtime`），
+  // 既不是 import、也不是 `app` 的解构、更不在段内 —— `unknown` 会（正确地）把它们报出来。
+  // 段表用 `bind` 回答"它们从哪来"：段模块里就地重建同样的绑定。
+  const bind = seg.bind || {}
+  const bindNames = new Set(Object.keys(bind))
+  const bindLines = []
+  const bindImports = new Map() // spec -> Set(name)
+  for (const [name, b] of Object.entries(bind)) {
+    if (b.import) {
+      if (!bindImports.has(b.import.from)) bindImports.set(b.import.from, new Set())
+      for (const n of b.import.names) bindImports.get(b.import.from).add(n)
+    }
+    bindLines.push(`  const ${name} = ${b.expr}`)
+  }
+
   // ── 段体的自由标识符 ───────────────────────────────────────────────────
   const bySpec = new Map() // spec -> Set(name)
   const appUsed = new Set()
@@ -597,24 +638,44 @@ function move() {
         (ts.isFunctionDeclaration(p) && p.name === node) ||
         (ts.isVariableDeclaration(p) && p.name === node) ||
         (ts.isBindingElement(p) && p.name === node) ||
+        // ★ 参数名节点也必须跳过：函数/箭头/方法的形参**本身**会被遍历到，
+        //   它的"符号的声明位置 == 节点位置"，会被下面的防御判据误判成"符号指向自身"。
+        //   实测漏了这一条时会一次报出 13 个参数（t / el / i / dt / time / m …）。
+        (ts.isParameter(p) && p.name === node) ||
         (ts.isLabeledStatement(p) && p.label === node) ||
         (ts.isBreakOrContinueStatement(p) && p.label === node) ||
         (ts.isPropertyAccessExpression(p) && p.expression === node && p.expression.getText(sf) === 'ctx')
-      if (!skip) {
-        const sym = checker.getSymbolAtLocation(node)
-        const d = sym?.declarations?.[0]
+      if (!skip && !bindNames.has(node.text)) {
+        const sym = symbolOf(checker, node)
+        const decls = sym?.declarations || []
+        // import 的符号：`declarations[0]` 可能是 `ImportSpecifier` / `NamespaceImport` / `ImportClause`，
+        // 它们的 `getStart()` 与"名字节点"的偏移**不一定相同** ⇒ 按名字索引才可靠。
+        const isImportSym =
+          decls.length > 0 &&
+          decls.every((x) => ts.isImportSpecifier(x) || ts.isNamespaceImport(x) || ts.isImportClause(x) || ts.isImportEqualsDeclaration(x))
+        if (isImportSym && importByName.has(node.text)) {
+          const info = importByName.get(node.text)
+          if (!bySpec.has(info.spec)) bySpec.set(info.spec, new Set())
+          bySpec.get(info.spec).add(info.name)
+          ts.forEachChild(node, visit)
+          return
+        }
+        const d = decls[0]
+        // ★ 防御判据：符号的声明位置**就是引用位置本身** ⇒ 符号解析失败（简写属性的典型症状）。
+        //   它既不会进 appUsed、也不会进 unknown，会**静默漏掉** —— 所以必须显式报出来。
+        if (d && d.getStart(sf) === node.getStart(sf)) {
+          unknown.add(`${node.text}（符号指向自身 ⇒ 解析失败）`)
+          ts.forEachChild(node, visit)
+          return
+        }
         // 只有**本文件**里的声明才需要搬运；`document` / `Math` 这类来自 lib.dom / lib.es*
         // 的声明不在 `sf` 里 —— 它们是 JS 全局，搬出去照样能用（第一版就是这样误报的）。
         if (d && d.getSourceFile() === sf) {
           const off = d.getStart(sf)
-          if (importOf.has(off)) {
-            const info = importOf.get(off)
-            if (!bySpec.has(info.spec)) bySpec.set(info.spec, new Set())
-            bySpec.get(info.spec).add(info.name)
-          } else if (appNames.has(off)) {
+          if (appNames.has(off)) {
             appUsed.add(appNames.get(off))
           } else if (off < bodyStart || off >= bodyEnd) {
-            // 声明在段外、又不是 import / app 解构 ⇒ 搬出去以后这个裸标识符就没人给了。
+            // 声明在段外、又不是 import / app 解构 / 段表 bind ⇒ 搬出去以后这个裸标识符没人给了。
             // 它**必须**被报出来：这类错 tsc 不查（checkJs:false），只有页面跑起来才炸，
             // 而像素回归只会说"等待超时"。
             unknown.add(node.text)
@@ -634,6 +695,11 @@ function move() {
   const modPath = path.join(CABIN, seg.module)
   const modDir = path.dirname(modPath)
   const importLines = []
+  // 段表 `bind` 声明的依赖也一并进 import —— 它们与段体自己的 import 同等对待
+  for (const [spec, names] of bindImports) {
+    if (!bySpec.has(spec)) bySpec.set(spec, new Set())
+    for (const n of names) bySpec.get(spec).add(n)
+  }
   for (const [spec, names] of bySpec) {
     let out = spec
     if (spec.startsWith('.')) {
@@ -642,10 +708,7 @@ function move() {
       if (!out.startsWith('.')) out = './' + out
     }
     const list = [...names]
-    const ns = list.find((n) => {
-      const info = [...importOf.values()].find((i) => i.name === n && i.spec === spec)
-      return info?.kind === 'namespace'
-    })
+    const ns = list.find((n) => importByName.get(n)?.kind === 'namespace' && importByName.get(n)?.spec === spec)
     importLines.push(ns ? `import * as ${ns} from '${out}'` : `import { ${list.sort().join(', ')} } from '${out}'`)
   }
   importLines.sort()
@@ -664,7 +727,8 @@ function move() {
     ` */\n`
   const fnSig = `export function ${seg.fn}(ctx, app) {\n`
   const appHead = appUsed.size ? `  const { ${[...appUsed].sort().join(', ')} } = app\n` : ''
-  const modText = `${head}${importLines.length ? importLines.join('\n') + '\n\n' : ''}${fnSig}${appHead}${segBody.join('\n')}\n}\n`
+  const bindHead = bindLines.length ? `${bindLines.join('\n')}\n` : ''
+  const modText = `${head}${importLines.length ? importLines.join('\n') + '\n\n' : ''}${fnSig}${appHead}${bindHead}${segBody.join('\n')}\n}\n`
 
   // ── 改写 monolith ──────────────────────────────────────────────────────
   const rel = './' + path.relative(path.dirname(MONOLITH), modPath).replace(/\\/g, '/')

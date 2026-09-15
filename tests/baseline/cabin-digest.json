@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-15",
   "totals": {
-    "files": 77,
-    "lines": 16625
+    "files": 78,
+    "lines": 16650
   },
-  "combined": "0546a1372e1b7c3473dd3f97353a0b1842857be4f340a4d6a57bafe1d5bf67ea",
+  "combined": "bd127bda9b14fa31b5fbcc51d6860a492a234170ccca8b5a359ab706b58690a2",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -38,7 +38,7 @@
     "core/render/CameraRig.js": "b60be1371f1a5515",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "c6eac6dd98798a5b",
-    "legacy/monolith.js": "789184a420ee5e58",
+    "legacy/monolith.js": "878cfb92426dfc6d",
     "props/README.md": "600f9c9259b2ee19",
     "systems/audio/AudioSystem.js": "2b622e38bc52fb82",
     "systems/interaction/HintUI.js": "1794afdcb98dae86",
@@ -49,6 +49,7 @@
     "systems/ui/MenuPanel.js": "710248c601e0ed86",
     "systems/ui/SettingsForm.js": "c6389a80b73924a6",
     "systems/weather/environment.js": "65393605ebd7501d",
+    "systems/weather/WeatherSystem.js": "32de6ad915238225",
     "world/floor1/bookPile.js": "a9c1d2e6c31fdae6",
     "world/floor1/broom.js": "2c4dade66bf52a51",
     "world/floor1/cauldron.js": "30c7bc2a2dc2b4e9",
