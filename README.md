@@ -5,17 +5,18 @@
 > 操控一只软软的史莱姆在魔法小屋里生活：昼夜循环、7 种天气、120+ 可交互物件、24 层魔法阵与超位爆裂魔法；
 > **书架上的书 = 我写的文章，点开就在书页里读**。
 
-**当前阶段：`J3` 物件模块化 🟡 基础设施完成 + 21/67 件搬迁**（版本 `0.3.0`，见 [`docs/实施结果/J3-实施结果.md`](./docs/实施结果/J3-实施结果.md)）
-**当前稳定版：`v0.2.5`**（tag `v0.2.5`，开发主线在 `dev` 分支 —— 见 [`docs/VERSIONING.md`](./docs/VERSIONING.md)）
+**当前阶段：`J3` 物件模块化 🟡 基础设施完成 + 35/67 件搬迁**（版本 `0.3.0`，见 [`docs/实施结果/J3-实施结果.md`](./docs/实施结果/J3-实施结果.md)）
+**当前稳定版：`v0.2.5`**（tag `v0.2.5`，开发主线在 `dev` 分支；`J3` 的开发版快照是 `v0.3.0-dev.1` —— 见 [`docs/VERSIONING.md`](./docs/VERSIONING.md)）
 下一步：**`J4` 系统模块化**（player / weather / audio / magic / ui，最后删除 `legacy/`）——
-`J3` 剩下的 46 件里有四类结构性阻塞（每帧分支与主循环耦合 / 光源槽位 / `addStatic` 链 / 自建射线），
+`J3` 剩下的 32 件里有四类结构性阻塞（每帧分支与主循环耦合 / 光源槽位 / `addStatic` 链 / 自建射线），
 解锁条件逐件留痕在结果文档 §3 与 `scripts/oneoff/_j3-specs/*.SKIP.md`。
 
 `J3` 把「一件物件 = 一个文件」落成了流水线：**契约**（`app/defineProp.js`）+ **装配器**（`app/installProp.js`）
 + **挂载点 ID 表**（`app/mounts.js`）+ **搬迁应用器**（`scripts/oneoff/_j3-apply.mjs`），
-并用 21 件物件验证到像素逐字节零差异。它也补上了一条**没有任何测试守得住**的通路：
+并用 35 件物件验证到像素逐字节零差异（`legacy/monolith.js` 8973 → 6215 行）。
+它也补上了一条**没有任何测试守得住**的通路：
 搬走 `regMagic` 之后，若不同时补上 `magicMeshes` + `userData.onClick`，物件会「点不动」而画面毫无变化 ——
-`tests/e2e/j3-probe.mjs` 与 `registry.stats().magicPropIds` 就是为它造的判据。
+`tests/e2e/j3-probe.mjs` 与 `registry.stats().magicPropIds`（26 件）就是为它造的判据。
 画面与性能**与阶段开始前完全相同**：
 
 | 判据 | 结果 |
