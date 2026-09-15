@@ -25,7 +25,7 @@
  * | 顶层 `const hangBar / sunPivot / chimePivot` | `build()`，并用 `{ root, parts }` 交出根与两个摆锤 |
  * | 行内字面量 `0 / 2.66 / 3.86` | `world/layout.js` 的 `HANGBAR_X / HANGBAR_Y / HANGBAR_Z`（不变量 `N9`，数值一个没改） |
  * | `sunPivot.userData = { energy: 0, ph: 0 }`（含风铃的 `ph: 2`） | **原样保留**：状态本来就活在 `userData` 里，不属于顶层 `let`，逐字照搬最忠实 |
- * | `regMagic(sunPivot, …)` / `regMagic(chimePivot, …)` | `interactables()` 两条（`label` 语义化、`mode: 'both'`，消解风险 `R1`） |
+ * | `regMagic`（娃娃 / 风铃各一处） | `interactables()` 两条（`label` 语义化、`mode: 'both'`，消解风险 `R1`） |
  * | `tickOnce()` 里的 `{ for (const h of [sunPivot, chimePivot]) … }` | `update()`（函数体逐字搬运，只把变量来源换成 `parts`） |
  *
  * ⚠️ **需要人工在 monolith 侧做两件事**（应用器只管几何段，见 `_j3-apply.mjs` 文件头）：
@@ -144,7 +144,7 @@ export default defineProp({
     return { root: hangBar, parts: { sunPivot, chimePivot } }
   },
 
-  // 原 `regMagic(sunPivot, …)` / `regMagic(chimePivot, …)` —— 一处一条，`label` 语义化
+  // 原 `regMagic`（娃娃 / 风铃各一处）—— 一处一条，`label` 语义化
   interactables: (s, { L, parts }) => [
     {
       id: 'sun-doll/pat',

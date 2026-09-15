@@ -1,0 +1,23 @@
+{
+  "id": "floor1/book-pile",
+  "name": "bookPile",
+  "assign": "bookPileApi",
+  "file": "src/cabin/world/floor1/bookPile.js",
+  "batch": "B3",
+  "startMarker": "            /* ---- 12.9a 左窗下魔法书堆 ---- */",
+  "endMarker": "            /* ---- 12.9b 沙漏 ---- */",
+  "layout": [
+    {
+      "name": "BOOK_PILE_POS",
+      "value": "{ x: -3.62, y: 0, z: -1.4 }",
+      "doc": "左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）"
+    }
+  ],
+  "notes": "有动画的物件（B3）：几何 + 状态 + 交互 + 每帧分支全部搬进物件；update 由 tickOnce() 在**原位置**调用（原地 tick，见 app/installProp.js 文件头）。【边界】区间 = startMarker 行之后到 endMarker 行之前，即搬迁时 L1062–1113（几何 1062–1108 + regMagic 1109–1112 + 一个空行）；endMarker（12.9b 沙漏那行）本身**保留**，其后 12.9b 的装配调用不受影响。【拆干净的证明】grep 全文件：`bookPileG` / `pileBooks` / `pileState` / `pileT` 的全部命中都在 L1062–1112 与每帧块 L7726–7758 之内；`pileBooks`（顶层 const 数组）经 parts.books 交出（同一数组实例，`userData` 契约字段一个没改）、`pileState`/`pileT` 收进 state、`regMagic` 回调体进 onActivate ⇒ 区间内没有任何名字被区间外引用。【ctx 键】scene / L / put / box / line / rng（rng.floor1）；未用 cbox / crboxCol / colEdge / crumpleBall / arcPos / jitterGeo / hash01 / smooth / regSlide / registerHinge / regWobble / makeWavyFlame / updateWavyFlame（原段本来就没用，故按需解构、不复制实现）。【rng】每本书 4 次 floor1Rng() × 13 本 = 52 次，发生在 build 内、位置即原区间 ⇒ 次数与顺序不变。【交互】原本 regMagic（准星/点击）一条；现为 interactables 的 mode:'both'（近距 + 准星/点击），准星/点击通路由 installProp 自动补齐（userData.onClick / aimLabel / magicMeshes）。【需要人工做的 monolith 侧改动】① 装配行由应用器写成 `const bookPileApi = installProp(bookPile);`（spec 已声明 assign）；② 把 tickOnce() 里的每帧块按 tick.old 原文整块替换成 tick.new（原地调用，顺序不变）。",
+  "tick": {
+    "at": "tickOnce() 的「室内陈设动画」段：`/* ---- 书堆 ---- */` 那个块（搬迁时 L7724–7760，紧跟魔法餐桌的灵光/尘埃循环之后、`lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;` 之前）",
+    "note": "应用器只管几何段；这一段由人工替换（风格照 12.10 魔法扫帚那处）",
+    "old": "                /* ---- 书堆 ---- */\n                {\n                    const n = pileBooks.length;\n                    if (pileState === 'falling') {\n                        pileT += dt;\n                        let done = true;\n                        for (let i = 0; i < n; i++) {\n                            const b = pileBooks[i], u = b.userData;\n                            const delay = (n - 1 - i) * 0.075;\n                            const p = Math.min(Math.max((pileT - delay) / 0.55, 0), 1);\n                            if (p < 1) done = false;\n                            const e = p * p;\n                            b.position.x = u.sx + (u.fx - u.sx) * e;\n                            b.position.z = u.sz + (u.fz - u.sz) * e;\n                            b.position.y = u.sy + (u.fy - u.sy) * e + Math.sin(p * Math.PI) * 0.05;\n                            b.rotation.y = u.sry + (u.fry - u.sry) * e;\n                            b.rotation.z = Math.sin(p * Math.PI) * 0.45;\n                        }\n                        if (done) pileState = 'fallen';\n                    } else if (pileState === 'rising') {\n                        pileT += dt;\n                        let done = true;\n                        for (let i = 0; i < n; i++) {\n                            const b = pileBooks[i], u = b.userData;\n                            const delay = i * 0.11;\n                            const p = Math.min(Math.max((pileT - delay) / 0.65, 0), 1);\n                            if (p < 1) done = false;\n                            const e = p * p * (3 - 2 * p);\n                            b.position.x = u.fx + (u.sx - u.fx) * e;\n                            b.position.z = u.fz + (u.sz - u.fz) * e;\n                            b.position.y = u.fy + (u.sy - u.fy) * e + Math.sin(p * Math.PI) * 0.24;\n                            b.rotation.y = u.fry + (u.sry - u.fry) * e + Math.sin(p * Math.PI * 2) * 0.4;\n                            b.rotation.z = Math.sin((1 - p) * Math.PI) * 0.3;\n                        }\n                        if (done) pileState = 'stacked';\n                    }\n                }",
+    "new": "                {\n                    // J3（B3）：左窗下魔法书堆的每帧分支已搬入 world/floor1/bookPile.js（原地 tick）\n                    bookPileApi.tick(dt, time);\n                }"
+  }
+}

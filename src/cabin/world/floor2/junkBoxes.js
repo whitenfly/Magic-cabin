@@ -11,7 +11,7 @@
  * | 顶层 `let junkOpen = false, junkT = 0` | `state: () => ({ open: false, t: 0 })` |
  * | 行内字面量 `3.34 / 3.34` | `world/layout.js` 的 `JUNK_X / JUNK_Z`（不变量 `N9`，数值一个没改） |
  * | `const junkG / junkFlaps / junkInside` + 几何 | `build()`，用 `{ root, parts }` 把盖子数组与内胆交出去 |
- * | `regMagic(junkG, …)` | `interactables()`（`label` 语义化 + `mode: 'both'`，消解风险 `R1`） |
+ * | `regMagic`（箱体一处） | `interactables()`（`label` 语义化 + `mode: 'both'`，消解风险 `R1`） |
  * | `updateNewDecor()` 里的 6 行 | `update()`（逐字搬运，`junkT/junkOpen` → `s.t/s.open`，`junkFlaps/junkInside` → `parts`） |
  *
  * ## ★ 关于本文件里的三份"复刻工具"（唯一多出来的代码，务必知情）
@@ -170,7 +170,7 @@ export default defineProp({
     return { root: junkG, parts: { flaps: junkFlaps, inside: junkInside } }
   },
 
-  // 原 `regMagic(junkG, function () { junkOpen = !junkOpen; })`
+  // 原 `regMagic`（点箱体翻转 `junkOpen`）的替身
   interactables: (s, { L }) => [{
     id: 'junk-box/open',
     label: '翻开杂物纸箱的盖子',

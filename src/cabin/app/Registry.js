@@ -99,6 +99,10 @@ export function createRegistry() {
     return {
       props: props.length,
       magicMeshes: magicMeshes.length,
+      // `J3`：有准星/点击入口（`userData.onClick`）的物件 id —— 由 `installProp` 打标。
+      // 「搬走一件 `regMagic` 物件」最容易出的错就是它**悄悄失去准星入口**：
+      // 画面逐字节相同、冒烟也不覆盖，只有这个清单能把它照出来。
+      magicPropIds: [...new Set(magicMeshes.map((m) => m.userData.magicRoot?.userData?.cabinProp).filter(Boolean))],
       lights: lights.length,
       interactables: interactables.length,
       features: features.length,

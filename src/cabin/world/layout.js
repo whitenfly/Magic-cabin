@@ -126,6 +126,26 @@ export function createLayout() {
   const TBLZ = -2.5
   const TBL_TOP = FY + 0.80
 
+  /* ══════════ J3 搬迁新增 ══════════ */
+  /** 小宝箱（12.9c）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）（floor1/chest） */
+  const CHEST_POS = { x: -3.72, y: 0.805, z: -2.66 }
+  /** 门口上方挂杆（含晴天娃娃 / 玻璃风铃）中心 x（floor1/hang-bar） */
+  const HANGBAR_X = 0
+  /** 门口上方挂杆中心高度 y（floor1/hang-bar） */
+  const HANGBAR_Y = 2.66
+  /** 门口上方挂杆中心 z（门内侧）（floor1/hang-bar） */
+  const HANGBAR_Z = 3.86
+  /** 沙漏（12.9b）在楼梯下储物架台面上的位置（x 与原 12.9a 的 SFX 同值，y 是架子台面高）（floor1/hourglass） */
+  const HG_POS = { x: -3.72, y: 0.805, z: -2.44 }
+  /** 右前角杂物纸箱（18.16）中心 x（floor2/junk-boxes） */
+  const JUNK_X = 3.34
+  /** 右前角杂物纸箱（18.16）中心 z（floor2/junk-boxes） */
+  const JUNK_Z = 3.34
+  /** 二楼毛茸茸大地毯（18.15）中心 x（floor2/rug-large） */
+  const RUG2_X = 2.7
+  /** 二楼毛茸茸大地毯（18.15）中心 z（floor2/rug-large） */
+  const RUG2_Z = 0.7
+
   return {
     // 建筑外壳
     HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
@@ -136,5 +156,7 @@ export function createLayout() {
     BROOM_REST, BROOM_FLY,
     // 二楼
     FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
+    // J3 搬迁新增
+    CHEST_POS, HANGBAR_X, HANGBAR_Y, HANGBAR_Z, HG_POS, JUNK_X, JUNK_Z, RUG2_X, RUG2_Z,
   }
 }

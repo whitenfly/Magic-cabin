@@ -1,0 +1,17 @@
+{
+  "id": "floor1/stools",
+  "name": "stools",
+  "assign": "stoolsApi",
+  "file": "src/cabin/world/floor1/stools.js",
+  "batch": "B2",
+  "startMarker": "            // ---- 12.5 三脚圆凳 ----",
+  "endMarker": "            // ---- 12.6 桌下椭圆地毯 ----",
+  "layout": [],
+  "notes": "★ 本文件后缀是 .pending（应用器只读 *.json）—— 因为它有一条**应用器表达不了的前置条件**，做完前置再改名成 floor1-stools.json。几何段与每帧分支都已在 prop 里备好并用 _j3-verify-b2.mjs 验过（两只凳子各自直接挂 scene、userData 契约字段一个没改、update 逐字搬运）。前置条件见 prereq：movingPlatforms 引用了 `stools` 这个数组，而它在替换区间之外。",
+  "prereq": [
+    "① 装配行要拿到记录：应用器会写 `const stoolsApi = installProp(stools);`（spec 已声明 assign）。",
+    "② movingPlatforms（tickOnce 之前的碰撞表）里的两行 `{ g: stools[0], hx: 0.23, hz: 0.23, top: 0.475 },` / `{ g: stools[1], hx: 0.23, hz: 0.23, top: 0.475 },` 改成 `stoolsApi.parts.stoolA` / `stoolsApi.parts.stoolB`。不改 ⇒ `stools` 未定义 ⇒ refreshPlatforms() 每帧抛错（不是像素差异，是直接崩）。",
+    "③ tickOnce 里的 `for (const s of stools) { … }` 整块（7 行，`for (const s of stools) {` 起、16 空格缩进的 `}` 止）换成 `{ // J3：三脚圆凳的每帧分支已搬入 world/floor1/stools.js（原地 tick）` + `stoolsApi.tick(dt, time);` + `}`。",
+    "④ 两条交互（每只凳子一条）会经 interactables 注册；与其它 B2 物件同理，准星/点击那条通路在 J3 期间不再由 magicMeshes 提供。"
+  ]
+}

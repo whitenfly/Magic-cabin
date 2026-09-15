@@ -79,7 +79,23 @@ test('Registry：registerInteractable 需要 id；stats 汇总五类', () => {
   reg.registerInteractable({ id: 'i1' })
   reg.registerFeature({ id: 'f1' })
   const s = reg.stats()
-  assert.deepEqual(s, { props: 1, magicMeshes: 0, lights: 1, interactables: 1, features: 1 })
+  // `J3` 追加 `magicPropIds`：有准星/点击入口的物件 id（物品侧"交互没丢"的唯一可诊断痕迹）
+  assert.deepEqual(s, { props: 1, magicMeshes: 0, magicPropIds: [], lights: 1, interactables: 1, features: 1 })
+})
+
+test('Registry：magicPropIds 列出"有准星入口"的物件（J3 aim 桥的可观测判据）', () => {
+  const reg = createRegistry()
+  const root = { userData: {}, traverse(fn) { fn(this) } }
+  const mesh = { isMesh: true, userData: {} }
+  root.userData.cabinProp = 'floor1/broom'
+  reg.registerMagic(root, [mesh])
+  assert.deepEqual(reg.stats().magicPropIds, ['floor1/broom'])
+  // 同一物件多个命中体只报一次
+  reg.registerMagic(root, [{ isMesh: true, userData: {} }])
+  assert.deepEqual(reg.stats().magicPropIds, ['floor1/broom'])
+  // 没有来源标记的（仍是老 `regMagic` 路径的物件）不会污染这个清单
+  reg.registerMagic({ userData: {} }, [{ isMesh: true, userData: {} }])
+  assert.deepEqual(reg.stats().magicPropIds, ['floor1/broom'])
 })
 
 test('UpdateScheduler：登记顺序 = 执行顺序（J2 期间不做任何裁剪）', () => {

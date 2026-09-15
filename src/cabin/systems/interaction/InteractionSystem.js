@@ -52,7 +52,9 @@ export function createInteractionSystem({ registry = null, warn = () => {} } = {
   //
   // `J3` 期间 monolith 的 9 条硬编码条目走 `registerProximity()`，是在本系统**创建之后**才注册的，
   // 因此不会与这个循环重复；`J4` 把两边统一后，这段可以简化成"只读 registry"。
-  if (registry) {
+  // 用 `Array.isArray` 守住：只提供 `registerInteractable` 的最小 registry 替身（单测里常见）
+  // 也能用 —— 认领是"有则收编"，不是"必须有"。
+  if (registry && Array.isArray(registry.interactables)) {
     for (const it of registry.interactables) {
       if (it.mode !== 'aim' && !proximity.includes(it)) proximity.push(it)
     }

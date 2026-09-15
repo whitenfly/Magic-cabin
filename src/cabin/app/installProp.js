@@ -80,15 +80,26 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
     }
     if (installed.has(prop.id)) throw new Error(`物件重复装配：${prop.id}`)
 
-    const c = { ...ctx, ...(options.ctx || {}) }
+    // 装配环境以 `ctx` 为**原型**，而不是展开它。
+    //
+    // 这不是风格偏好：`ctx` 里的每个键可以是 getter，**只在物件真正读取它的那一刻求值**。
+    // 而装配器的构造点（monolith 早段）**早于**某些共享工具的定义 ——
+    // `regSlide` / `registerHinge` 在 L283 就有，但 `cbox` / `crboxCol` 住在 18.10 段、
+    // `colEdge` 住在 18.12 段。若在这里展开（`{ ...ctx }`），所有 getter 会被立刻触发，
+    // 早段构造时就撞上后段工具的 TDZ。
+    //
+    // ⇒ **物件的 `build` 请按需解构**（`build({ scene, put, line })`），不要展开整个 env。
+    const env = Object.create(ctx)
+    if (options.ctx) Object.assign(env, options.ctx)
 
     // ① 状态（闭包级，替代搬迁前散落的顶层 let）
-    const state = typeof prop.state === 'function' ? prop.state(c) : {}
+    const state = typeof prop.state === 'function' ? prop.state(env) : {}
+    env.state = state
 
     // ② 几何 —— build 内部自己 scene.add（保持对象父子结构与原实现一致）。
     //    `build` 可以返回 Object3D（常见），也可以返回 `{ root, parts }` ——
     //    后者用于"一件物件里有多个需要后续访问的 Group"（如扫帚本体 + 悬浮光环）。
-    const built = prop.build({ ...c, state })
+    const built = prop.build(env)
     let root = built
     let parts = {}
     if (built && typeof built === 'object' && !built.isObject3D && 'root' in built) {
@@ -96,7 +107,8 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       parts = built.parts || {}
     }
     // 后续所有声明都能通过 `ctx.parts` 拿到这些部件（与 `mounts` 的 `parts` 同名同义）
-    const c2 = { ...c, parts }
+    env.parts = parts
+    const c2 = env
 
     // ③ 物件登记（id 查重在这里生效：搬错文件、两处定义同一物件会立刻炸）
     const entry = registry.registerProp(root, { id: prop.id, kind: prop.kind, mount: prop.mount })
@@ -146,6 +158,9 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       ud.onClick = () => { if (typeof aimEntry.onActivate === 'function') aimEntry.onActivate() }
       ud.aimLabel = aimEntry.label
       if (typeof ud.sfx !== 'string') ud.sfx = 'toggle'
+      // 来源标记：`registry.stats().magicPropIds` 靠它回答"哪些物件真的有准星入口"。
+      // 这条通路任何测试都守不住（画面不变、冒烟不覆盖），所以留一个可诊断的痕迹。
+      ud.cabinProp = prop.id
       const meshes = []
       root.traverse((m) => { if (m.isMesh && !m.userData.noHit) meshes.push(m) })
       // 顺序 = 装配顺序 = 原 `regMagic` 的调用位置 ⇒ `magicMeshes` 的命中优先级不变
