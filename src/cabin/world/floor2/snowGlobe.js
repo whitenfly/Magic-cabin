@@ -33,47 +33,47 @@ import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `updateSnow(time, dt)`，逐字搬运（捕获量按原名从 `parts` / `rng` 解构回来） */
-    function updateSnow(time, dt, env) {
+function updateSnow(time, dt, env) {
     const { parts, rng } = env;
     const snowParts = parts.flakes, SNOW_C = parts.center, SNOW_R = parts.radius, SNOW_FLOOR = parts.floor;
     const runtimeRng = rng.runtime;
-        for (const s of snowParts) {
-            s.v.y -= 0.05 * dt;
-            s.v.multiplyScalar(Math.max(0, 1 - 1.4 * dt));
-            s.p.addScaledVector(s.v, dt);
-            s.p.x += Math.sin(time * s.sf + s.ph) * 0.00018;
-            const dx = s.p.x - SNOW_C.x, dy = s.p.y - SNOW_C.y, dz = s.p.z - SNOW_C.z;
-            const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            const R = SNOW_R - 0.004;
-            if (L > R) {
-                const k = R / L;
-                s.p.set(SNOW_C.x + dx * k, SNOW_C.y + dy * k, SNOW_C.z + dz * k);
-                s.v.multiplyScalar(0.35);
-            }
-            if (s.p.y < SNOW_FLOOR) {
-                s.p.y = SNOW_FLOOR;
-                s.v.y = Math.max(0, s.v.y);
-                s.v.x *= 0.5;
-                s.v.z *= 0.5;
-                if (s.v.length() < 0.006 && runtimeRng() < 0.004) {
-                    s.p.set(
-                        SNOW_C.x + (runtimeRng() - 0.5) * 0.05,
-                        SNOW_C.y + 0.028 + runtimeRng() * 0.032,
-                        SNOW_C.z + (runtimeRng() - 0.5) * 0.05
-                    );
-                    s.v.set(0, -0.008, 0);
-                }
-            }
-            s.mesh.position.copy(s.p);
-            s.mesh.rotation.y += 1.8 * dt;
+    for (const s of snowParts) {
+        s.v.y -= 0.05 * dt;
+        s.v.multiplyScalar(Math.max(0, 1 - 1.4 * dt));
+        s.p.addScaledVector(s.v, dt);
+        s.p.x += Math.sin(time * s.sf + s.ph) * 0.00018;
+        const dx = s.p.x - SNOW_C.x, dy = s.p.y - SNOW_C.y, dz = s.p.z - SNOW_C.z;
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const R = SNOW_R - 0.004;
+        if (L > R) {
+            const k = R / L;
+            s.p.set(SNOW_C.x + dx * k, SNOW_C.y + dy * k, SNOW_C.z + dz * k);
+            s.v.multiplyScalar(0.35);
         }
+        if (s.p.y < SNOW_FLOOR) {
+            s.p.y = SNOW_FLOOR;
+            s.v.y = Math.max(0, s.v.y);
+            s.v.x *= 0.5;
+            s.v.z *= 0.5;
+            if (s.v.length() < 0.006 && runtimeRng() < 0.004) {
+                s.p.set(
+                    SNOW_C.x + (runtimeRng() - 0.5) * 0.05,
+                    SNOW_C.y + 0.028 + runtimeRng() * 0.032,
+                    SNOW_C.z + (runtimeRng() - 0.5) * 0.05
+                );
+                s.v.set(0, -0.008, 0);
+            }
+        }
+        s.mesh.position.copy(s.p);
+        s.mesh.rotation.y += 1.8 * dt;
     }
+}
 
 export default defineProp({
   id: 'floor2/snow-globe',
   kind: 'decor',
 
-  build({ scene, L, V, LITMAT, rng }) {
+  build({ scene, L, V, LITMAT, MAT, rng }) {
     const { SNOW_X, SNOW_Z, TBL_TOP } = L
     const floor2Rng = rng.floor2
 

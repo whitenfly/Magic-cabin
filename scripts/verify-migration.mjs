@@ -162,10 +162,21 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   //   把差值写进白名单**逐项对照**：与预期不符即失败，仍能抓住意外的增删；
   //   而"合法下降"本身不必让门禁变红。
   //   ⚠️ 后续阶段（J3/J4）再动这些调用点时，一并更新这里的期望值并在结果文档里说明。
-  const J25_DELTA = {
-    'addEventListener(': -1,
+  // 已知差值白名单 —— **每一项都必须能解释**（哪个阶段、删了什么、搬到了哪）。
+  // 与预期不符即失败，所以仍能抓住意外的增删；而"合法下降"本身不必让门禁变红。
+  const KNOWN_DELTA = {
+    // ── J2.5 配置编排层：菜单里 6 个手写控件的绑定搬进 `systems/ui/SettingsForm.js`
     'getElementById(': -8,
     'SND.play(': -4,
+    // J2.5 −1（手写绑定 → bus.on('ui:click')）；J3 再 −3：
+    //   · 全身镜的**自建射线段**（`renderer.domElement.addEventListener('pointerdown'/'pointerup')`）
+    //     随几何段一起搬走 —— 射线那一半留给 `J4`（见 `J3-实施结果.md` §3④）；
+    //   · 前墙挂画的编辑器监听器同理。
+    'addEventListener(': -4,
+    // ── J3 物件模块化：`regMagic(o, onClick)` 被 `defineProp` 的 `interactables` 取代
+    //    每搬走一处，这个计数就少 1 —— **这正是本阶段的目的**，不是回归。
+    //    当前已搬 35 件，其中 17 件带 `regMagic` ⇒ −17（收尾时按实际搬迁数核对）。
+    'regMagic(': -17,
   }
   // ★ J3：计数前先**剥掉块注释**。
   //
@@ -189,11 +200,11 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   ]) {
     const a = count(srcCode, re)
     const b = count(curCode, re)
-    const delta = J25_DELTA[label] ?? 0
+    const delta = KNOWN_DELTA[label] ?? 0
     check(
       `${label}  ${a} → ${b}`,
       b - a === delta,
-      delta === 0 ? '' : `J2.5 已知差 ${delta > 0 ? '+' : ''}${delta}`,
+      delta === 0 ? '' : `已知差 ${delta > 0 ? '+' : ''}${delta}`,
     )
   }
   check('已无 three.min.js 的 <script> 引用', !/<script\s+src="three\.min\.js"/.test(parts))

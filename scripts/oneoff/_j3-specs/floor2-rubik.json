@@ -1,0 +1,23 @@
+{
+  "id": "floor2/rubik",
+  "name": "rubik",
+  "assign": "rubikApi",
+  "file": "src/cabin/world/floor2/rubik.js",
+  "batch": "B5",
+  "startMarker": "            /* —— 魔方 —— */",
+  "endMarker": "            /* —— 通用倒塌/恢复 —— */",
+  "layout": [
+    {
+      "name": "RUBIK_HOME",
+      "value": "{ x: 3.15, y: TBL_TOP + 0.085, z: -2.68 }",
+      "doc": "二楼书桌桌面魔方（18.4）的静止位（组原点）"
+    }
+  ],
+  "tick": {
+    "at": "tickOnce() 里 `updateChalk(time);` / `updateWand2(time);` 之后、`updateSnow(time, dt);` 之前那一对相邻行（当前 L6872–6873）",
+    "note": "两行合并成一行 `rubikApi.tick(dt, time);`。⚠️ 原名分别是 `updateRubik(time)` 与 `updateLayerAnim(dt)`，tick 的参数顺序是 (dt, time)，写反会让抬升/下落与层旋转的时长全错。它前面那行 `updateWand2(time);`（18.9，本轮 SKIP）与后面那行 `updateSnow(time, dt);`（本批新 spec）都必须留在原地，顺序一个字节不变。",
+    "old": "                updateRubik(time);\n                updateLayerAnim(dt);",
+    "new": "                // J3（B5）：魔方（浮起打乱 / 落回还原）的每帧分支已搬入 world/floor2/rubik.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                rubikApi.tick(dt, time);"
+  },
+  "notes": "用到的 ctx 键：scene / L(RUBIK_HOME, 交互锚点也用它) / V / LITMAT / rng.runtime（**按需解构**）。私有顶层量 rubikG / RUBIK_HOME / rubikPivot / faceCol / cmMat / cmDark / cubieEdgeMat / cubies / AXV / beginLayer / updateLayerAnim / startNextTurn / updateRubik 已逐名 grep 核对：区间外**只**在 tickOnce 那两行被读（本 spec 的 tick 已替换），其余全部只在本段内出现 ⇒ 整段搬走不产生 ReferenceError。顶层 `const rubikState = {...}` 与 `let layerAnim = null` 收进 state（字段名不变 + `layerAnim` + `now`）。★ 两处 `clock.now`（regMagic 回调里、`startNextTurn()` 里）改写为 `s.now` —— `update` 第一行 `s.now = time;`，而 `tickOnce()` 开头就是 `const time = clock.now;`，二者**恒等**（不是近似），与 floor2/witchHat.js 同一处置；ctx 里没有 clock，也不该为此新增一个 ctx 键。A XV 由 build 用 ctx 的 V 造好后经 parts.axv 交出。rng：build 不消耗随机源；点击时 18 次 runtimeRng()（6 步 × 3 次）经 rng.runtime 取**同一个真随机源实例**，次数与顺序未变。interactables：原 `regMagic(rubikG, …)` 一条，id `rubik/scramble`、label `转动桌上的魔方`、mode both、anchor 取 L.RUBIK_HOME（与几何同源，不变量 N9）、radius 1.4。"
+}

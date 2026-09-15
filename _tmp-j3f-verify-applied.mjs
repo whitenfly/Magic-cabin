@@ -18,11 +18,14 @@ const layout = fs.readFileSync(path.join(ROOT, 'src/cabin/world/layout.js'), 'ut
 const SPEC_DIR = path.join(ROOT, 'scripts/oneoff/_j3-specs')
 
 const countOf = (hay, needle) => hay.split(needle).length - 1
-/** 标识符命中（按行报告） */
+/** 标识符命中（按行报告）—— 先把单引号字符串字面量抹掉，避免 `'flipping'` 这种字符串误报 */
 function hits(name) {
   const out = []
   const re = new RegExp(`\\b${name}\\b`)
-  mono.split('\n').forEach((l, i) => { if (re.test(l)) out.push(`${i + 1}: ${l.trim().slice(0, 120)}`) })
+  mono.split('\n').forEach((l, i) => {
+    const code = l.replace(/'[^']*'/g, "''")
+    if (re.test(code)) out.push(`${i + 1}: ${l.trim().slice(0, 120)}`)
+  })
   return out
 }
 

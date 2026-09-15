@@ -1,0 +1,23 @@
+{
+  "id": "floor2/coin-towers",
+  "name": "coinTowers",
+  "assign": "coinTowersApi",
+  "file": "src/cabin/world/floor2/coinTowers.js",
+  "batch": "B5",
+  "startMarker": "            /* —— 通用倒塌/恢复 —— */",
+  "endMarker": "            /* —— 扑克牌堆 —— */",
+  "layout": [
+    {
+      "name": "COIN_BASE",
+      "value": "{ x: 3.34, z: -2.28 }",
+      "doc": "二楼书桌桌面金币柱（18.4）的基座（交互锚点与几何同源）"
+    }
+  ],
+  "tick": {
+    "at": "tickOnce() 里 `updateGlyphs(time, dt);` 之后那一行（当前 L6880），在 `tissueBoxApi.tick(dt, time);` 之前",
+    "note": "原样换成一行 `coinTowersApi.tick(dt, time);`。后面 `tissueBoxApi.tick(dt, time);` / `updateWobblers(dt);` / `witchHatApi.tick(dt, time);` 三行留在原地。",
+    "old": "                for (const tg of toppleGroups) updateTopple(tg);",
+    "new": "                // J3（B5）：金币柱倒塌/恢复的每帧分支已搬入 world/floor2/coinTowers.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                coinTowersApi.tick(dt, time);"
+  },
+  "notes": "用到的 ctx 键：scene / L(COIN_BASE) / V / LITMAT / rng.floor2 / state（`regTopple` 在 build 里 push 进 state.groups）。本 spec **一次覆盖两个原注释小节**（`/* —— 通用倒塌/恢复 —— */` 是金币柱私有的两个辅助函数 regTopple / updateTopple，已 grep 核对只被金币柱使用）—— 「通用」二字是原作者的措辞，实际没有第二个用户，随本件一起搬走不留缺口。私有顶层量 toppleGroups（→ state.groups）/ coinG / goldMat / goldEdge / coinItems / BASE（→ layout COIN_BASE）/ slots / all / cols / colOrder / DIR / PER / dl 已逐名核对：区间外**只**在 tickOnce 那一行被读，其余只在本段内。regTopple 末尾的 `regMagic(group, …)` 移到 interactables（用 `s.groups.map` 保持「一个 group 一条交互」的条数）。边界：startMarker 取「通用倒塌/恢复」行、endMarker 取「扑克牌堆」行（各只出现一次）。rng：build 里每枚金币两次 floor2Rng()（fr 的 y 旋转与 delay），共 49 枚；经 rng.floor2 取同一个种子随机源实例，次数与顺序未变（不变量 N8）。"
+}

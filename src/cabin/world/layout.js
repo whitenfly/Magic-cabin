@@ -127,6 +127,26 @@ export function createLayout() {
   const TBL_TOP = FY + 0.80
 
   /* ══════════ J3 搬迁新增 ══════════ */
+  /** 二楼书桌桌面台历（18.4）中心 x（floor2/calendar） */
+  const CAL_X = 2.62
+  /** 二楼书桌桌面台历（18.4）中心 z（floor2/calendar） */
+  const CAL_Z = -2.34
+  /** 二楼书桌桌面扑克牌堆（18.4）的静止位（组原点）（floor2/card-deck） */
+  const DECK_HOME = { x: 3.35, y: TBL_TOP + 0.002, z: -2.15 }
+  /** 二楼书桌桌面金币柱（18.4）的基座（交互锚点与几何同源）（floor2/coin-towers） */
+  const COIN_BASE = { x: 3.34, z: -2.28 }
+  /** 二楼书桌桌面沙漏（18.4）中心 x（floor2/desk-hourglass） */
+  const DESK_HG_X = 2.15
+  /** 二楼书桌桌面沙漏（18.4）中心 z（floor2/desk-hourglass） */
+  const DESK_HG_Z = -2.50
+  /** 二楼前墙挂画（18.13）中心（原 `picG.position.set(1.45, FY + 1.55, 3.82)` 拆出，y 是相对二楼楼面的高度）（floor2/picture） */
+  const PIC_POS = { x: 1.45, y: 1.55, z: 3.82 }
+  /** 二楼书桌桌面魔方（18.4）的静止位（组原点）（floor2/rubik） */
+  const RUBIK_HOME = { x: 3.15, y: TBL_TOP + 0.085, z: -2.68 }
+  /** 二楼书桌桌面玻璃雪景球（18.4）中心 x（floor2/snow-globe） */
+  const SNOW_X = 3.50
+  /** 二楼书桌桌面玻璃雪景球（18.4）中心 z（floor2/snow-globe） */
+  const SNOW_Z = -2.80
   /** 左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）（floor1/book-pile） */
   const BOOK_PILE_POS = { x: -3.62, y: 0, z: -1.4 }
   /** 旋转星铃（12.9d）的组原点（x 与 12.9 左墙书架的 SFX 同值，y 是吊挂高度）（floor1/star-bell） */
@@ -202,5 +222,7 @@ export function createLayout() {
     CHEST_POS, HANGBAR_X, HANGBAR_Y, HANGBAR_Z, HG_POS, JUNK_X, JUNK_Z, RUG2_X, RUG2_Z,
     // J3 搬迁新增
     BOOK_PILE_POS, STARBELL_POS, TAROT_POS, BAG_HOOK_X, BAG_HOOK_Y, BAG_HOOK_Z, BIN_X, BIN_Z, BIN_H, CRATE_X, CRATE_Z, CR_W, CR_D, CR_H, CRATE_TOP, MIRROR_X, MIRROR_Z, TISSUE_X, TISSUE_Z, WD_X, WD_Z,
+    // J3 搬迁新增
+    CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
   }
 }

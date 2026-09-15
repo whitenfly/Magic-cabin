@@ -1,0 +1,28 @@
+{
+  "id": "floor2/desk-hourglass",
+  "name": "deskHourglass",
+  "assign": "deskHourglassApi",
+  "file": "src/cabin/world/floor2/deskHourglass.js",
+  "batch": "B5",
+  "startMarker": "            /* —— 沙漏 —— */",
+  "endMarker": "            /* —— 台历（转轴位于背板面顶端：未翻页贴板前面、翻过页贴板背面， */",
+  "layout": [
+    {
+      "name": "DESK_HG_X",
+      "value": "2.15",
+      "doc": "二楼书桌桌面沙漏（18.4）中心 x"
+    },
+    {
+      "name": "DESK_HG_Z",
+      "value": "-2.50",
+      "doc": "二楼书桌桌面沙漏（18.4）中心 z"
+    }
+  ],
+  "tick": {
+    "at": "tickOnce() 里 `updateSnow(time, dt);` 之后那一行（当前 L6875）",
+    "note": "原样换成一行 `deskHourglassApi.tick(dt, time);`。前一行 `updateSnow(time, dt);`（本批新 spec）与后一行 `updateDeck(time);`（本批新 spec）留在原地。⚠️ 原名是 `updateHourglass(time)`，tick 的顺序是 (dt, time)。",
+    "old": "                updateHourglass(time);",
+    "new": "                // J3（B5）：桌面沙漏（翻身 / 流沙）的每帧分支已搬入 world/floor2/deskHourglass.js（原地 tick）\n                // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。\n                deskHourglassApi.tick(dt, time);"
+  },
+  "notes": "★ 与 floor1/hourglass（原 12.9b，楼梯下储物架台面上那只，位置来自 L.HG_POS）**不是同一件** —— 本件是二楼书桌桌面上这只（原 18.4）。两者几何/状态机/交互完全独立，只是外形相同；id 用 `floor2/desk-hourglass` 以免与 floor1/hourglass 撞名（registry 的 id 查重会立刻炸）。用到的 ctx 键：scene / L(DESK_HG_X, DESK_HG_Z, TBL_TOP) / LITMAT / smooth（**只在 update 里解构** —— smooth 在原 monolith 里住在 18.8 段，build 期间还在 TDZ）。私有顶层量 hourG / sandUp / sandDn / sandStream / hourSand / hourState 已逐名 grep 核对：区间外**只**在 tickOnce 那一行被读。顶层 `const hourState = { phase: 'flow', t0: clock.now }` 收进 state 的 phase/t0，`const hourSand = { up: 1.0, dn: 0.05 }` 收进 state.sand（字段名不变，update 里以原名 hourSand 别住 ⇒ 函数体逐字未改）。★ `t0: clock.now` 写成 `t0: 0`：clock 只在 animate() 里的 clock.tick(t) 推进，而**全部建几何代码都在第一次 animate() 之前**（monolith 末尾 `if (clock.mode === 'manual') {…} else { animate(0); }`），建几何时 clock.now 恒为 0（app/clock.js 初值也是 0）⇒ 与原实现**同一个数**。点击时那处 clock.now 走 s.now（update 第一行存的上一帧 time），与 floor2/witchHat.js 同一处置。rng：本段不消耗随机源。interactables：原 `regMagic(hourG, …)` 一条，id `desk-hourglass/flip`、label `把桌上的沙漏翻过来`、mode both、anchor 取 L.DESK_HG_X / L.DESK_HG_Z、radius 1.4。"
+}

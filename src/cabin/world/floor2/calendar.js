@@ -36,49 +36,49 @@ import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `calZFor(pg, rot)`，逐字搬运（`smooth` 改为显式参数） */
-    // 根据当前旋转角计算页面沿杆的 z 偏移：
-    // 前半圈（页在前方）保持板前层叠位置，翻过顶部（rot > π）后平滑滑到板后层叠位置
-    function calZFor(pg, rot, smooth) {
-        const kk = smooth(Math.max(0, Math.min(1, (rot - Math.PI) / Math.PI)));
-        return pg.zInit + (pg.zFlip - pg.zInit) * kk;
-    }
+// 根据当前旋转角计算页面沿杆的 z 偏移：
+// 前半圈（页在前方）保持板前层叠位置，翻过顶部（rot > π）后平滑滑到板后层叠位置
+function calZFor(pg, rot, smooth) {
+    const kk = smooth(Math.max(0, Math.min(1, (rot - Math.PI) / Math.PI)));
+    return pg.zInit + (pg.zFlip - pg.zInit) * kk;
+}
 
 /** 原 `updateCal(dt)`，逐字搬运（`calState` 以原名别住形参 `s`；`calPages` 从 `parts` 取） */
-    function updateCal(s, dt, env) {
-        const { parts, smooth } = env;
+function updateCal(s, dt, env) {
+    const { parts, smooth } = env;
     const calPages = parts.pages;
     const calState = s;   /* 原名别名：下面函数体逐字未改 */
     if (calState.phase === 'idle') return;
-        calState.animT += dt;
-        const e = calState.animT;
-        const k = smooth(Math.min(e / calState.animDur, 1));
-        if (calState.phase === 'flipping') {
-            const pg = calState.animPage;
-            const rot = pg.initRot + (pg.flippedRot - pg.initRot) * k;
+    calState.animT += dt;
+    const e = calState.animT;
+    const k = smooth(Math.min(e / calState.animDur, 1));
+    if (calState.phase === 'flipping') {
+        const pg = calState.animPage;
+        const rot = pg.initRot + (pg.flippedRot - pg.initRot) * k;
+        pg.grp.rotation.x = rot;
+        pg.mesh.position.z = calZFor(pg, rot, smooth);
+        if (e >= calState.animDur) {
+            pg.grp.rotation.x = pg.flippedRot;
+            pg.mesh.position.z = pg.zFlip;
+            calState.month++;
+            calState.phase = 'idle';
+        }
+    } else if (calState.phase === 'returning') {
+        for (const pg of calPages) {
+            const rot = pg.flippedRot + (pg.initRot - pg.flippedRot) * k;
             pg.grp.rotation.x = rot;
             pg.mesh.position.z = calZFor(pg, rot, smooth);
-            if (e >= calState.animDur) {
-                pg.grp.rotation.x = pg.flippedRot;
-                pg.mesh.position.z = pg.zFlip;
-                calState.month++;
-                calState.phase = 'idle';
-            }
-        } else if (calState.phase === 'returning') {
+        }
+        if (e >= calState.animDur) {
             for (const pg of calPages) {
-                const rot = pg.flippedRot + (pg.initRot - pg.flippedRot) * k;
-                pg.grp.rotation.x = rot;
-                pg.mesh.position.z = calZFor(pg, rot, smooth);
+                pg.grp.rotation.x = pg.initRot;
+                pg.mesh.position.z = pg.zInit;
             }
-            if (e >= calState.animDur) {
-                for (const pg of calPages) {
-                    pg.grp.rotation.x = pg.initRot;
-                    pg.mesh.position.z = pg.zInit;
-                }
-                calState.month = 1;
-                calState.phase = 'idle';
-            }
+            calState.month = 1;
+            calState.phase = 'idle';
         }
     }
+}
 
 export default defineProp({
   id: 'floor2/calendar',
@@ -87,7 +87,7 @@ export default defineProp({
   /** 原 `const calState = { month: 1, phase: 'idle', animT: 0, animDur: 0.75, animPage: null }` */
   state: () => ({ month: 1, phase: 'idle', animT: 0, animDur: 0.75, animPage: null }),
 
-  build({ scene, L, MAT }) {
+  build({ scene, L, LITMAT, MAT }) {
     const { CAL_X, CAL_Z, TBL_TOP } = L
 
     const calG = new THREE.Group();

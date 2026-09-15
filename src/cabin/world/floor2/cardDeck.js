@@ -34,78 +34,79 @@ import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `updateDeck(time)`，逐字搬运（`deckState` → 形参 `s`；三个捕获量按原名从 `parts` 解构回来） */
-    function updateDeck(s, time, env) {
+function updateDeck(s, time, env) {
     const { parts, smooth } = env;
     const deckG = parts.body, deckCards = parts.cards, revealCard = parts.revealCard;
-    const DECK_HOME = parts.home;        if (s.phase === 'idle') return;
-        const e = time - s.t0;
-        const rc = revealCard.grp;
-        const go = ph => { s.phase = ph; s.t0 = time; };
-        if (s.phase === 'rise') {
-            const k = smooth(Math.min(e / 0.35, 1));
-            deckG.position.y = DECK_HOME.y + 0.22 * k;
-            if (e >= 0.35) go('split');
-        } else if (s.phase === 'split') {
-            deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
-            const k = smooth(Math.min(e / 0.28, 1));
-            for (const c of deckCards) {
-                const side = (c.userData.i < 6) ? -1 : 1;
-                c.position.x = side * 0.052 * k;
-                c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * k;
-                c.rotation.y = side * 0.12 * k;
-            }
-            rc.position.x = 0.026 * k;
-            if (e >= 0.36) go('riffle');
-        } else if (s.phase === 'riffle') {
-            deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
-            for (const c of deckCards) {
-                const side = (c.userData.i < 6) ? -1 : 1;
-                const tk = smooth(Math.max(0, Math.min(1, (e - (side > 0 ? 0.14 : 0)) / 0.30)));
-                c.position.x = side * 0.052 * (1 - tk);
-                c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * (1 - tk) + Math.sin(tk * Math.PI) * 0.006;
-                c.rotation.y = side * 0.12 * (1 - tk);
-            }
-            const rtk = smooth(Math.max(0, Math.min(1, (e - 0.14) / 0.30)));
-            rc.position.x = 0.026 * (1 - rtk);
-            if (e >= 0.52) go('settle');
-        } else if (s.phase === 'settle') {
-            for (const c of deckCards) {
-                c.position.copy(c.userData.base);
-                c.rotation.y = 0;
-            }
-            rc.position.set(0, revealCard.homeY, 0);
-            if (e >= 0.15) go('rup');
-        } else if (s.phase === 'rup') {
-            const k = smooth(Math.min(e / 0.30, 1));
-            rc.position.y = revealCard.homeY + 0.11 * k;
-            if (e >= 0.30) go('rflip');
-        } else if (s.phase === 'rflip') {
-            const k = smooth(Math.min(e / 0.45, 1));
-            rc.rotation.x = Math.PI * k;
-            rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin(k * Math.PI);
-            if (e >= 0.45) go('rhold');
-        } else if (s.phase === 'rhold') {
-            rc.position.y = revealCard.homeY + 0.11 + Math.sin(time * 2.5) * 0.004;
-            if (e >= 1.5) go('rback');
-        } else if (s.phase === 'rback') {
-            const k = smooth(Math.min(e / 0.45, 1));
-            rc.rotation.x = Math.PI * (1 - k);
-            rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin((1 - k) * Math.PI);
-            if (e >= 0.45) go('rdown');
-        } else if (s.phase === 'rdown') {
-            const k = smooth(Math.min(e / 0.30, 1));
-            rc.position.y = revealCard.homeY + 0.11 * (1 - k);
-            if (e >= 0.30) go('down');
-        } else if (s.phase === 'down') {
-            rc.rotation.x = 0;
-            const k = smooth(Math.min(e / 0.40, 1));
-            deckG.position.y = DECK_HOME.y + 0.22 * (1 - k);
-            if (e >= 0.40) {
-                deckG.position.copy(DECK_HOME);
-                s.phase = 'idle';
-            }
+    const DECK_HOME = parts.home;
+    if (s.phase === 'idle') return;
+    const e = time - s.t0;
+    const rc = revealCard.grp;
+    const go = ph => { s.phase = ph; s.t0 = time; };
+    if (s.phase === 'rise') {
+        const k = smooth(Math.min(e / 0.35, 1));
+        deckG.position.y = DECK_HOME.y + 0.22 * k;
+        if (e >= 0.35) go('split');
+    } else if (s.phase === 'split') {
+        deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
+        const k = smooth(Math.min(e / 0.28, 1));
+        for (const c of deckCards) {
+            const side = (c.userData.i < 6) ? -1 : 1;
+            c.position.x = side * 0.052 * k;
+            c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * k;
+            c.rotation.y = side * 0.12 * k;
+        }
+        rc.position.x = 0.026 * k;
+        if (e >= 0.36) go('riffle');
+    } else if (s.phase === 'riffle') {
+        deckG.position.y = DECK_HOME.y + 0.22 + Math.sin(time * 5) * 0.004;
+        for (const c of deckCards) {
+            const side = (c.userData.i < 6) ? -1 : 1;
+            const tk = smooth(Math.max(0, Math.min(1, (e - (side > 0 ? 0.14 : 0)) / 0.30)));
+            c.position.x = side * 0.052 * (1 - tk);
+            c.position.y = c.userData.base.y + (side > 0 ? 0.005 : 0) * (1 - tk) + Math.sin(tk * Math.PI) * 0.006;
+            c.rotation.y = side * 0.12 * (1 - tk);
+        }
+        const rtk = smooth(Math.max(0, Math.min(1, (e - 0.14) / 0.30)));
+        rc.position.x = 0.026 * (1 - rtk);
+        if (e >= 0.52) go('settle');
+    } else if (s.phase === 'settle') {
+        for (const c of deckCards) {
+            c.position.copy(c.userData.base);
+            c.rotation.y = 0;
+        }
+        rc.position.set(0, revealCard.homeY, 0);
+        if (e >= 0.15) go('rup');
+    } else if (s.phase === 'rup') {
+        const k = smooth(Math.min(e / 0.30, 1));
+        rc.position.y = revealCard.homeY + 0.11 * k;
+        if (e >= 0.30) go('rflip');
+    } else if (s.phase === 'rflip') {
+        const k = smooth(Math.min(e / 0.45, 1));
+        rc.rotation.x = Math.PI * k;
+        rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin(k * Math.PI);
+        if (e >= 0.45) go('rhold');
+    } else if (s.phase === 'rhold') {
+        rc.position.y = revealCard.homeY + 0.11 + Math.sin(time * 2.5) * 0.004;
+        if (e >= 1.5) go('rback');
+    } else if (s.phase === 'rback') {
+        const k = smooth(Math.min(e / 0.45, 1));
+        rc.rotation.x = Math.PI * (1 - k);
+        rc.position.y = revealCard.homeY + 0.11 + 0.025 * Math.sin((1 - k) * Math.PI);
+        if (e >= 0.45) go('rdown');
+    } else if (s.phase === 'rdown') {
+        const k = smooth(Math.min(e / 0.30, 1));
+        rc.position.y = revealCard.homeY + 0.11 * (1 - k);
+        if (e >= 0.30) go('down');
+    } else if (s.phase === 'down') {
+        rc.rotation.x = 0;
+        const k = smooth(Math.min(e / 0.40, 1));
+        deckG.position.y = DECK_HOME.y + 0.22 * (1 - k);
+        if (e >= 0.40) {
+            deckG.position.copy(DECK_HOME);
+            s.phase = 'idle';
         }
     }
+}
 
 export default defineProp({
   id: 'floor2/card-deck',
@@ -114,7 +115,7 @@ export default defineProp({
   /** 原 `const deckState = { phase: 'idle', t0: 0 }` + `now`（替 `clock.now`） */
   state: () => ({ phase: 'idle', t0: 0, now: 0 }),
 
-  build({ scene, L, LITMAT }) {
+  build({ scene, L, V, LITMAT }) {
     // `DECK_HOME` 来自 layout（不变量 N9）—— 与几何同源，交互锚点也用它
     const { DECK_HOME } = L
 

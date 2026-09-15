@@ -1,0 +1,10 @@
+{
+  "id": "floor2/desk",
+  "name": "desk",
+  "file": "src/cabin/world/floor2/desk.js",
+  "batch": "B5",
+  "startMarker": "            /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */",
+  "endMarker": "            /* —— 椅子 —— */",
+  "layout": [],
+  "notes": "用到的 ctx 键：L(TBLX, TBLZ, FY) / put / edge / box（按需解构，勿展开 ctx）。本件是 18.4 拆分出的第 1 件：**纯几何、无状态、无交互、无每帧逻辑** ⇒ 既不需要 assign 也不需要 tick（应用器会写 `installProp(desk);`）。私有顶层量：无（该段一行 `const`/`let` 都没声明，只有一个 `for (const sxsz of …)` 的块级循环变量，全文另有同名循环变量但作用域无关）。边界：startMarker 取 18.4 的分区标题行，endMarker 取「椅子」小节注释行（各只出现一次，已逐字核对）。区间内含 1 行空行，逐字保留。rng：本段一个随机调用都没有 ⇒ 随机源调用序列零变化。像素：几何、材质、父节点、scene.add 顺序全部原样（installProp 在**原位置**同步调用 build）。"
+}

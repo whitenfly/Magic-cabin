@@ -29,30 +29,30 @@ import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `regTopple()` / `updateTopple()`，逐字搬运（`toppleGroups` → `s.groups`；末尾的 `regMagic` 移到 `interactables`） */
 
-    function regTopple(s, group, items) {
-        let maxD = 0;
-        for (const it of items) if ((it.delay || 0) > maxD) maxD = it.delay || 0;
-        group.userData.tp = { t: 0, open: false, items: items, maxD: maxD };
-        s.groups.push(group);
-    }
+function regTopple(s, group, items) {
+    let maxD = 0;
+    for (const it of items) if ((it.delay || 0) > maxD) maxD = it.delay || 0;
+    group.userData.tp = { t: 0, open: false, items: items, maxD: maxD };
+    s.groups.push(group);
+}
 
-    function updateTopple(group) {
-        const s = group.userData.tp;
-        s.t += ((s.open ? 1 : 0) - s.t) * 0.055;
-        for (const it of s.items) {
-            let e = s.t * (1 + s.maxD) - (it.delay || 0);
-            e = Math.max(0, Math.min(1, e));
-            e = e * e * (3 - 2 * e);
-            it.o.position.lerpVectors(it.hp, it.fp, e);
-            it.o.rotation.set(
-                it.hr[0] + (it.fr[0] - it.hr[0]) * e,
-                it.hr[1] + (it.fr[1] - it.hr[1]) * e,
-                it.hr[2] + (it.fr[2] - it.hr[2]) * e
-            );
-        }
+function updateTopple(group) {
+    const s = group.userData.tp;
+    s.t += ((s.open ? 1 : 0) - s.t) * 0.055;
+    for (const it of s.items) {
+        let e = s.t * (1 + s.maxD) - (it.delay || 0);
+        e = Math.max(0, Math.min(1, e));
+        e = e * e * (3 - 2 * e);
+        it.o.position.lerpVectors(it.hp, it.fp, e);
+        it.o.rotation.set(
+            it.hr[0] + (it.fr[0] - it.hr[0]) * e,
+            it.hr[1] + (it.fr[1] - it.hr[1]) * e,
+            it.hr[2] + (it.fr[2] - it.hr[2]) * e
+        );
     }
+}
 
-    /* —— 金币柱 ×3 —— */
+/* —— 金币柱 ×3 —— */
 
 export default defineProp({
   id: 'floor2/coin-towers',
@@ -61,9 +61,9 @@ export default defineProp({
   /** 原顶层 `const toppleGroups = []` */
   state: () => ({ groups: [] }),
 
-  build({ scene, L, LITMAT, rng, state }) {
+  build({ scene, L, V, LITMAT, rng, state }) {
     // 金币柱基座来自 layout（不变量 N9）—— 与几何同源，交互锚点也用它
-    const { COIN_BASE: BASE } = L
+    const { COIN_BASE: BASE, TBL_TOP } = L
     const floor2Rng = rng.floor2
 
     const coinG = new THREE.Group();

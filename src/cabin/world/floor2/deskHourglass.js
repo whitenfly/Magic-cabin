@@ -36,36 +36,37 @@ import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `updateHourglass(time)`，逐字搬运（`hourState` → 形参 `s`；`hourSand` 以原名别住 `s.sand`） */
-    function updateHourglass(s, time, env) {
+function updateHourglass(s, time, env) {
     const { parts, smooth } = env;
     const hourG = parts.body, sandUp = parts.up, sandDn = parts.dn, sandStream = parts.stream;
-    const hourSand = s.sand;        if (s.phase === 'flip') {
-            const e = time - s.t0;
-            const kk = smooth(Math.min(e / 0.6, 1));
-            hourG.rotation.z = kk * Math.PI;
-            sandStream.visible = false;
-            if (e >= 0.6) {
-                hourG.rotation.z = 0;
-                const t = hourSand.up;
-                hourSand.up = hourSand.dn;
-                hourSand.dn = t;
-                s.phase = 'flow';
-                s.t0 = time;
-            }
-        } else if (s.phase === 'flow') {
-            const e = time - s.t0;
-            const kk = smooth(Math.min(e / 3.0, 1));
-            hourSand.up = 1 - 0.95 * kk;
-            hourSand.dn = 0.05 + 0.95 * kk;
-            sandStream.visible = e < 2.9;
-            if (e >= 3.0) {
-                sandStream.visible = false;
-                s.phase = 'idle';
-            }
+    const hourSand = s.sand;
+    if (s.phase === 'flip') {
+        const e = time - s.t0;
+        const kk = smooth(Math.min(e / 0.6, 1));
+        hourG.rotation.z = kk * Math.PI;
+        sandStream.visible = false;
+        if (e >= 0.6) {
+            hourG.rotation.z = 0;
+            const t = hourSand.up;
+            hourSand.up = hourSand.dn;
+            hourSand.dn = t;
+            s.phase = 'flow';
+            s.t0 = time;
         }
-        sandUp.scale.setScalar(Math.max(0.05, hourSand.up));
-        sandDn.scale.setScalar(Math.max(0.05, hourSand.dn));
+    } else if (s.phase === 'flow') {
+        const e = time - s.t0;
+        const kk = smooth(Math.min(e / 3.0, 1));
+        hourSand.up = 1 - 0.95 * kk;
+        hourSand.dn = 0.05 + 0.95 * kk;
+        sandStream.visible = e < 2.9;
+        if (e >= 3.0) {
+            sandStream.visible = false;
+            s.phase = 'idle';
+        }
     }
+    sandUp.scale.setScalar(Math.max(0.05, hourSand.up));
+    sandDn.scale.setScalar(Math.max(0.05, hourSand.dn));
+}
 
 export default defineProp({
   id: 'floor2/desk-hourglass',
@@ -77,7 +78,7 @@ export default defineProp({
    */
   state: () => ({ phase: 'flow', t0: 0, now: 0, sand: { up: 1.0, dn: 0.05 } }),
 
-  build({ scene, L, LITMAT }) {
+  build({ scene, L, LITMAT, MAT }) {
     const { DESK_HG_X, DESK_HG_Z, TBL_TOP } = L
 
     const hourG = new THREE.Group();

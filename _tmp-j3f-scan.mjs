@@ -1,13 +1,14 @@
 /**
  * J3-F 扫描器（临时工具，非交付物）
  *
- * 用途：把「候选分区的边界标记」与「每帧分支的 old 原文」在 monolith 里做**逐字唯一性**核对，
- * 并把待搬迁的行区间原样 dump 出来（供人工/脚本核对，避免转写错误）。
+ * ⚠️ 本脚本里 `expect` 的行号是 **B4 应用前**的行号；那 6 件已于提交 `87843b1` 搬走，
+ * ⇒ 现在跑它会全部报 FAIL（"startMarker 出现 0 次"）—— 那是"已经搬走了"，不是边界写错。
+ * 它当时的作用是：把每件候选的 `startMarker` / `endMarker` / `tick.old` 在 monolith 里
+ * 做**逐字唯一性**核对（判据与 `scripts/oneoff/_j3-apply.mjs` 的 `lineIndexOf` 完全一致：
+ * 标记必须出现在行首），结果 6/6 通过；`--dump=<名字>` 会把几何段（去 8 空格缩进）与
+ * 每帧块原样打印出来，避免手工转写。
  *
- * 判据与 `scripts/oneoff/_j3-apply.mjs` 的 `lineIndexOf` **完全一致**：
- * 标记必须出现在行首（`\n` + 整行文本）。
- *
- * 用法：node _tmp-j3f-scan.mjs [--dump=<name>]
+ * 用法：node _tmp-j3f-scan.mjs [--dump=<id 或中文名片段>]
  */
 import fs from 'node:fs'
 import path from 'node:path'

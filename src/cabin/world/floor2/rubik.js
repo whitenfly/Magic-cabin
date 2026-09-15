@@ -47,85 +47,86 @@ import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
 
 /** 原 `beginLayer()` / `updateLayerAnim(dt)` / `startNextTurn()`，逐字搬运（捕获量按原名从 `env.parts` 解构） */
-    function beginLayer(s, env, axis, layer, dir, dur, onDone) {
+function beginLayer(s, env, axis, layer, dir, dur, onDone) {
     const { parts } = env;
     const rubikPivot = parts.pivot, cubies = parts.cubies;
-        rubikPivot.rotation.set(0, 0, 0);
-        rubikPivot.updateMatrixWorld(true);
-        for (const c of cubies) {
-            if (Math.round(c.pos[axis]) === layer) rubikPivot.attach(c.mesh);
-        }
-        s.layerAnim = { axis: axis, layer: layer, dir: dir, t: 0, dur: dur, onDone: onDone };
+    rubikPivot.rotation.set(0, 0, 0);
+    rubikPivot.updateMatrixWorld(true);
+    for (const c of cubies) {
+        if (Math.round(c.pos[axis]) === layer) rubikPivot.attach(c.mesh);
     }
+    s.layerAnim = { axis: axis, layer: layer, dir: dir, t: 0, dur: dur, onDone: onDone };
+}
 
-    function updateLayerAnim(s, dt, env) {
+function updateLayerAnim(s, dt, env) {
     const { parts } = env;
     const rubikPivot = parts.pivot, cubies = parts.cubies, rubikG = parts.body, AXV = parts.axv;
-        if (!s.layerAnim) return;
-        const la = s.layerAnim;
-        la.t += dt;
-        const k = la.t >= la.dur ? 1 : (la.t / la.dur) * (la.t / la.dur) * (3 - 2 * la.t / la.dur);
-        rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2 * k;
-        if (la.t >= la.dur) {
-            rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2;
-            rubikPivot.updateMatrixWorld(true);
-            for (let i = cubies.length - 1; i >= 0; i--) {
-                const c = cubies[i];
-                if (c.mesh.parent === rubikPivot) {
-                    rubikG.attach(c.mesh);
-                    c.pos.applyAxisAngle(AXV[la.axis], la.dir * Math.PI / 2);
-                    c.pos.set(Math.round(c.pos.x), Math.round(c.pos.y), Math.round(c.pos.z));
-                    c.mesh.position.set(
-                        Math.round(c.mesh.position.x / 0.05) * 0.05,
-                        Math.round(c.mesh.position.y / 0.05) * 0.05,
-                        Math.round(c.mesh.position.z / 0.05) * 0.05
-                    );
-                }
+    if (!s.layerAnim) return;
+    const la = s.layerAnim;
+    la.t += dt;
+    const k = la.t >= la.dur ? 1 : (la.t / la.dur) * (la.t / la.dur) * (3 - 2 * la.t / la.dur);
+    rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2 * k;
+    if (la.t >= la.dur) {
+        rubikPivot.rotation[la.axis] = la.dir * Math.PI / 2;
+        rubikPivot.updateMatrixWorld(true);
+        for (let i = cubies.length - 1; i >= 0; i--) {
+            const c = cubies[i];
+            if (c.mesh.parent === rubikPivot) {
+                rubikG.attach(c.mesh);
+                c.pos.applyAxisAngle(AXV[la.axis], la.dir * Math.PI / 2);
+                c.pos.set(Math.round(c.pos.x), Math.round(c.pos.y), Math.round(c.pos.z));
+                c.mesh.position.set(
+                    Math.round(c.mesh.position.x / 0.05) * 0.05,
+                    Math.round(c.mesh.position.y / 0.05) * 0.05,
+                    Math.round(c.mesh.position.z / 0.05) * 0.05
+                );
             }
-            rubikPivot.rotation.set(0, 0, 0);
-            const cb = la.onDone;
-            s.layerAnim = null;
-            if (cb) cb();
         }
+        rubikPivot.rotation.set(0, 0, 0);
+        const cb = la.onDone;
+        s.layerAnim = null;
+        if (cb) cb();
     }
+}
 
-    function startNextTurn(s, env) {
-        const mv = s.moves[s.mi];
-        beginLayer(s, env, mv.a, mv.l, mv.d, 0.30, () => {
-            s.mi++;
-            if (s.mi < s.moves.length) {
-                startNextTurn(s, env);
-            } else {
-                s.phase = 'down';
-                s.t0 = s.now;
-            }
-        });
-    }
+function startNextTurn(s, env) {
+    const mv = s.moves[s.mi];
+    beginLayer(s, env, mv.a, mv.l, mv.d, 0.30, () => {
+        s.mi++;
+        if (s.mi < s.moves.length) {
+            startNextTurn(s, env);
+        } else {
+            s.phase = 'down';
+            s.t0 = s.now;
+        }
+    });
+}
 
 /** 原 `updateRubik(time)`，逐字搬运 */
-    function updateRubik(s, time, env) {
+function updateRubik(s, time, env) {
     const { parts } = env;
-    const rubikG = parts.body, RUBIK_HOME = parts.home;        if (s.phase === 'idle') return;
-        const e = time - s.t0;
-        if (s.phase === 'up') {
-            const k = Math.min(e / 0.4, 1);
-            rubikG.position.y = RUBIK_HOME.y + (k * k * (3 - 2 * k)) * 0.25;
-            if (e >= 0.4) {
-                s.phase = 'turn';
-                startNextTurn(s, env);
-            }
-        } else if (s.phase === 'turn') {
-            rubikG.position.y = RUBIK_HOME.y + 0.25 + Math.sin(time * 3) * 0.006;
-        } else if (s.phase === 'down') {
-            const k = Math.min(e / 0.4, 1);
-            rubikG.position.y = RUBIK_HOME.y + (1 - k * k * (3 - 2 * k)) * 0.25;
-            if (e >= 0.4) {
-                rubikG.position.copy(RUBIK_HOME);
-                s.scrambled = !s.scrambled;
-                s.phase = 'idle';
-            }
+    const rubikG = parts.body, RUBIK_HOME = parts.home;
+    if (s.phase === 'idle') return;
+    const e = time - s.t0;
+    if (s.phase === 'up') {
+        const k = Math.min(e / 0.4, 1);
+        rubikG.position.y = RUBIK_HOME.y + (k * k * (3 - 2 * k)) * 0.25;
+        if (e >= 0.4) {
+            s.phase = 'turn';
+            startNextTurn(s, env);
+        }
+    } else if (s.phase === 'turn') {
+        rubikG.position.y = RUBIK_HOME.y + 0.25 + Math.sin(time * 3) * 0.006;
+    } else if (s.phase === 'down') {
+        const k = Math.min(e / 0.4, 1);
+        rubikG.position.y = RUBIK_HOME.y + (1 - k * k * (3 - 2 * k)) * 0.25;
+        if (e >= 0.4) {
+            rubikG.position.copy(RUBIK_HOME);
+            s.scrambled = !s.scrambled;
+            s.phase = 'idle';
         }
     }
+}
 
 export default defineProp({
   id: 'floor2/rubik',
