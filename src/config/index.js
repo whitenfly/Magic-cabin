@@ -9,10 +9,19 @@
  * 也可以直接导入单个配置：
  *   import { shelfConfig } from '@/config/shelf.config.js'
  *
- * ⚠️ 当前状态：本目录已按目标架构写就（J2.5 的产物形态），但**消费方尚未实现**——
- *    `cabin/app/store.js`（读取默认值 + 持久化）与 `cabin/systems/ui/SettingsForm.js`
- *    （由 schema 自动生成设置面板）都在 J2 / J2.5 落地。
- *    在它们落地之前，改这里的值**不会有效果**（现状代码仍是 legacy 里的硬编码常量）。
+ * ⚠️ 当前状态（`J2.5` 之后）：**消费方已就位**，改这里的值会真的生效。
+ *
+ * | 消费方 | 读什么 | 落地于 |
+ * |---|---|---|
+ * | `cabin/app/settings.js` | `settingsSchema`（默认值 + 校验范围） | `J2.5` |
+ * | `cabin/systems/ui/SettingsForm.js` | `settingsSchema` + `displayConfig`（自动生成面板） | `J2.5` |
+ * | `blog/registry.js` | `modulesConfig`（按开关装配模块） | `J2.5` |
+ * | `cabin/app/store.js` | 经 `settings.js` 派生出的默认值 | `J2.8` |
+ * | `cabin/legacy/monolith.js` | 经 `store.subscribe` 拿到设置值 | `J2.5` |
+ * | 站点页（Astro） | `siteConfig` / `homeConfig` | `J1.5` / `J5` |
+ * | `blog/ShelfLayout.js`、`blog/reader/*` | `shelfConfig` / `readerConfig` | `J6`（待落地） |
+ *
+ * 门禁：`pnpm verify:cf` 守着 `CF1`–`CF4`（清单一一对应、无反向依赖、可缺省即失败）。
  */
 
 // ── 类型 ────────────────────────────────────────────────────────
@@ -35,6 +44,10 @@ export { modulesConfig } from './modules.config.js'
 export { shelfConfig } from './shelf.config.js'
 export { readerConfig } from './reader.config.js'
 export { homeConfig } from './home.config.js'
+
+// ── 运行时设置面板（`J2.5`：schema 真源 + 显示设定）────────────────
+export { settingsSchema, SETTING_GROUPS, SETTING_TYPES, TIME_SCALE_CURVE } from './settings.config.js'
+export { displayConfig } from './display.config.js'
 
 // ── 环境变量覆盖工具（配置文件内部使用，导出以便测试与门禁复用）────
 export {

@@ -7372,26 +7372,40 @@ export function installCabin(app) {
             renderer.domElement.addEventListener('wheel', e => { if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + e.deltaY * 0.012)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + e.deltaY * 0.0025)); }, { passive: true });
             addEventListener('contextmenu', e => { if (e.target === renderer.domElement || e.target.closest('#joyZone, .touchBtn')) e.preventDefault(); });
 
-            const menuPanel = document.getElementById('menuPanel'), houseToggle = document.getElementById('houseToggle'), viewFixedBtn = document.getElementById('viewFixedBtn'), viewTpBtn = document.getElementById('viewTpBtn'), viewFpBtn = document.getElementById('viewFpBtn'), resetBtn = document.getElementById('resetBtn');
+            // J2.5：设置类控件（houseToggle / viewXxxBtn / sfxToggle / sfxSlider / wxRandToggle /
+            //      speedSlider）已交给 `cabin/systems/ui/SettingsForm.js` 由 schema 生成，
+            //      这里**不再持有元素引用** —— 场景只订阅 store 的值（见下面的 applySetting 段）。
+            const menuPanel = document.getElementById('menuPanel'), resetBtn = document.getElementById('resetBtn');
             document.getElementById('menuDot').addEventListener('click', () => { SND.play('ui'); menuPanel.classList.toggle('open'); });
+            // J2.5：设置面板控件的**点击音**。由面板广播、这里播放 —— 面板在 `systems/ui/`，
+            //      不该认识 `SND`（它住在 3D 实现里）。拖动滑块不发这个事件，与搬迁前的行为一致。
+            bus.on('ui:click', () => SND.play('ui'));
             /** J2.8：小屋形态的**唯一**应用点 —— 菜单按钮、持久化初始化、测试钩子共用它，
-             *  避免"改了一处忘了另一处"（搬迁前这段逻辑在 3 个地方各写了一遍）。 */
-            function applyFullHouse(on) { fullHouse = !!on; houseToggle.classList.toggle('on', fullHouse); fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; }
-            houseToggle.addEventListener('click', () => { SND.play('ui'); applyFullHouse(!fullHouse); store.set('house.full', fullHouse); });
+             *  避免"改了一处忘了另一处"（搬迁前这段逻辑在 3 个地方各写了一遍）。
+             *  J2.5：不再自己 toggle 控件的 class —— 控件的视觉状态归 `SettingsForm`（订阅同一个 store）。 */
+            function applyFullHouse(on) { fullHouse = !!on; fullHouseGroup.visible = fullHouse; dashedGroup.visible = !fullHouse; }
             function resetSlime() { player.pos.set(0, 0, 5.2); player.vy = 0; player.yaw = Math.PI; player.moveSpeed = 0; player.onGround = true; camYaw = Math.PI; camPitch = 0.32; pendYaw = 0; pendPitch = 0; slime.squash = SLIME_FLAT; slime.squashV = 0; slime.wob = 0; slime.wobV = 0; }
             resetBtn.addEventListener('click', () => { SND.play('ui'); resetSlime(); });
-            function setViewMode(m) { viewMode = m; store.set('view.mode', m); cameraRig.setMode(m); viewFixedBtn.classList.toggle('on', m === 'fixed'); viewTpBtn.classList.toggle('on', m === 'tp'); viewFpBtn.classList.toggle('on', m === 'fp'); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
-            viewFixedBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fixed'); }); viewTpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('tp'); }); viewFpBtn.addEventListener('click', () => { SND.play('ui'); setViewMode('fp'); });
-            const sfxToggle = document.getElementById('sfxToggle'), sfxSlider = document.getElementById('sfxSlider');
-            sfxToggle.addEventListener('click', () => { const on = !SND.isEnabled(); SND.setEnabled(on); store.set('audio.enabled', on); sfxToggle.classList.toggle('on', on); if (on) SND.play('ui'); });
-            sfxSlider.addEventListener('input', () => { const v = parseFloat(sfxSlider.value); SND.setVolume(v); store.set('audio.volume', v); });
-            // J2.8：把持久化的设置**应用回场景与 UI** —— 刷新后保持上次的选择（风险 R4 的正面）。
-            // 放在这里是因为它需要菜单 DOM（houseToggle / viewXxxBtn / sfxToggle / sfxSlider）已就绪；
+            /** J2.5：视角的**唯一**应用点（同上，控件视觉归 SettingsForm）。
+             *  与 `applyFullHouse` 一样，它只负责"把值变成画面"，不负责存值。 */
+            function applyViewMode(m) { viewMode = m; cameraRig.setMode(m); if (m === 'fixed') { if (document.pointerLockElement) document.exitPointerLock(); slimeRoot.visible = true; crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } else { slimeRoot.visible = (m !== 'fp'); if (m === 'fp') { if (IS_TOUCH) crosshairEl.classList.add('show'); else lockTipEl.classList.add('show'); } else { if (document.pointerLockElement) document.exitPointerLock(); crosshairEl.classList.remove('show'); lockTipEl.classList.remove('show'); } } }
+            /** J2.5：切视角 = 只写 store。应用与控件视觉都由订阅者负责（单向数据流）。 */
+            function setViewMode(m) { store.set('view.mode', m); }
+            // ── ★ J2.5：设置 → 场景 的**唯一通道** ────────────────────────────────
+            //    控件（由 `src/config/settings.config.js` 的 schema 生成）只调 `store.set()`；
+            //    这里订阅 store，把值应用到场景。**单向数据流** ——
+            //    不存在"控件改完值、又自己应用一遍"的双写，加一个设置项只需加一条订阅。
+            //    `store.subscribe` 只在**值真的变化**时触发 ⇒ 首屏那一次显式应用仍由下面两行负责。
+            store.subscribe('house.full', ({ value }) => applyFullHouse(value));
+            store.subscribe('view.mode', ({ value }) => applyViewMode(value));
+            // 音效：打开的那一刻补一声 ui —— 让用户立刻听到音量（搬迁前该按钮单独做过这件事）
+            store.subscribe('audio.enabled', ({ value }) => { SND.setEnabled(value); if (value) SND.play('ui'); });
+            store.subscribe('audio.volume', ({ value }) => SND.setVolume(value));
+            // J2.8：把持久化的设置**应用回场景** —— 刷新后保持上次的选择（风险 R4 的正面）。
             // `?deterministic=1` 下 store 不持久化，读到的必然是默认值 ⇒ 像素回归与冒烟仍然**环境无关**。
-            sfxToggle.classList.toggle('on', SND.isEnabled());
-            sfxSlider.value = String(SND.getVolume());
+            // 控件的视觉状态由 `SettingsForm` 在挂载时同步（读的是同一个 store），这里只管场景。
             applyFullHouse(store.get('house.full'));
-            setViewMode(store.get('view.mode'));
+            applyViewMode(store.get('view.mode'));
             function applySign() { signText = signInput.value.trim() || '魔女小屋'; drawSign(signText); signEditor.classList.remove('show'); signInput.blur(); SND.play('chim'); }
             document.getElementById('signOk').addEventListener('click', applySign);
             signInput.addEventListener('keydown', e => { if (e.key === 'Enter') applySign(); if (e.key === 'Escape') { signEditor.classList.remove('show'); signInput.blur(); } e.stopPropagation(); });
@@ -7452,7 +7466,7 @@ export function installCabin(app) {
             };
             const wx = { type: 'sunny', random: false, timer: 14, clouds: 2, rain: 0, snow: 0, fog: 0, gray: 0, wind: 0.2 };
             const WIND_DIR = { x: 0.86, z: 0.51 };
-            const wxChipsBox = document.getElementById('wxChips'), wxRandToggle = document.getElementById('wxRandToggle'), timeSlider = document.getElementById('timeSlider'), speedSlider = document.getElementById('speedSlider'), clockEl = document.getElementById('clock');
+            const wxChipsBox = document.getElementById('wxChips'), timeSlider = document.getElementById('timeSlider'), clockEl = document.getElementById('clock');
             const chipEls = [];
             for (const t of WX_LIST) { const b = document.createElement('div'); b.className = 'wxChip'; b.textContent = WX_NAME[t]; b.addEventListener('click', () => { SND.play('ui'); setWeather(t); }); wxChipsBox.appendChild(b); chipEls.push(b); }
             // J2.10：环境量（天气 / 时间 / 采光）有了唯一持有者，并通过 bus 广播 env:change。
@@ -7460,9 +7474,13 @@ export function installCabin(app) {
             const environment = createEnvironment({ bus, fillMaterial: FILL });
             function setWeather(t) { wx.type = t; environment.setWeather(t); chipEls.forEach((el, i) => el.classList.toggle('on', WX_LIST[i] === t)); }
             setWeather('sunny');
-            wxRandToggle.addEventListener('click', () => { SND.play('ui'); wx.random = !wx.random; wxRandToggle.classList.toggle('on', wx.random); wx.timer = 6 + runtimeRng() * 10; });
-            function sliderToScale(v) { if (v <= 0) return 0; if (v <= 0.5) return v * 120; return 60 + (v - 0.5) * 2 * (3600 - 60); }
-            speedSlider.addEventListener('input', () => { timeScale = sliderToScale(parseFloat(speedSlider.value)); });
+            // J2.5：随机天气开关与流速滑杆都由 schema 生成（见 src/config/settings.config.js 的
+            //      'weather.random' 与 'time.scale'），这里只订阅它们的值 —— 控件不再自己写状态。
+            //      注意订阅只在**值变化**时触发，所以不会重置 `wx.timer` 的初值（与搬迁前一致）。
+            store.subscribe('weather.random', ({ value }) => { wx.random = value; wx.timer = 6 + runtimeRng() * 10; });
+            // 流速的非线性曲线（0–3600×）已搬到 config 的 `TIME_SCALE_CURVE`，公式一字未改；
+            // 面板拖的是 0–1 的位置，存进 store 的与这里读到的都是**倍率**。
+            store.subscribe('time.scale', ({ value }) => { timeScale = value; });
             let draggingTime = false; timeSlider.addEventListener('pointerdown', () => draggingTime = true); addEventListener('pointerup', () => draggingTime = false);
             timeSlider.addEventListener('input', () => { gameSec = parseFloat(timeSlider.value) * 3600; });
 

@@ -129,20 +129,50 @@
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 运行时设置面板（由 schema 自动生成控件，见 02-架构与目录调整.md §3 M-3）
+// display.config.js（M17 显示设定）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 显示设定：决定设置面板**呈现什么**（不改任何一项的默认值）。
+ *
+ * @typedef {object} DisplayConfig
+ * @property {boolean} enable 面板总开关（false = 菜单里不出现「设 置」分区）
+ * @property {Record<string, boolean>} panels 分组可见性；键与 `SettingSpec.group` 一一对应
+ * @property {boolean} inlineInMenu 面板是否随菜单一起展开（false = 由菜单里的按钮打开独立浮层）
+ * @property {boolean} showReset 是否显示「恢复默认」按钮
+ * @property {Record<string, string>} hidden 过渡期显式排除的键（键 = 设置键，值 = 为什么排除）
+ */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// settings.config.js（运行时设置面板的 schema）
+// 由 schema 自动生成控件，见 04-模块增量开发与配置编排.md §3.5
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * @typedef {object} SettingSpecBase
- * @property {string} group 面板分组名（"视角" / "阅读" / "音效" …）
+ * @property {string} group 面板分组 id（`view` / `house` / `time` / `weather` / `audio`，见 `SETTING_GROUPS`）
  * @property {string} label 控件标签
- * @property {string} [hint] 一行说明（显示为 tooltip）
+ * @property {string} [hint] 一行说明（显示为 tooltip；**要写"改了会怎样"**）
+ * @property {string} [domId] ⚠️ 迁移期兼容：生成控件时沿用该 id（`J4` 搬完 `ui` 后移除）
+ * @property {Record<string,string>} [domIds] ⚠️ 同上，用于 `enum` 的每个取值
+ */
+
+/**
+ * 非线性滑块：面板上拖的是 `min`–`max` 的位置，`store` 里存的是 `toValue(pos)`。
+ * 用于取值跨数量级的项（如 `time.scale` 的 0–3600×）。
+ *
+ * @typedef {object} SliderCurve
+ * @property {number} min
+ * @property {number} max
+ * @property {number} step
+ * @property {(pos: number) => number} toValue
+ * @property {(value: number) => number} fromValue
  */
 
 /**
  * @typedef {SettingSpecBase & { type: 'boolean', default: boolean }} BooleanSetting
- * @typedef {SettingSpecBase & { type: 'number', min: number, max: number, step: number, default: number }} NumberSetting
- * @typedef {SettingSpecBase & { type: 'enum', values: readonly string[], default: string }} EnumSetting
+ * @typedef {SettingSpecBase & { type: 'number', min: number, max: number, step: number, default: number, slider?: SliderCurve }} NumberSetting
+ * @typedef {SettingSpecBase & { type: 'enum', values: readonly string[], valueLabels?: Record<string,string>, default: string }} EnumSetting
  * @typedef {SettingSpecBase & { type: 'string', default: string }} StringSetting
  * @typedef {BooleanSetting | NumberSetting | EnumSetting | StringSetting} SettingSpec
  */

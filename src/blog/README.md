@@ -3,7 +3,10 @@
 > **定位**：所有功能模块**共享**的内容能力。它不属于任何单个模块 ——
 > 书架算法、书脊绘制、阅读器、路由、命令总线都在这里，模块通过命令名与它对接。
 >
-> **当前状态**：⬜ 空壳（仅本 README）。由 **`J5`（内容管线与静态页）** 与 **`J6`（书架即博客 + 方案 B 阅读器）** 填充。
+> **当前状态**：🟡 **部分落地**。
+> 已实现 **`registry.js`**（`J2.5`，按 `modulesConfig` 过滤装配功能模块）；
+> 其余（`ContentLoader` / `ShelfLayout` / `BookSpine` / `reader/**` / `Router` / `commands.js`）
+> 由 **`J5`（内容管线与静态页）** 与 **`J6`（书架即博客 + 方案 B 阅读器）** 填充。
 > 见 [`docs/BuildPlaning/01-完善路线图.md`](../../docs/BuildPlaning/01-完善路线图.md) §3。
 
 ---
@@ -29,8 +32,19 @@ src/blog/
 │
 ├─ Router.js             pushState / popstate / 深链接（与静态页共用同一规范 URL）
 ├─ commands.js           ★ 命令总线：模块 ↔ 物品的唯一接口
-└─ registry.js           按 modulesConfig 装配 src/features/**
+└─ registry.js           ✅ 按 modulesConfig 装配 src/features/**（`J2.5` 已落地）
 ```
+
+### `registry.js`（已落地）的三条边界
+
+| 项 | 做法 | 为什么 |
+|---|---|---|
+| 清单从哪来 | 由 `cabin/boot.js` **注入**（`features/_index.js`），本文件不 import `features/**` | `blog/**` 不得依赖任何一个模块（§2 的依赖规则）；副作用是它成了纯编排逻辑，可直接单测 |
+| 未启用的模块 | **连 `load()` 都不调用** | thunk 清单的意义就在这里 —— 关闭的模块其 chunk 不会被浏览器请求（验收 `CF1`） |
+| 清单里的 id 在开关表里缺项 | **抛错** | `04` §3.2 规则 4「可缺省即失败」；静默按关闭处理会让一个拼错的 id 表现为"模块神秘消失"（防 `R30`） |
+
+另有 `notEnabledHint(label)`：未启用模块的交互被触发时给用户的一句话（验收 `BB3`）——
+物品侧接上它需要 `J3` 的挂载点 ID 表。
 
 ---
 

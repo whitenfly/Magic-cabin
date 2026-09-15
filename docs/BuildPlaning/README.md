@@ -81,16 +81,16 @@ Firefly 不是数据源、不是依赖、不是集成对象——它只有两个
 | `J1` 工程化骨架 | ✅ 已完成（Vite + TS + 目录边界 + `three@0.128.0` + sounds 迁移，19 项静态校验 + 11 项运行时校验全绿） |
 | **`J1.5` Astro 落地** | ✅ **已完成（2026-09-14）**：Astro 静态工程 + `src/content/` 集合骨架 + 门厅 + `serve.mjs` 托管 `dist/` + 双管线。**DoD 四条全绿**：`astro build` 8 个页面、`dist` 里 3D 正常启动（冒烟 28/28）、3 机位截图回归与 `J0.4` **逐字节相同**、`src/cabin/**` **逐字节未改**。见 [`docs/实施结果/J1.5-实施结果.md`](../实施结果/J1.5-实施结果.md) |
 | **`J2` 小屋核心设施** | ✅ **已完成（2026-09-14）**：10 项任务全部落地（`CameraRig` + 统一 `Interactable` + 持久化 + `LightField` + 内核，另含几何 DSL / 材质 / 坐标 / 天气解耦）。**四个 DoD 全部由机器判据证明**：像素回归 10/10 次逐字节相同、冒烟 28/0、**「新增一盏灯 / 一个交互的改动文件数 = 1」**（两个测试用例）、`CameraRig` 三视角交还（`BB16`）。见 [`docs/实施结果/J2-实施结果.md`](../实施结果/J2-实施结果.md) |
-| `J2.5` 配置编排层 | ⬜ 未开始（`store` 与 `SETTINGS` schema 已由 `J2` 备好，只差 `SettingsForm` 与 `src/config/` 接线） |
+| **`J2.5` 配置编排层** | ✅ **已完成（2026-09-15）**：`src/config/` 真正接上了电 —— `settings.config.js`（schema 真源）+ `display.config.js`（面板呈现）+ `settings/ui/SettingsForm.js`（按 schema 自动生成控件并自动持久化）+ `blog/registry.js`（按总开关过滤装配）+ **`pnpm verify:cf`（31 项，`CF1`–`CF4`）**。**两条 DoD**：关掉任一模块不加载/不注册/不报错（`BB3` 的机制部分，物品侧待 `J3`）、**加一个配置项 = 改 1 个文件 + 加 1 个字段**（端到端成立）。门禁：像素 3/3 逐字节相同、冒烟 28/0、渲染统计 +0.0%、单测 151/0。见 [`docs/实施结果/J2.5-配置编排层-实施结果.md`](../实施结果/J2.5-配置编排层-实施结果.md) |
 | `J3`–`J8` | ⬜ 未开始（**`J3` 物件模块化是下一个可开工的阶段**） |
-| `src/cabin/**` | **30 个文件 / 10945 行**（`J2` 新增 19 个模块），由 `tests/baseline/cabin-digest.json` 指纹 + `pnpm verify:j15` 双重守住 |
+| `src/cabin/**` | **36 个文件 / 12664 行**（`J2` 新增 19 个模块、`J2.5` 新增 `systems/ui/`），由 `tests/baseline/cabin-digest.json` 指纹 + `pnpm verify:j15` 双重守住 |
 | **截图回归（F0.4）** | ✅ **`J2` 全程 10/10 次逐字节相同**：`dist/` 产物 3 机位 sha256 一致；`pnpm serve:legacy`（零构建）同样一致 |
 | **交互冒烟（F0.5）** | ✅ 28 项断言全绿，**跑在 `dist/` 产物上**（`tests/e2e/smoke.mjs` 自动识别产物与零构建两种形态）；`J2` 全程 10/10 次 |
 | **性能基线（F0.6）** | ✅ **3138 draw calls / 86158 triangles**；`J2` 结束时**全部指标 +0.0%**（模块化未引入额外渲染批次） |
-| **单元测试（`J2` 新增）** | ✅ **`pnpm test:unit`：105 项**（几何 / 材质 / 坐标 / 内核 / 存储 / 光照 / 交互 / 相机 / 环境 / 版本工具），**零新依赖**（Node 内置 `node:test`） |
+| **单元测试（`J2` 新增）** | ✅ **`pnpm test:unit`：151 项**（几何 / 材质 / 坐标 / 内核 / 存储 / 设置面板 / 配置契约 / 光照 / 交互 / 相机 / 环境 / 版本工具），**零新依赖**（Node 内置 `node:test`）。`J2.5` 新增 46 项（面板生成与绑定 27 + 配置契约与 `registry` 19） |
 | **`J1.5` 门禁** | ✅ **`pnpm verify:j15`**（构建形态 / 一个岛 + `N12` 双向 / 内容集合零依赖加载器 / 门厅 / 兜底路径 / 双管线 / `cabin/**` 摘要 / 产物结构），已接入 `pnpm verify` |
 | 目录微调（决策 1） | ✅ **已执行（2026-09-13）**：删 `src/data/`、`src/domains/` → `src/features/`、升格 `src/config/`、新增 `src/blog/` `src/content/` `tests/` |
-| **配置层（决策 5）** | 🟡 **形状已就位**：`src/config/` 已含 9 个文件（含 18 个模块的总开关表）；**`store` + `SETTINGS` schema 已由 `J2.8` 备好**，剩下的是 `src/config/` 接线与 `SettingsForm`（子阶段 `J2.5`） |
+| **配置层（决策 5）** | ✅ **已落地（`J2.5`，2026-09-15）**：`src/config/` 含 **12 个文件**（8 个 `*.config.js`：站点 / 3D / 模块总开关 / 设置 schema / 面板显示 / 书架 / 阅读器 / 门厅）。**"加一个配置项 = 改 1 个文件 + 加 1 个字段"由 `pnpm verify:cf` 的 `CF2` 逐条守着**；`config/**` 是叶子（不 import 实现）由 `CF4` 守着；README 清单与文件一一对应由 `CF3` 守着 |
 | 内容源 | ✅ **已有内容**：`src/content/posts/hello-cabin.md`（样例文章）+ `src/content/pages/about.md`；新增一篇文章 = 加一个 `.md`（静态页 / 归档 / 标签 / RSS 自动更新） |
 | **待拍板决策** | 🟡 **OD-1 / OD-2 已拍板（均选建议项）**；**OD-3 / OD-4 作者主动暂缓**至 `J5` / `J6`（配置值已就位，不阻塞）。真源 [`mapping.yaml`](./mapping.yaml) 的 `pendingDecisions` |
 | 关键路径上的下一步 | **`J3`（物件模块化，6–10 人日）** —— `J2` 造好的"注册机制"（几何 DSL / 材质工厂 / `layout.js` 坐标 / `lights()` / `Interactable` 契约 / 调度档位）让每件物件从"要不要补一个注册"变成**填空** |

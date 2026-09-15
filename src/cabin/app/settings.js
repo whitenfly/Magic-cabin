@@ -5,9 +5,25 @@
  * 音量在 `SND` 闭包里、视角在 `viewMode`、小屋形态在 `fullHouse`、时间流速在 `timeScale`，
  * 刷新即回到初始值，用户每次进小屋都要重调一遍。
  *
- * ## 这份清单的三个用途
+ * ## `J2.5` 起：本文件不再自己写死清单
  *
- * 1. **`store` 的默认值来源**：`store.get('view.mode')` 没存过时取这里的 `default`；
+ * 设置的**真源**搬到了 [`src/config/settings.config.js`](../../config/settings.config.js)
+ * （决策 5：用户唯一需要看的目录是 `src/config/`）。本文件退化成一层**薄适配**：
+ *
+ * ```
+ *   src/config/settings.config.js   ← 真源：类型 / 默认值 / 范围 / 分组 / 控件形态
+ *            │  派生
+ *            ▼
+ *   cabin/app/settings.js           ← 本文件：数组形态 + 校验钳制（store 与单测的入口）
+ * ```
+ *
+ * 为什么还要这一层：`store` 与既有单测都按**数组**遍历（`for (const def of SETTINGS)`），
+ * 而 schema 用**对象**（键即 `store` 的键，可读性更好、增删一项不会错位）。
+ * 两种形态各有各的用处，转换放在这里，不必让两边互相妥协。
+ *
+ * ## 三个用途（与搬迁前一致，调用方无感）
+ *
+ * 1. **`store` 的默认值来源**：`store.get('view.mode')` 没存过时取 schema 里的 `default`；
  * 2. **校验与钳制**：`number` 会被 `min`/`max` 夹住，`enum` 只接受 `values` 里的值
  *    —— 手工改过 `localStorage` 的脏数据不会把场景搞坏；
  * 3. **`SettingsForm` 的生成源**（子阶段 `J2.5` 配置编排层）：面板控件由 `type` 自动生成，
@@ -15,67 +31,32 @@
  *
  * ## 命名约定
  *
- * `键` 用 `<域>.<项>` 的两段式：域是 `audio` / `view` / `house` / `time`。
+ * 键用 `<域>.<项>` 的两段式：域是 `view` / `house` / `time` / `weather` / `audio`。
  * `store` 实际写进 `localStorage` 的键是 `cabin:` 前缀 + 这个键（如 `cabin:view.mode`）。
  *
- * ⚠️ **改这里的 `default` 就等于改画面**（`?deterministic=1` 下读的就是它）——
- * 必须同时重跑像素回归。
+ * ⚠️ **改默认值就等于改画面**（`?deterministic=1` 下读的就是它）——
+ * 必须同时重跑像素回归。默认值现在写在 `src/config/settings.config.js` 里。
  */
+import { settingsSchema, SETTING_TYPES } from '../../config/settings.config.js'
 
-/** 控件类型 → `SettingsForm` 该生成什么（子阶段 `J2.5` 用） */
-export const SETTING_TYPES = ['number', 'boolean', 'enum']
+/** 控件类型 → `SettingsForm` 该生成什么（`J2.5` 用） */
+export { SETTING_TYPES }
 
 /**
+ * 全部设置项（数组形态，顺序 = `settingsSchema` 的声明顺序）。
+ *
+ * 每项至少含 `key` / `type` / `default` / `label` / `group`；
+ * `number` 另有 `min` / `max` / `step`（或 `slider` 曲线），`enum` 另有 `values` / `valueLabels`。
+ *
  * @type {{
- *   key: string, type: 'number'|'boolean'|'enum', default: any, label: string,
- *   min?: number, max?: number, step?: number, values?: string[], valueLabels?: Record<string,string>,
- *   hint?: string,
+ *   key: string, type: 'number'|'boolean'|'enum', default: any, label: string, group: string,
+ *   min?: number, max?: number, step?: number, values?: readonly string[],
+ *   valueLabels?: Record<string,string>, hint?: string,
+ *   slider?: { min: number, max: number, step: number, toValue: (p: number) => number, fromValue: (v: number) => number },
+ *   domId?: string, domIds?: Record<string,string>,
  * }[]}
  */
-export const SETTINGS = [
-  {
-    key: 'audio.enabled',
-    type: 'boolean',
-    default: true,
-    label: '音效',
-    hint: '门、窗、炉火、施法等音效的总开关',
-  },
-  {
-    key: 'audio.volume',
-    type: 'number',
-    default: 0.6,
-    min: 0,
-    max: 1,
-    step: 0.05,
-    label: '音量',
-  },
-  {
-    key: 'view.mode',
-    type: 'enum',
-    values: ['fixed', 'tp', 'fp'],
-    valueLabels: { fixed: '固定视角', tp: '第三人称', fp: '第一人称' },
-    default: 'fixed',
-    label: '视角',
-    hint: '固定视角适合看陈设与点选物件；第一人称适合走进去看',
-  },
-  {
-    key: 'house.full',
-    type: 'boolean',
-    default: false,
-    label: '完整小屋',
-    hint: '关闭时是剖切模式：省略的墙与屋顶用虚线表示，便于从外面看到室内',
-  },
-  {
-    key: 'time.scale',
-    type: 'number',
-    default: 60,
-    min: 0,
-    max: 600,
-    step: 10,
-    label: '时间流速',
-    hint: '游戏内秒数相对真实秒数的倍率；0 = 时间静止',
-  },
-]
+export const SETTINGS = Object.entries(settingsSchema).map(([key, spec]) => ({ key, ...spec }))
 
 /** `key → 定义` 的快查表 */
 export const SETTINGS_BY_KEY = new Map(SETTINGS.map((s) => [s.key, s]))

@@ -7,9 +7,14 @@
 > 每个模块承载哪件物品、怎么交互、用什么呈现通道、用哪些配置键，**都在那里写一次**。
 > 本目录只承载**实现**。
 >
-> **当前状态**：⬜ 空壳。除本 README 与 `_index.js` 外无任何模块目录 ——
+> **当前状态**：⬜ 空壳（清单为空）。除本 README 与 `_index.js` 外无任何模块目录 ——
 > 按 `02-架构与目录调整.md` §3 的要求"**按需创建，不预置空目录**"。
 > 第一个模块 `01-posts`（M01 内容存档）随 `J6` 落地。
+>
+> ✅ **但装配链路已经通了**（`J2.5`）：`cabin/boot.js` → `blog/registry.js` 会按
+> `src/config/modules.config.js` 过滤本清单、只对**启用**的模块调用 `load()`。
+> 也就是说——**现在往下面加一行、再在 `modules.config.js` 里加一个开关，就有一个真模块了**，
+> 不需要再动任何装配代码。
 
 ---
 
@@ -37,7 +42,7 @@
 
 ```
 src/features/04-taxonomy/
-├─ index.js        Feature 契约：{ id, requires, order, settings, mount(ctx), dispose() }
+├─ index.js        Feature 契约：{ id, requires, order, settings, setup(ctx), start?(ctx), dispose?(ctx) }
 ├─ model.js        ★ 纯函数：数据 → 呈现参数（零 3D 依赖、零副作用、可单测）
 ├─ data.js         数据适配：只读（posts.json / 集合 / 本地 JSON）
 ├─ scene.js        场景挂载：认领挂载点、注册 interactable、按帧写物件属性
@@ -101,13 +106,21 @@ S9 回填（mapping.yaml status → shipped，impl 填本目录路径）
 
 ## 5. 装配与开关
 
-- **装配**：`_index.js` 是**唯一总装文件**（一行一个模块）。`blog/registry.js` 按
-  `src/config/modules.config.js` 过滤后依次 `mount(ctx)`。
+- **装配**：`_index.js` 是**唯一总装文件**（一行一个模块）。
+  `cabin/boot.js` 在 `installCabin()` 之后把它交给 `blog/registry.js`，
+  后者按 `src/config/modules.config.js` 过滤，再对启用的模块调 `load()` 并 `app.register(feature)`。
+  （清单由 `boot.js` **注入**而不是 `registry.js` import —— 因为 `blog/**` 不得依赖任何一个模块。）
 - **开关**：把 `modules.config.js` 里对应模块置 `false` →
   ① 它的 `interactable` 不注册，物品恢复纯装饰（点击给「这件东西还没启用」浮标）；
   ② 它的页面/面板不生成；
-  ③ 它的 `features/<id>/**` **不被 import、不被下载**。
+  ③ 它的 `features/<id>/**` **不被 import、不被下载**（`load()` 是 thunk，未启用就根本不调用）。
   —— 三条合起来就是验收 `BB3` / `CF1`。
+
+> ✅ **`J2.5` 已落地的部分**：②③ 与 ① 的"不注册"由 `blog/registry.js` 实现，
+  并由 `pnpm verify:cf` 的 `CF1`（8 项断言，含"逐个关闭任一模块"）机器守住。
+> ⚠️ ① 的"**物品恢复纯装饰**"还差一半：需要"哪件物品属于哪个模块"这个信息，
+> 而那要等 `J3` 的挂载点 ID 表（`cabin/app/mounts.js`）。
+> 文案出口已经备好：`blog/registry.js` 的 `notEnabledHint(label)`。
 
 ---
 
