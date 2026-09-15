@@ -870,13 +870,23 @@ function cmdShip(args) {
     ];
     say('');
     for (const c of cmds) say(`  ${c.startsWith('#') ? `${C.d}${c}${C.x}` : c}`);
+    // ★ L18 修正：**只有推送类命令**进入「待执行命令」区。
+    //   本地变更类（switch / merge / add / commit / tag）由**模型经 exec 入口执行**（§8 / R10）：
+    //   它们既不需要人工在普通终端跑，也**永远无法**被 isCommandDone() 自动翻成 [x]
+    //   （§9.2 只认 push 类）—— 写进「待执行」区只会留下永不消失的 `[ ]` 噪音，
+    //   并让人误以为"还有一堆命令没执行"。
+    const pushCmds = cmds.filter((c) => /^git push\b/.test(c));
     const flipped = appendRecord(
       buildEntry({
         task: `发布计划 v${ver}`, kind: 'ship', st,
-        body: ['- 计划内容：`dev` → `main` 的 `--no-ff` 合并 + 正式版 tag', '- 以下命令**待人工执行**'],
+        body: [
+          '- 计划内容：`dev` → `main` 的 `--no-ff` 合并 + 正式版 tag',
+          '- ★ **本地变更类命令（switch / merge / add / commit / tag）由模型经 `exec` 入口自动执行** —— 完整计划见上方输出（§8 / R10）',
+          '- 下面**只列推送类命令**：只有它们需要人工在普通终端执行',
+        ],
         note: '`main` 上永远不要直接开发；发布完立刻 `git switch dev`。本工具不做任何 push。',
       }),
-      cmds,
+      pushCmds.length ? pushCmds : null,
     );
     say('');
     reportFlipped(flipped);
