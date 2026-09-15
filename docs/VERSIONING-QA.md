@@ -480,6 +480,40 @@ git log --oneline dev..main
 > tag 根本没创建（事后 `git tag -d` 报 `tag not found` 才证实），而输出看起来"都成功了"。
 > 实际损失为零（四条命令都没产生副作用），但这个坑值得写进规范。
 
+### Q21 · 用 PowerShell 改文件，为什么会让门禁"报错却查不出原因"？
+
+这是 SPEC-1.3.0 记录的坑（判例 P8）。
+
+**现象**：`Set-Content -Encoding utf8` 写出的文件，开头会多出 `EF BB BF`（UTF-8 BOM）——
+文件"看起来没变"，但**多了 3 个字节**。
+
+**为什么对本仓库是致命的**：本仓库有**逐字节判据** —— `tests/baseline/cabin-digest.json` 记着 `src/cabin/**` 的摘要、视觉基线记着截图的 sha256。
+**多 3 个字节 = 摘要对不上 = 门禁报警**，而报错只会说"摘要不匹配"，**不会告诉你"是 BOM"**。
+
+这正是规范 §8 开头那句警告的另一个版本：*"那会悄悄改写被摘要守住的文件，让门禁报警却查不出原因"* —— 那次讲的是换行符，这次是 BOM。
+
+**两条正确写法**：
+
+```powershell
+# ✗ 会加 BOM
+Get-Content x.json -Raw | Set-Content x.json -Encoding utf8
+
+# ✓ 改用 node（readFileSync 读时自动剥离 BOM；writeFileSync 默认不写 BOM）
+node -e "const fs=require('fs');fs.writeFileSync('x.json',fs.readFileSync('x.json','utf8'))"
+
+# ✓ 或显式指定无 BOM（PS 7.4+）
+Set-Content x.json -Value $s -NoNewline -Encoding utf8NoBOM
+```
+
+**复核判据**（改完**任何**文件后都值得跑一次）：
+
+```powershell
+Get-Content <file> -Encoding Byte -TotalCount 3    # 应是文件真实开头，不是 239,187,191
+```
+
+> 📌 **实证**：`J3.12` 清理 `GitPushHistory.md` 时就踩了 —— 前 3 字节从 `35,32,71` 变成 `239,187,191`，已用 node 重写剥离。
+> **幸运的是那个文件在 `.gitignore` 里、不受判据保护**；若换成被摘要守住的文件，就会直接触发一次"查不出原因"的门禁失败。
+
 ---
 
 ## 六、快速索引
