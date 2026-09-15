@@ -1,10 +1,10 @@
-# 版本管理执行规范 · SPEC-1.0.0 ★ 强制执行
+# 版本管理执行规范 · SPEC-1.0.1 ★ 强制执行
 
 <!-- ⛔ 修改本文件前必须先读 §12。规范是执行判据，禁止"顺手改"。 -->
 
 | 项 | 值 |
 |---|---|
-| 规范版本 | **SPEC-1.0.0** |
+| 规范版本 | **SPEC-1.0.1**（修订历史见 §12.4） |
 | 状态 | ★ **执行期冻结**（修订须走 §12 完整流程） |
 | 生效日期 | 2026-09-15 |
 | 适用对象 | 在本仓库执行开发的**模型**与**人工** |
@@ -736,12 +736,43 @@ lockfile 无谓膨胀，并让 CI 的 `pnpm install --frozen-lockfile` 面临失
 
 | 场景 | 现象 | 降级做法 |
 |---|---|---|
-| `pnpm <别名>` 启动失败 | `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`（pnpm 试图重装 `node_modules` 且无 TTY） | 用 **`node scripts/release.mjs <子命令>`** 完全等价替代 |
+| `pnpm <别名>` 启动失败 | `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` | ★ 见下方 **§11.1.1**（根因三条事实 + 判别命令） |
 | `done` 内部门禁调 `pnpm` 失败 | `runGates()` 执行的是 `pnpm typecheck/verify/build` | 手工等价收尾（见下） |
 | `git ls-remote` / `git push` 失败 | `ssh.exe: couldn't create signal pipe, Win32 error 5` | **推送一律在普通终端人工执行**（工具本来就只生成命令） |
 | git 钩子不执行 | `sh.exe: couldn't create signal pipe` | 第 1 层防护（`exec`）不受影响；记录用 `sync` 幂等补记 |
 | **`pre-commit` 崩溃并阻塞所有提交** | 同上——Git for Windows 用 `sh.exe` 执行 hook，崩溃 ⇒ 非零退出 ⇒ **连合法提交也被拒绝** | ★ 受限环境里提交**必须**加 `--no-verify`，并**在记录里写明理由**（§13）。**普通终端无需此步**（钩子按设计工作） |
 | `git log` 中文乱码 | PowerShell 控制台编码 | 只影响显示，不影响判据；必要时 `chcp 65001` |
+
+#### §11.1.1 pnpm 双重安装与 `.modules.yaml`（根因 · 实测）
+
+**现象**：任何 `pnpm <别名>` 命令在跑脚本**之前**都会先执行 `runDepsStatusCheck()`，
+判定 `node_modules` 需要重建并尝试 purge + install —— 于是**连一条只读命令都会触发重装**。
+
+**根因（三条实测事实）**：
+
+| # | 事实 | 后果 |
+|---|---|---|
+| 1 | PATH 上可能同时存在**两个 pnpm**，且宿主注入的 shim **优先**于用户自装版本（实测：shim `11.8.0` 先命中，自装 `12.3.4` 才是 `.github/workflows/ci.yml` 固定的版本） | 命中的可能是**版本不对**的那一个 |
+| 2 | `node_modules/.modules.yaml` 是 pnpm 记录「由哪个 pnpm、用什么参数安装」的**状态文件**；**它缺失 ⇒ pnpm 无法确认 `node_modules` 完好 ⇒ 判定需要 install** | ★ **触发重装的直接原因** |
+| 3 | 重装会在原生依赖的 postinstall 处失败（`esbuild` → `spawnSync … EPERM`，受限环境禁止创建子进程），**因此写不出 `.modules.yaml`** | ⇒ **每次都重复触发，永不收敛** |
+
+**开工前判别（两条命令）**：
+
+```bash
+Test-Path node_modules/.modules.yaml    # False ⇒ 本环境 pnpm 不可用，直接走降级路径
+pnpm --version                          # 与项目要求不符 ⇒ 命中的是宿主注入的 shim
+```
+
+**结论：受限环境里 §11.1 的降级路径是默认姿势，不是备选。**
+
+- 受限环境：一律 `node scripts/release.mjs <子命令>`（完全等价，且不碰依赖检查）
+- 普通终端：跑一次 `pnpm install` 补写 `.modules.yaml` 即可恢复正常。
+  它只补状态文件、不改依赖图 ⇒ **不会改动 `pnpm-lock.yaml`**（lockfile 是判据的一部分，见 §10.2）
+
+> ⚠️ **操作警告（对上述降级路径的补充说明，不构成 §1 红线）**：
+> pnpm 的报错会建议「set the `CI` environment variable to `true`, or set `confirmModulesPurge` to `false`」——
+> **禁止照做**。那会让 pnpm **真的删除 `node_modules` 并重装**；在无网络或受限环境里，这等于毁掉工作区。
+> **那个 TTY 中止是保护，不是故障。**
 
 #### 手工等价收尾（`node … done` 不可用时，逐步执行 §3.5 的动作）
 
@@ -786,7 +817,7 @@ node scripts/release.mjs status
 
 ### 12.1 冻结声明
 
-- 本文件当前版本 **SPEC-1.0.0**，处于**执行期冻结**状态。
+- 本文件当前版本 **SPEC-1.0.1**，处于**执行期冻结**状态。
 - 「轻易不可修改」的**具体含义**：
   1. 任何修订**必须**走 §12.2 的完整流程，**禁止**"顺手改一下"；
   2. **禁止**在功能任务的同一分支 / 同一提交里修改本文件（R14）；
@@ -818,6 +849,7 @@ node scripts/release.mjs status
 | SPEC 版本 | 日期 | 变更摘要 | 依据编号 |
 |---|---|---|---|
 | **1.0.0** | 2026-09-15 | 首版定稿：由 0.x 草案重构为**面向模型的执行规范**；新增 §1 红线 14 条（每条带判定命令）、§2 标识符命名空间账本（消除 `Jx.5` 撞号 / 版本序列歧义）、§3.5 分支删除安全性说明、**§9.3 R1 两层机械防护**（`exec` 拦截 + `pre-commit` 钩子，判例 P1 的直接对策）、§12 规范修订协议（冻结条款）；人类答疑拆分至 `VERSIONING-QA.md` | `J3.2` |
+| **1.0.1** | 2026-09-16 | **补漏，不改变任何规则含义**：§11.1 新增 **§11.1.1**——pnpm 双重安装与 `.modules.yaml` 缺失的根因（三条实测事实）、开工前判别命令（两条）、以及「禁止用 `CI=true` 绕过 TTY 中止」的操作警告。同步：`VERSIONING-QA.md` 新增 Q18。本次是 §12.2 修订 SOP 的**首次完整执行**（含影响面清单与人类确认） | `J3.3` |
 
 ### 12.5 禁止事项（写规范时）
 
