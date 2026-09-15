@@ -713,8 +713,14 @@ function nextDevVersion(st, task, baseOverride) {
     if (!/^\d+\.\d+\.\d+$/.test(baseOverride)) die(`--base 应为 x.y.z 形式，收到：${baseOverride}`);
     base = baseOverride;
   } else if (m) base = m[2] ? `0.${m[1]}.${m[2]}` : `0.${m[1]}.0`;
-  const existing = st.localTags.filter((t) => t.startsWith(`v${base}-dev.`)).length;
-  return { base, tag: `v${base}-dev.${existing + 1}` };
+  // ★ L1 修正（对齐 VERSIONING.md §2.4 / R8）：序号取「**历史最大 N + 1**」，
+  //   而不是「现存同 base tag 的数量 + 1」。数量法在**删过**同 base 的 tag 之后会算错：
+  //   例如 dev.1/dev.2/dev.3 删掉 dev.2 后数量变 2，下一个又会算出 dev.3（与现存 tag 冲突）。
+  const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^v${esc}-dev\\.(\\d+)$`);
+  const used = st.localTags.map((t) => re.exec(t)).filter(Boolean).map((mm) => Number(mm[1]));
+  const nextN = used.length ? Math.max(...used) + 1 : 1;
+  return { base, tag: `v${base}-dev.${nextN}`, nextN };
 }
 
 function cmdDone(args) {
@@ -741,7 +747,23 @@ function cmdDone(args) {
   }
   ok('门禁全绿');
 
-  const { base, tag } = nextDevVersion(st, task, baseOverride);
+  const { base, tag, nextN } = nextDevVersion(st, task, baseOverride);
+
+  // ★ L2：**强制校验** package.json 的 version 是否已对齐（R9）。
+  //   规范 §3④ 的分工是「开发者在 ④ 步对齐版本号」，工具负责**验证**。
+  //   为什么不做"自动代改"：那会让 §3④ 的描述失真，而规范修订必须另走 §12.2 流程、
+  //   不能混进工具任务（R14）—— 校验既能消除"忘了改"，又不破坏规范与实现的分工。
+  const wantVersion = `${base}-dev.${nextN}`;
+  const pkgVersion = String(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version);
+  if (pkgVersion !== wantVersion) {
+    die(
+      `package.json 的 version 是 ${pkgVersion}，但本次将打 tag ${tag}（应为 ${wantVersion}）。\n` +
+      `    请先对齐（§4④）：把 package.json 的 version 改为 ${wantVersion}，\n` +
+      `    与实施结果文档一起提交后，再重跑 done。  依据：R9（version 必须与最近 tag 一致）。`,
+    );
+  }
+  ok(`版本号已对齐：${wantVersion}`);
+
   const srcBranch = collect(false).branch;
   const mergeMsg = `merge ${task}：合入 ${DEV_BRANCH}`;
   const cmds = [
@@ -765,7 +787,7 @@ function cmdDone(args) {
       kind: 'done',
       st: after,
       body: [
-        `- 版本号：\`${base}\`（package.json 的 version 请同步）`,
+        `- 版本号：\`${wantVersion}\`（**已校验**与 package.json 的 version 一致，R9）`,
         `- tag：\`${tag}\`（开发版快照，只打在 ${DEV_BRANCH} 上）`,
         `- 合并至：\`${DEV_BRANCH}\` @ \`${after.head}\``,
         `- 待补：\`docs/实施结果/${task}-实施结果.md\`（DoD 核对 / 落点 / 门禁项数 / 遗留交接）`,
@@ -809,13 +831,17 @@ function cmdShip(args) {
       `git switch ${DEV_BRANCH}`,
       `git switch ${MAIN_BRANCH}`,
       `git merge --no-ff ${DEV_BRANCH} -m "release: v${ver}（${st.lastTag || '阶段验收通过'} 之后）"`,
-      `# 手动：把 package.json 的 version 改为 ${ver}（去掉 -dev 后缀）`,
-      `git commit -am "chore(release): v${ver}"`,
+      `# ★ package.json 会【冲突】—— 这是预期（dev 侧是 -dev.N、main 侧停在上一次的正式号）`,
+      `#   处理：直接在冲突处写成 ${ver}（下面本来就要写它），然后 git add + 完成合并`,
+      `git add package.json`,
+      `git commit -m "release: v${ver}（阶段验收通过）"`,
+      `#   ↑ 这一个 merge commit 同时完成「合并」与「去掉 -dev 后缀」`,
+      `#     ⇒ SPEC-1.1.0 起**不再需要**单独的 chore(release) 提交（§5.2）`,
       `git tag -a v${ver} -m "v${ver} 正式版"`,
       `# --follow-tags 会把 v${ver} 一起推上去（它是附注 tag 且指向 main 上的提交）`,
       `git push origin ${MAIN_BRANCH} --follow-tags`,
       `git switch ${DEV_BRANCH}`,
-      `# 回到 dev 后仍需推送 dev 与开发版 tag —— 用 pnpm ship 复查`,
+      `# ★ 发布提交【不回流 dev】（§5.2）；回到 dev 后仍需推送 dev 与开发版 tag —— 用 ship 复查`,
     ];
     say('');
     for (const c of cmds) say(`  ${c.startsWith('#') ? `${C.d}${c}${C.x}` : c}`);
