@@ -4789,7 +4789,7 @@ export function installCabin(app) {
             function doInteract() { if (viewMode === 'fp' && (aimHit || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (nearestInteract) interaction.activate(nearestInteract); }
             function updateInteractHint() {
                 if (hintUI.applyOverride()) return;
-                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
+                if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { nearestInteract = null; aimHit = aimRay(); if (aimHit) hintUI.showAim(aimHit.label); else hintUI.hide(); return; } aimHit = null; nearestInteract = interaction.nearestTarget(player.pos, { fullHouse }); if (nearestInteract) hintUI.showProximity(nearestInteract.label); else hintUI.hide();
             }
 
             const keys = {}; const signInput = document.getElementById('signInput'); const signEditor = document.getElementById('signEditor'); const picInput = document.getElementById('picInput');
@@ -4800,7 +4800,9 @@ export function installCabin(app) {
                 keys[e.code] = true;
                 if (e.code === 'KeyV' && viewMode !== 'fixed') setViewMode(viewMode === 'fp' ? 'tp' : 'fp');
                 if (e.code === 'Space') { e.preventDefault(); tryJump(); }
-                if (e.code === 'KeyE' && nearestInteract) doInteract();
+                // J3.1：不再以 `nearestInteract` 为前置 —— 第一人称（准星通路）下它按设计是 null，
+                // 旧写法会让"准星对准 + 按 E"依赖一个陈旧值才能生效。是否真有可激活目标由 doInteract() 判定。
+                if (e.code === 'KeyE') doInteract();
                 if (e.code === 'Digit1' || e.code === 'Numpad1') selectSlot(1);
                 if (e.code === 'Digit2' || e.code === 'Numpad2') selectSlot(2);
                 if (e.code === 'KeyF') tryCast();
@@ -4832,7 +4834,7 @@ export function installCabin(app) {
                 ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); pinchMode = true; didPinch = true; dragInfo = null; } else if (ptrs.size === 1) { dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; didPinch = false; }
             });
             renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = pinchD - nd; if (viewMode === 'fixed') fixDist = Math.max(4, Math.min(40, fixDist + diff * 0.02)); else viewDist = Math.max(1.4, Math.min(7.0, viewDist + diff * 0.006)); pinchD = nd; return; } if (!dragInfo) return; if (viewMode === 'fp' && isLocked()) return; const dx = e.clientX - dragInfo.x, dy = e.clientY - dragInfo.y; dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.moved += Math.abs(dx) + Math.abs(dy); pendYaw -= dx * 0.0055; pendPitch += dy * 0.0045 * (viewMode === 'fp' ? -1 : 1); });
-            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) aimHit.act(); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
+            renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; if (!dragInfo) return; const wasClick = dragInfo.moved < 6 && !didPinch; dragInfo = null; if (!wasClick) return; if (viewMode === 'fp' && (isLocked() || IS_TOUCH)) { if (aimHit) interaction.activate(aimHit); return; } if (viewMode === 'fp' && !IS_TOUCH && !isLocked()) { renderer.domElement.requestPointerLock(); return; } mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, camera);
                 // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
                 const clickTarget = interaction.aimTarget(raycaster); if (clickTarget) interaction.activate(clickTarget); });
             renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchMode = false; dragInfo = null; });
