@@ -42,6 +42,10 @@ import { createEnvironment } from '../systems/weather/environment.js'
 // J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
 // 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
 import { createPropInstaller } from '../app/installProp.js'
+import { installPlayerController } from './../systems/player/PlayerController.js'
+import { installInput } from './../systems/player/Input.js'
+import { installInteractionBridge } from './../systems/interaction/Bridge.js'
+import { installCollision } from './../systems/player/collision.js'
 import { installWeatherSystem } from './../systems/weather/WeatherSystem.js'
 import { installAudio } from './../systems/audio/AudioSystem.js'
 import { installMenuPanel } from './../systems/ui/MenuPanel.js'
@@ -5102,213 +5106,20 @@ export function installCabin(app) {
             ctx.PLAYER_R = PLAYER_R;
             /* ===== 家具平台碰撞体：史莱姆可跳跃站上（top 为台面高度） ===== */
             /* ==================== [J4:seg collision] ==================== */
-            // ↓ J4 段导出（collision）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.refreshPlatforms = refreshPlatforms; ctx.collideXZ = collideXZ; ctx.stairHeightAt = stairHeightAt; ctx.railCollide = railCollide; ctx.groundAt = groundAt;
-            const platformBoxes = [
-                { x1: ctx.MTX - 0.64, z1: ctx.MTZ - 0.46, x2: ctx.MTX + 0.64, z2: ctx.MTZ + 0.46, top: ctx.MTTOP },          // 原木餐桌
-                { x1: ctx.DT_X - 1.36, z1: ctx.DT_Z - 0.46, x2: ctx.DT_X + 1.36, z2: ctx.DT_Z + 0.46, top: ctx.DTOP },      // 长餐桌
-                { x1: ctx.KOT_X - 0.62, z1: ctx.KOT_Z - 0.62, x2: ctx.KOT_X + 0.62, z2: ctx.KOT_Z + 0.62, top: ctx.KTOP },  // 暖桌
-                { x1: ctx.CBX - 0.28, z1: ctx.CBZ - 0.28, x2: ctx.CBX + 0.28, z2: ctx.CBZ + 0.28, top: 0.65 },         // 水晶球占卜台
-                { x1: -1.84, z1: -1.97, x2: -0.86, z2: -1.03, top: 0.345 },                             // 灶台旁固定木台
-                { x1: ctx.SFX - 0.25, z1: ctx.SFZ - 0.70, x2: ctx.SFX + 0.25, z2: ctx.SFZ + 0.70, top: 2.02 },         // 左墙书架（实心阻挡）
-                { x1: ctx.CCX - 0.66, z1: ctx.CCZ - 0.66, x2: ctx.CCX + 0.66, z2: ctx.CCZ + 0.66, top: 1.28 },         // 大魔女坩埚（实心阻挡）
-                { x1: -0.41, z1: -1.06, x2: 0.41, z2: -0.50, top: 0.49 },                              // 楼梯下储物箱
-                { x1: -0.99, z1: -3.04, x2: -0.51, z2: -2.56, top: 0.48 },                             // 塔罗牌小圆凳
-                { x1: ctx.BEDX - 0.68, z1: ctx.BEDZ - 1.18, x2: ctx.BEDX + 0.68, z2: ctx.BEDZ + 1.13, top: ctx.FY + 0.85, bot: ctx.FY }, // 二楼大床
-                { x1: ctx.NSX - 0.29, z1: ctx.NSZ - 0.26, x2: ctx.NSX + 0.29, z2: ctx.NSZ + 0.26, top: ctx.FY + 0.60, bot: ctx.FY },    // 二楼床头柜
-                { x1: ctx.TBLX - 1.22, z1: ctx.TBLZ - 0.58, x2: ctx.TBLX + 1.22, z2: ctx.TBLZ + 0.58, top: ctx.FY + 0.80, bot: ctx.FY }, // 二楼书桌
-                { x1: -2.03, z1: 3.26, x2: -0.77, z2: 3.84, top: ctx.FY + 1.95, bot: ctx.FY },                 // 二楼衣柜（实心阻挡）
-                { x1: 2.22, z1: 3.53, x2: 2.88, z2: 3.68, top: ctx.FY + 1.85, bot: ctx.FY },                   // 二楼拱形全身镜（实心阻挡）
-                { x1: -3.58, z1: 2.28, x2: -2.40, z2: 3.48, top: ctx.FY + 2.0, bot: ctx.FY },                  // 二楼小黑板画架（实心阻挡）
-                { x1: 0.61, z1: 3.21, x2: 1.29, z2: 3.76, top: ctx.FY + 0.41, bot: ctx.FY },                  // 二楼置物箱
-                { x1: 1.59, z1: -3.66, x2: 2.11, z2: -3.14, top: ctx.FY + 0.60, bot: ctx.FY }                 // 二楼垃圾桶
-            ];
-            ctx.platformBoxes = platformBoxes;
-            const movingPlatforms = [
-                // J3（B2）：三脚圆凳已搬入 world/floor1/stools.js —— 碰撞平台改用装配记录里的部件
-                { g: ctx.stoolsApi.parts.stoolA, hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: ctx.stoolsApi.parts.stoolB, hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: ctx.cartG, hx: 0.21, hz: 0.16, top: 0.482 },
-                { g: ctx.chairG, hx: 0.24, hz: 0.24, top: ctx.FY + 0.49, bot: ctx.FY },
-                { g: ctx.stoolG, hx: 0.17, hz: 0.15, top: ctx.FY + 0.33, bot: ctx.FY },
-                ...ctx.chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))
-            ];
-            ctx.movingPlatforms = movingPlatforms;
-            ctx.activePlatforms = platformBoxes;
-            function refreshPlatforms() {
-                ctx.activePlatforms = platformBoxes.slice();
-                for (const m of movingPlatforms) {
-                    const px = m.g.position.x, pz = m.g.position.z;
-                    ctx.activePlatforms.push({ x1: px - m.hx, z1: pz - m.hz, x2: px + m.hx, z2: pz + m.hz, top: m.top, bot: m.bot || 0 });
-                }
-            }
-            function collideXZ(px, pz, y) { const boxes = ctx.solidBoxes.slice(); if (y >= 2.35 || !ctx.doorGroup.userData.spring.open) boxes.push(ctx.DOOR_BOX); for (const p of ctx.activePlatforms) { if (y < p.top - 0.42 && y + 0.5 > (p.bot || 0)) boxes.push(p); } for (const b of boxes) { const cx = Math.max(b.x1, Math.min(px, b.x2)); const cz = Math.max(b.z1, Math.min(pz, b.z2)); let dx = px - cx, dz = pz - cz; const d2 = dx * dx + dz * dz; if (d2 < ctx.PLAYER_R * ctx.PLAYER_R) { if (d2 < 1e-9) { const l = px - b.x1, rr = b.x2 - px; const tt = pz - b.z1, bb = b.z2 - pz; const m = Math.min(l, rr, tt, bb); if (m === l) px = b.x1 - ctx.PLAYER_R; else if (m === rr) px = b.x2 + ctx.PLAYER_R; else if (m === tt) pz = b.z1 - ctx.PLAYER_R; else pz = b.z2 + ctx.PLAYER_R; } else { const d = Math.sqrt(d2); px = cx + dx / d * ctx.PLAYER_R; pz = cz + dz / d * ctx.PLAYER_R; } } } return [px, pz]; }
-            function stairHeightAt(aDeg) { if (aDeg > 30 && aDeg < 300) return ((aDeg - 30) / 270) * ctx.FLOOR_TOP; return 0; }
-            function railCollide(px, pz, y, prevX, prevZ) { const r = Math.hypot(px, pz); if (r < 1e-5) return [px, pz]; const a = (Math.atan2(px, pz) * 180 / Math.PI + 360) % 360; const pR = Math.hypot(prevX, prevZ); const pA = (Math.atan2(prevX, prevZ) * 180 / Math.PI + 360) % 360; const inLand = ang => (ang >= 300 || ang <= 60); if (y > ctx.FLOOR_TOP - 0.30 && y < ctx.FLOOR_TOP + 0.95) { if (a > 60 && a < 300 && pA > 60 && pA < 300) { if (pR < 1.24 && r > 1.24) { const s = 1.21 / r; px *= s; pz *= s; } else if (pR > 1.24 && r < 1.24) { const s = 1.27 / r; px *= s; pz *= s; } } if (Math.min(r, pR) < 1.24 && inLand(a) !== inLand(pA)) { if ((a > 60 && a < 160) || (pA > 60 && pA < 160)) { px = prevX; pz = prevZ; } } } else if (y > 0.45 && y <= ctx.FLOOR_TOP - 0.30) { const sh = stairHeightAt(a); if (pR < 1.25 && Math.abs(y - sh) < 0.85) { if (r > 0.98 && r < 1.12) { const s = 0.98 / r; px *= s; pz *= s; } else if (r < 0.30) { const s = 0.30 / r; px *= s; pz *= s; } } } else if (y <= 0.45) { if (pR >= 1.14 && r < 1.14 && !(a > 18 && a < 62)) { const s = 1.14 / r; px *= s; pz *= s; } } return [px, pz]; }
-            function groundAt(x, z, curY) { let g = 0; const r = Math.hypot(x, z); const a = (Math.atan2(x, z) * 180 / Math.PI + 360) % 360; if (r > 0.10 && r < 1.20 && a > 30 && a < 300) { const h = Math.min(((a - 30) / 270) * ctx.FLOOR_TOP, ctx.FLOOR_TOP); if (curY > h - 0.5) g = Math.max(g, h); } for (const p of ctx.activePlatforms) { if (x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2 && curY > p.top - 0.45) g = Math.max(g, p.top); } if (x > -4 && x < 4 && z > -4 && z < 4 && curY > 2.6) { if (r >= 1.20) g = Math.max(g, ctx.FLOOR_TOP); else if (a >= 300 || a <= 60) g = Math.max(g, ctx.FLOOR_TOP); } return g; }
-
-            /* ---- 音效辅助：门窗弹簧 / 壁炉 / 吊灯 / 魔法物件 ---- */
+            // J4（collision）：本段已搬入 systems/player/collision.js
+            installCollision(ctx, app);
             /* ==================== [J4:seg sfxBridge] ==================== */
-            // ↓ J4 段导出（sfxBridge）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.toggleFire = toggleFire; ctx.toggleLamp = toggleLamp; ctx.ancestorVisible = ancestorVisible; ctx.aimRay = aimRay; ctx.doInteract = doInteract; ctx.updateInteractHint = updateInteractHint;
-            ctx.doorGroup.userData.sfx = 'door';
-            for (const w of [ctx.winFL, ctx.winFR, ctx.winL, ctx.winR, ctx.winB, ctx.winG]) w.userData.sfx = 'window';
-            const toggleSpring = g => { if (g.userData.onToggle) { g.userData.onToggle(); return; } g.userData.spring.open = !g.userData.spring.open; ctx.SND.play(g.userData.sfx || 'toggle'); };
-            ctx.toggleSpring = toggleSpring;
-            function toggleFire() { ctx.fireLit = !ctx.fireLit; ctx.SND.play('fire'); }
-            function toggleLamp() { ctx.lampLit = !ctx.lampLit; ctx.SND.play('lamp'); }
-            const fireMagic = o => { ctx.SND.play(o.userData.sfx || 'toggle'); o.userData.onClick(); };
-            ctx.fireMagic = fireMagic;
-            // J2.6：9 条近距条目改为**注册式**（统一交互契约）。顺序、半径、锚点逐条照搬 ⇒ 行为零差异；
-            // anchor 全部来自 cabin/world/layout.js（不变量 N9），label 是面向用户的语义化文案（不变量 N10）。
-            const interaction = createInteractionSystem({ registry, warn: (m) => console.warn(m) });
-            ctx.interaction = interaction;
-            interaction.registerProximity({ id: 'floor1/fireplace', label: '点燃 / 熄灭壁炉', mode: 'proximity', anchor: { x: ctx.FX, z: ctx.FZ }, radius: 2.0, onActivate: toggleFire });
-            interaction.registerProximity({ id: 'floor1/chandelier', label: '点亮 / 熄灭魔法吊灯', mode: 'proximity', anchor: { x: 0, z: 0 }, radius: 2.4, onActivate: toggleLamp });
-            interaction.registerProximity({ id: 'house/door', label: '打开 / 关上大门', mode: 'proximity', anchor: { x: 0, z: 4 }, radius: 1.8, onActivate: () => toggleSpring(ctx.doorGroup) });
-            interaction.registerProximity({ id: 'house/window-front-left', label: '开 / 关前左窗', mode: 'proximity', anchor: { x: ctx.WIN_F_L.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(ctx.winFL) });
-            interaction.registerProximity({ id: 'house/window-front-right', label: '开 / 关前右窗', mode: 'proximity', anchor: { x: ctx.WIN_F_R.c, z: 4 }, radius: 1.6, onActivate: () => toggleSpring(ctx.winFR) });
-            interaction.registerProximity({ id: 'house/window-left', label: '开 / 关左侧窗', mode: 'proximity', anchor: { x: -4, z: ctx.WIN_LEFT.c }, radius: 1.6, onActivate: () => toggleSpring(ctx.winL) });
-            interaction.registerProximity({ id: 'outdoor/signpost', label: '编辑路牌文字', mode: 'proximity', anchor: { x: 3.1, z: 6.3 }, radius: 2.2, onActivate: ctx.openSignEditor });
-            interaction.registerProximity({ id: 'house/window-right', label: '开 / 关右侧窗', mode: 'proximity', anchor: { x: 4, z: -1.5 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(ctx.winR) });
-            interaction.registerProximity({ id: 'house/window-back', label: '开 / 关后窗', mode: 'proximity', anchor: { x: 1.5, z: -4 }, radius: 1.7, fullHouseOnly: true, onActivate: () => toggleSpring(ctx.winB) });
-            const hintEl = document.getElementById('hint'), crosshairEl = document.getElementById('crosshair'), lockTipEl = document.getElementById('lockTip');
-            ctx.hintEl = hintEl; ctx.crosshairEl = crosshairEl; ctx.lockTipEl = lockTipEl;
-            // J2.6：提示文案的唯一出口（原先 #hint 的 innerHTML 被直接写了 4 处，违反不变量 N10）
-            const hintUI = createHintUI({ element: hintEl, clock, isTouch: ctx.IS_TOUCH });
-            ctx.hintUI = hintUI;
-            ctx.nearestInteract = null, ctx.aimHit = null; const raycaster = new THREE.Raycaster();
-            ctx.raycaster = raycaster; const CENTER = new THREE.Vector2(0, 0);
-            ctx.CENTER = CENTER; const mouse = new THREE.Vector2();
-            ctx.mouse = mouse;
-            function ancestorVisible(o) { let p = o; while (p) { if (p.visible === false) return false; p = p.parent; } return true; }
-            // J2.6：把原先硬编码在 aimRay() 里的「铰链 → 魔法物件 → 壁炉」三段优先，改为按注册顺序的命中源。
-            // ★ 注册次序必须与搬迁前的短路次序**完全一致**，否则同一次点击会命中不同的物件。
-            //   每个源自己负责"命中的 Mesh → 可执行目标"这一步（label 取自各物件的 aimLabel）。
-            interaction.registerAimSource({ id: 'hinges', meshes: ctx.hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
-            interaction.registerAimSource({ id: 'magic', meshes: ctx.magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
-            interaction.registerAimSource({ id: 'fire', meshes: ctx.fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
-            function aimRay() { raycaster.setFromCamera(CENTER, ctx.camera); return interaction.aimTarget(raycaster); }
-            const isLocked = () => document.pointerLockElement === ctx.renderer.domElement;
-            ctx.isLocked = isLocked;
-            function doInteract() { if (ctx.viewMode === 'fp' && (ctx.aimHit || ctx.IS_TOUCH)) { if (ctx.aimHit) interaction.activate(ctx.aimHit); return; } if (ctx.nearestInteract) interaction.activate(ctx.nearestInteract); }
-            function updateInteractHint() {
-                if (hintUI.applyOverride()) return;
-                if (ctx.viewMode === 'fp' && (isLocked() || ctx.IS_TOUCH)) { ctx.nearestInteract = null; ctx.aimHit = aimRay(); if (ctx.aimHit) hintUI.showAim(ctx.aimHit.label); else hintUI.hide(); return; } ctx.aimHit = null; ctx.nearestInteract = interaction.nearestTarget(ctx.player.pos, { fullHouse: ctx.fullHouse }); if (ctx.nearestInteract) hintUI.showProximity(ctx.nearestInteract.label); else hintUI.hide();
-            }
-
+            // J4（sfxBridge）：本段已搬入 systems/interaction/Bridge.js
+            installInteractionBridge(ctx, app);
             /* ==================== [J4:seg input] ==================== */
-            // ↓ J4 段导出（input）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.tryJump = tryJump; ctx.setKnob = setKnob; ctx.joyEnd = joyEnd; ctx.sprintEnd = sprintEnd;
-            const keys = {};
-            ctx.keys = keys; const signInput = document.getElementById('signInput');
-            ctx.signInput = signInput; const signEditor = document.getElementById('signEditor');
-            ctx.signEditor = signEditor; const picInput = document.getElementById('picInput');
-            ctx.picInput = picInput;
-            ctx.joyX = 0, ctx.joyY = 0, ctx.sprintBtnDown = false;
-            function tryJump() { const now = clock.now; if (ctx.player.onGround || (now - ctx.player.groundT) < 0.15) { ctx.player.vy = 7.0; ctx.player.onGround = false; ctx.player.groundT = -10; ctx.slime.squashV += 1.3; ctx.slime.wobV += 2.2; } }
-            addEventListener('keydown', e => {
-                if (document.activeElement === signInput || document.activeElement === ctx.noteInput || document.activeElement === picInput) return;
-                keys[e.code] = true;
-                if (e.code === 'KeyV' && ctx.viewMode !== 'fixed') ctx.setViewMode(ctx.viewMode === 'fp' ? 'tp' : 'fp');
-                if (e.code === 'Space') { e.preventDefault(); tryJump(); }
-                // J3.1：不再以 `nearestInteract` 为前置 —— 第一人称（准星通路）下它按设计是 null，
-                // 旧写法会让"准星对准 + 按 E"依赖一个陈旧值才能生效。是否真有可激活目标由 doInteract() 判定。
-                if (e.code === 'KeyE') ctx.doInteract();
-                if (e.code === 'Digit1' || e.code === 'Numpad1') ctx.selectSlot(1);
-                if (e.code === 'Digit2' || e.code === 'Numpad2') ctx.selectSlot(2);
-                if (e.code === 'KeyF') ctx.tryCast();
-            });
-            addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space' && ctx.player.vy > 2.6) ctx.player.vy = 2.6; });
-            const joyZone = document.getElementById('joyZone'), joyBase = document.getElementById('joyBase'), joyKnob = document.getElementById('joyKnob');
-            ctx.joyZone = joyZone; ctx.joyBase = joyBase; ctx.joyKnob = joyKnob;
-            const JOY_R = 44;
-            ctx.JOY_R = JOY_R; ctx.joyId = null, ctx.joyCx = 0, ctx.joyCy = 0;
-            function setKnob(dx, dy) { joyKnob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; }
-            joyZone.addEventListener('pointerdown', e => { if (ctx.joyId !== null) return; ctx.joyId = e.pointerId; ctx.joyCx = e.clientX; ctx.joyCy = e.clientY; joyBase.style.display = 'block'; joyBase.style.left = ctx.joyCx + 'px'; joyBase.style.top = ctx.joyCy + 'px'; setKnob(0, 0); joyZone.setPointerCapture(e.pointerId); e.preventDefault(); });
-            joyZone.addEventListener('pointermove', e => { if (e.pointerId !== ctx.joyId) return; let dx = e.clientX - ctx.joyCx, dy = e.clientY - ctx.joyCy; const m = Math.hypot(dx, dy); if (m > JOY_R) { dx = dx / m * JOY_R; dy = dy / m * JOY_R; } setKnob(dx, dy); ctx.joyX = dx / JOY_R; ctx.joyY = dy / JOY_R; e.preventDefault(); });
-            function joyEnd(e) { if (e.pointerId !== ctx.joyId) return; ctx.joyId = null; ctx.joyX = 0; ctx.joyY = 0; joyBase.style.display = 'none'; setKnob(0, 0); }
-            joyZone.addEventListener('pointerup', joyEnd); joyZone.addEventListener('pointercancel', joyEnd);
-            const btnSprint = document.getElementById('btnSprint'), btnJump = document.getElementById('btnJump'), btnAct = document.getElementById('btnAct'), btnCast = document.getElementById('btnCast');
-            ctx.btnSprint = btnSprint; ctx.btnJump = btnJump; ctx.btnAct = btnAct; ctx.btnCast = btnCast;
-            btnSprint.addEventListener('pointerdown', e => { ctx.sprintBtnDown = true; btnSprint.classList.add('pressed'); e.preventDefault(); });
-            function sprintEnd() { ctx.sprintBtnDown = false; btnSprint.classList.remove('pressed'); }
-            btnSprint.addEventListener('pointerup', sprintEnd); btnSprint.addEventListener('pointercancel', sprintEnd);
-            btnJump.addEventListener('pointerdown', e => { btnJump.classList.add('pressed'); tryJump(); e.preventDefault(); });
-            btnJump.addEventListener('pointerup', () => { btnJump.classList.remove('pressed'); if (ctx.player.vy > 2.6) ctx.player.vy = 2.6; });
-            btnJump.addEventListener('pointercancel', () => btnJump.classList.remove('pressed'));
-            btnAct.addEventListener('pointerdown', e => { btnAct.classList.add('pressed'); ctx.doInteract(); e.preventDefault(); });
-            btnAct.addEventListener('pointerup', () => btnAct.classList.remove('pressed')); btnAct.addEventListener('pointercancel', () => btnAct.classList.remove('pressed'));
-            btnCast.addEventListener('pointerdown', e => { btnCast.classList.add('pressed'); ctx.tryCast(); e.preventDefault(); });
-            btnCast.addEventListener('pointerup', () => btnCast.classList.remove('pressed')); btnCast.addEventListener('pointercancel', () => btnCast.classList.remove('pressed'));
-            document.getElementById('slot1').addEventListener('click', () => ctx.selectSlot(1));
-            document.getElementById('slot2').addEventListener('click', () => ctx.selectSlot(2));
-            ctx.dragInfo = null; const ptrs = new Map();
-            ctx.ptrs = ptrs; ctx.pinchMode = false, ctx.pinchD = 0, ctx.didPinch = false;
-            ctx.renderer.domElement.addEventListener('pointerdown', e => {
-                if (e.button === 2) { ctx.tryCast(); return; }
-                ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; ctx.pinchD = Math.hypot(a.x - b.x, a.y - b.y); ctx.pinchMode = true; ctx.didPinch = true; ctx.dragInfo = null; } else if (ptrs.size === 1) { ctx.dragInfo = { x: e.clientX, y: e.clientY, moved: 0 }; ctx.didPinch = false; }
-            });
-            ctx.renderer.domElement.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ctx.pinchMode && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const nd = Math.hypot(a.x - b.x, a.y - b.y); const diff = ctx.pinchD - nd; if (ctx.viewMode === 'fixed') ctx.fixDist = Math.max(4, Math.min(40, ctx.fixDist + diff * 0.02)); else ctx.viewDist = Math.max(1.4, Math.min(7.0, ctx.viewDist + diff * 0.006)); ctx.pinchD = nd; return; } if (!ctx.dragInfo) return; if (ctx.viewMode === 'fp' && ctx.isLocked()) return; const dx = e.clientX - ctx.dragInfo.x, dy = e.clientY - ctx.dragInfo.y; ctx.dragInfo.x = e.clientX; ctx.dragInfo.y = e.clientY; ctx.dragInfo.moved += Math.abs(dx) + Math.abs(dy); ctx.pendYaw -= dx * 0.0055; ctx.pendPitch += dy * 0.0045 * (ctx.viewMode === 'fp' ? -1 : 1); });
-            ctx.renderer.domElement.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) ctx.pinchMode = false; if (!ctx.dragInfo) return; const wasClick = ctx.dragInfo.moved < 6 && !ctx.didPinch; ctx.dragInfo = null; if (!wasClick) return; if (ctx.viewMode === 'fp' && (ctx.isLocked() || ctx.IS_TOUCH)) { if (ctx.aimHit) ctx.interaction.activate(ctx.aimHit); return; } if (ctx.viewMode === 'fp' && !ctx.IS_TOUCH && !ctx.isLocked()) { ctx.renderer.domElement.requestPointerLock(); return; } ctx.mouse.x = (e.clientX / innerWidth) * 2 - 1; ctx.mouse.y = -(e.clientY / innerHeight) * 2 + 1; ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
-                // J2.6：点击与准星**共用**同一个目标查找 —— 原先这段「铰链 → 魔法物件 → 壁炉」在这里又抄了一遍
-                const clickTarget = ctx.interaction.aimTarget(ctx.raycaster); if (clickTarget) ctx.interaction.activate(clickTarget); });
-            ctx.renderer.domElement.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) ctx.pinchMode = false; ctx.dragInfo = null; });
-            document.addEventListener('mousemove', e => { if (ctx.isLocked() && ctx.viewMode === 'fp') { ctx.camYaw -= e.movementX * 0.0026; ctx.camPitch -= e.movementY * 0.0022; ctx.camPitch = Math.max(-1.2, Math.min(1.2, ctx.camPitch)); } });
-            document.addEventListener('pointerlockchange', () => { const locked = ctx.isLocked(); ctx.crosshairEl.classList.toggle('show', ctx.viewMode === 'fp' && (locked || ctx.IS_TOUCH)); ctx.lockTipEl.classList.toggle('show', ctx.viewMode === 'fp' && !locked && !ctx.IS_TOUCH); });
-            ctx.renderer.domElement.addEventListener('wheel', e => { if (ctx.viewMode === 'fixed') ctx.fixDist = Math.max(4, Math.min(40, ctx.fixDist + e.deltaY * 0.012)); else ctx.viewDist = Math.max(1.4, Math.min(7.0, ctx.viewDist + e.deltaY * 0.0025)); }, { passive: true });
-            addEventListener('contextmenu', e => { if (e.target === ctx.renderer.domElement || e.target.closest('#joyZone, .touchBtn')) e.preventDefault(); });
-
-            // J2.5：设置类控件（houseToggle / viewXxxBtn / sfxToggle / sfxSlider / wxRandToggle /
-            //      speedSlider）已交给 `cabin/systems/ui/SettingsForm.js` 由 schema 生成，
-            //      这里**不再持有元素引用** —— 场景只订阅 store 的值（见下面的 applySetting 段）。
+            // J4（input）：本段已搬入 systems/player/Input.js
+            installInput(ctx, app);
             /* ==================== [J4:seg menuUi] ==================== */
             // J4（menuUi）：本段已搬入 systems/ui/MenuPanel.js
             installMenuPanel(ctx, app);
             /* ==================== [J4:seg playerCtrl] ==================== */
-            // ↓ J4 段导出（playerCtrl）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.lerpAngle = lerpAngle; ctx.slimeLand = slimeLand; ctx.updatePlayer = updatePlayer;
-            function lerpAngle(a, b, t) { let d = (b - a + Math.PI * 3) % (Math.PI * 2) - Math.PI; return a + d * t; }
-            function slimeLand(time) { if (ctx.player.vy < -3.0) { const impact = Math.min(1.5, (-ctx.player.vy - 3.0) * 0.30); ctx.slime.squashV -= impact; ctx.slime.wobV += impact * 2.6; } ctx.player.pos.y = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y); ctx.player.pos.y = Math.max(ctx.player.pos.y, 0); ctx.player.vy = 0; ctx.player.onGround = true; ctx.player.groundT = time; }
-            function updatePlayer(dt, time) {
-                ctx.refreshPlatforms();
-                if (ctx.pendYaw !== 0 || ctx.pendPitch !== 0) { const APPLY = 0.6; if (ctx.viewMode === 'fixed') { ctx.fixYaw += ctx.pendYaw * APPLY; ctx.fixPitch += ctx.pendPitch * APPLY; ctx.fixPitch = Math.max(0.05, Math.min(1.45, ctx.fixPitch)); } else { ctx.camYaw += ctx.pendYaw * APPLY; ctx.camPitch += ctx.pendPitch * APPLY; if (ctx.viewMode === 'fp') ctx.camPitch = Math.max(-1.2, Math.min(1.2, ctx.camPitch)); else ctx.camPitch = Math.max(-0.25, Math.min(1.15, ctx.camPitch)); } ctx.pendYaw *= (1 - APPLY); ctx.pendPitch *= (1 - APPLY); if (Math.abs(ctx.pendYaw) < 1e-5) ctx.pendYaw = 0; if (Math.abs(ctx.pendPitch) < 1e-5) ctx.pendPitch = 0; }
-                if (ctx.viewMode === 'fixed') ctx.camYaw = ctx.fixYaw + Math.PI;
-                const typing = document.activeElement === ctx.signInput || document.activeElement === ctx.noteInput || document.activeElement === ctx.picInput; let ix = 0, iz = 0;
-                if (!typing) { if (ctx.keys['KeyW'] || ctx.keys['ArrowUp']) iz += 1; if (ctx.keys['KeyS'] || ctx.keys['ArrowDown']) iz -= 1; if (ctx.keys['KeyA'] || ctx.keys['ArrowLeft']) ix -= 1; if (ctx.keys['KeyD'] || ctx.keys['ArrowRight']) ix += 1; ix += ctx.joyX; iz += -ctx.joyY; const m = Math.hypot(ix, iz); if (m > 1) { ix /= m; iz /= m; } }
-                const joyFull = Math.hypot(ctx.joyX, ctx.joyY) > 0.85; const running = !!(ctx.keys['ShiftLeft'] || ctx.keys['ShiftRight']) || ctx.sprintBtnDown || joyFull; const maxSpeed = running ? 3.2 : 1.6;
-                let tx = 0, tz = 0; if (ix !== 0 || iz !== 0) { const fx = Math.sin(ctx.camYaw), fz = Math.cos(ctx.camYaw); const rx = -Math.cos(ctx.camYaw), rz = Math.sin(ctx.camYaw); tx = (fx * iz + rx * ix) * maxSpeed; tz = (fz * iz + rz * ix) * maxSpeed; }
-                ctx.player.moveSpeed += (Math.hypot(tx, tz) - ctx.player.moveSpeed) * Math.min(1, dt * 10); const spd = ctx.player.moveSpeed; const moving = spd > 0.12;
-                if (moving) ctx.slime.pulse += dt * (2.6 + spd * 1.3);
-                const creep = moving ? 0.45 + 0.55 * Math.max(0, Math.sin(ctx.slime.pulse - 0.5)) : 1;
-                const ox = ctx.player.pos.x, oz = ctx.player.pos.z; let nx = ctx.player.pos.x + tx * dt * creep, nz = ctx.player.pos.z + tz * dt * creep;
-                [nx, nz] = ctx.collideXZ(nx, nz, ctx.player.pos.y);[nx, nz] = ctx.railCollide(nx, nz, ctx.player.pos.y, ox, oz); ctx.player.pos.x = nx; ctx.player.pos.z = nz;
-                const ground = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y);
-                if (ctx.player.pos.y <= ground + 0.001 && ctx.player.vy <= 0) { if (ctx.player.pos.y - ground > 0.5) ctx.player.vy = 0; else slimeLand(time); }
-                if (ctx.player.pos.y > ground + 0.001 || ctx.player.vy > 0) { ctx.player.vy -= 22 * dt; ctx.player.pos.y += ctx.player.vy * dt; const g2 = ctx.groundAt(ctx.player.pos.x, ctx.player.pos.z, ctx.player.pos.y); if (ctx.player.pos.y <= g2 && ctx.player.vy <= 0) slimeLand(time); else if (ctx.player.pos.y > g2) ctx.player.onGround = false; }
-                if (spd > 0.15) ctx.player.yaw = lerpAngle(ctx.player.yaw, Math.atan2(tx, tz), Math.min(1, dt * 9));
-                const breathe = 1 + Math.sin(time * 1.7) * 0.03; const pulseSq = moving ? 1 - 0.10 * Math.max(0, Math.sin(ctx.slime.pulse - 0.9)) : 1; let jumpSq = 1;
-                if (!ctx.player.onGround) jumpSq = ctx.player.vy > 2 ? 1.22 : (ctx.player.vy < -2 ? 1.12 : 1.07);
-                const targetS = ctx.SLIME_FLAT * breathe * pulseSq * jumpSq;
-                ctx.slime.squashV += (targetS - ctx.slime.squash) * 165 * dt; ctx.slime.squashV *= Math.exp(-6.2 * dt); ctx.slime.squash += ctx.slime.squashV * dt;
-                const sy = Math.max(0.45, Math.min(1.5, ctx.slime.squash)); const sxz = (1 / Math.sqrt(sy)) * (1 + ctx.slime.wob * 0.10);
-                ctx.slime.wobV += (-ctx.slime.wob) * 55 * dt; ctx.slime.wobV *= Math.exp(-3.4 * dt); ctx.slime.wob += ctx.slime.wobV * dt; const wob = Math.max(-0.35, Math.min(0.35, ctx.slime.wob));
-                ctx.slimeRoot.position.set(ctx.player.pos.x, ctx.player.pos.y, ctx.player.pos.z); ctx.slimeRoot.rotation.y = ctx.player.yaw; ctx.slimeBody.scale.set(sxz, sy, sxz); ctx.slimeBody.position.y = ctx.SLIME_R * sy;
-                const leanT = Math.min(spd / 1.6, 1) * 0.15; ctx.slime.tiltV += (leanT - ctx.slime.tilt) * 130 * dt; ctx.slime.tiltV *= Math.exp(-5 * dt); ctx.slime.tilt += ctx.slime.tiltV * dt;
-                ctx.slimeBody.rotation.x = ctx.slime.tilt + wob * 0.35; ctx.slimeBody.rotation.z = Math.sin(time * 2.1) * 0.02 + Math.sin(ctx.slime.pulse * 0.5) * 0.035 * Math.min(spd / 1.6, 1) + wob * 0.55;
-                const casting = ctx.blast.active && ctx.blast.t < ctx.T_BOOM;
-                if (casting) ctx.slime.pulse += dt * 3;
-                const wAmp = moving ? 0.013 + 0.007 * Math.min(spd / 1.6, 1) : (casting ? 0.016 : 0.005);
-                const wSpd = moving ? 7.5 : (casting ? 5 : 1.5);
-                ctx.deformSlime(time, wAmp, wSpd);
-                ctx.core.scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + ctx.slime.pulse) + (casting ? 0.15 : 0)); ctx.core.position.set(Math.sin(time * 1.3) * 0.012, 0.015 * Math.sin(time * 1.9), Math.sin(time * 1.1) * 0.010);
-                for (const b of ctx.bubbles) { const t = (time * 0.22 + b.userData.ph) % 1; const r2 = b.userData.rr * (1 - t * 0.45); b.position.set(Math.cos(b.userData.ang) * r2, -0.12 + t * 0.24, Math.sin(b.userData.ang) * r2); b.scale.setScalar(0.5 + 0.5 * Math.sin(t * Math.PI)); }
-                const shs = 1 / Math.sqrt(sy); ctx.slimeShadow.scale.set(shs, shs, 1); ctx.slimeShadow.material.opacity = 0.10 + 0.10 / sy;
-                // J2.7：三段解算搬进 CameraRig（按当前视角选 solver；原先是 if / else if / else 三段）
-                ctx.cameraRig.update({ fixYaw: ctx.fixYaw, fixPitch: ctx.fixPitch, fixDist: ctx.fixDist, camYaw: ctx.camYaw, camPitch: ctx.camPitch, viewDist: ctx.viewDist, player: ctx.player, look: ctx.FIX_LOOK });
-            }
-
-            /* ==================== 天空·时间·天气系统 ==================== */
+            // J4（playerCtrl）：本段已搬入 systems/player/PlayerController.js
+            installPlayerController(ctx, app);
             /* ==================== [J4:seg weather] ==================== */
             // J4（weather）：本段已搬入 systems/weather/WeatherSystem.js
             installWeatherSystem(ctx, app);
