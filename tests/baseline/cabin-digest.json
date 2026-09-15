@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-15",
   "totals": {
-    "files": 82,
-    "lines": 16721
+    "files": 83,
+    "lines": 16743
   },
-  "combined": "c695b90166398643fb2810401e1259e04282a677ab9646a5d8321de8fc7614e9",
+  "combined": "8bbeff886bbcd0ffe3f426f53ba002d030ee516783fd1851ce501e0fc0ed3db3",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -38,13 +38,14 @@
     "core/render/CameraRig.js": "b60be1371f1a5515",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "c6eac6dd98798a5b",
-    "legacy/monolith.js": "aa853c0d95a80051",
+    "legacy/monolith.js": "ba3a764a05801798",
     "props/README.md": "600f9c9259b2ee19",
     "systems/audio/AudioSystem.js": "2b622e38bc52fb82",
     "systems/interaction/Bridge.js": "44fa8ad199425614",
     "systems/interaction/HintUI.js": "1794afdcb98dae86",
     "systems/interaction/InteractionSystem.js": "b8f10c7e1672da3b",
     "systems/interaction/types.js": "54b78b20c5b8840f",
+    "systems/magic/MagicSystem.js": "c2a632666f2c0462",
     "systems/player/collision.js": "1d7eede0ebca90e2",
     "systems/player/Input.js": "f2c84fc36f63ad9f",
     "systems/player/PlayerController.js": "8b889ce04ab4884e",
