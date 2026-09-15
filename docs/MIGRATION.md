@@ -367,7 +367,7 @@ Magic-cabin/
 | **J1.5** | ✅ **已完成（2026-09-14）**：构建与内容地基（Astro 落地、`src/content/` 集合骨架、门厅）—— 见 [`实施结果/J1.5-实施结果.md`](./实施结果/J1.5-实施结果.md) | `BuildPlaning/03` §5 |
 | **J2** | ✅ **已完成（2026-09-14）**：核心设施 —— **`CameraRig`** + 统一 `Interactable` + **持久化**；另含 `LightField`、`Clock`/`EventBus`/`Scheduler`，以及几何 DSL / 材质 / 坐标 / 天气解耦。四个 DoD 全部由机器判据证明 —— 见 [`实施结果/J2-实施结果.md`](./实施结果/J2-实施结果.md) | `BuildPlaning/01` §3 |
 | **J2.5** | ✅ **已完成（2026-09-15）**：配置编排层（**插层子阶段**，版本 `0.2.5`）—— `src/config/` 接线 + `SettingsForm` 由 schema 自动生成面板并自动持久化 + `blog/registry.js` 按 `modules.config` 过滤装配 + **`pnpm verify:cf`（31 项，`CF1`–`CF4`）**。见 [`实施结果/J2.5-配置编排层-实施结果.md`](./实施结果/J2.5-配置编排层-实施结果.md) | `BuildPlaning/04` §3 |
-| **J3** | ⬜ **下一个可开工**：物件模块化 —— B1–B6 六批、约 67 件物件 → `defineProp`；**新增 `mounts.js` 挂载点 ID 表** | `BuildPlaning/01` §3 |
+| **J3** | 🟡 **基础设施已完成 + 21/67 件搬迁**：`defineProp` 契约（`app/defineProp.js`）、装配器（`app/installProp.js`）、**`mounts.js` 挂载点 ID 表**、惰性装配环境、搬迁应用器（`scripts/oneoff/_j3-apply.mjs`）与两条新门禁（`tests/e2e/j3-probe.mjs`、场景图比对脚本）。其余 46 件因**四类结构性阻塞**（每帧分支与主循环耦合 / 光源槽位 / `addStatic` 链 / 自建射线）留给 `J4` —— 见 [`实施结果/J3-实施结果.md`](./实施结果/J3-实施结果.md) §3 | `BuildPlaning/01` §3 |
 | **J4** | 系统模块化：player / weather / audio / magic / ui；**删除 `legacy/`** | `BuildPlaning/01` §3 |
 | **J5** | 内容管线与静态页（Astro 版）：集合 schema、`posts.json`、`/posts/<slug>/`、RSS/sitemap/JSON-LD/Pagefind | `BuildPlaning/01` §3 |
 | **J6** | ★ **书架即博客 + 方案 B 阅读器**（CSS3DRenderer 真 DOM 书页、平面视角、路由、门厅） | `BuildPlaning/03` §3 |

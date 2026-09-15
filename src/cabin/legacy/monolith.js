@@ -42,6 +42,12 @@ import { createEnvironment } from '../systems/weather/environment.js'
 // J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
 // 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
 import { createPropInstaller } from '../app/installProp.js'
+import cauldron from '../world/floor1/cauldron.js'
+import diningBook from '../world/floor1/diningBook.js'
+import longTable from '../world/floor1/longTable.js'
+import orrery from '../world/floor1/orrery.js'
+import potionBottle from '../world/floor1/potionBottle.js'
+import tableware from '../world/floor1/tableware.js'
 import bookPile from '../world/floor1/bookPile.js'
 import starBell from '../world/floor1/starBell.js'
 import tarot from '../world/floor1/tarot.js'
@@ -709,172 +715,14 @@ export function installCabin(app) {
             // J3（B3）：几何已搬入 src/cabin/world/floor1/diningTable.js，此处只留装配调用。
             installProp(diningTable);
             // ---- 12.2 星象仪 ----
-            let orbOn = true, orbP = 1;
-            const OX = MTX - 0.38, OZ = MTZ - 0.14;
-            const orbG = new THREE.Group();
-            orbG.position.set(OX, MTTOP, OZ);
-            put(edge(new THREE.CylinderGeometry(0.09, 0.12, 0.06, 10)), 0, 0.03, 0, 0, 0, 0, orbG);
-            put(edge(new THREE.CylinderGeometry(0.035, 0.05, 0.05, 8)), 0, 0.08, 0, 0, 0, 0, orbG);
-            put(edge(new THREE.SphereGeometry(0.15, 14, 10)), 0, 0.21, 0, 0, 0, 0, orbG);
-            put(line([[0, 0.14, 0.13], [0, 0.24, 0.145], [0, 0.29, 0.08]]), 0, 0, 0, orbG);
-            put(line([[0, 0.14, -0.13], [0, 0.24, -0.145], [0, 0.29, -0.08]]), 0, 0, 0, orbG);
-
-            const orbRings = [];
-            for (const [tilt, spd] of [[0.5, 1.0], [-0.42, -0.75], [Math.PI / 2, 0.55]]) {
-                const holder = new THREE.Group();
-                holder.position.y = 0.21;
-                const t = edge(new THREE.TorusGeometry(0.21, 0.006, 6, 44));
-                t.rotation.x = tilt;
-                holder.add(t);
-                const pl = edge(new THREE.SphereGeometry(0.018, 8, 6));
-                pl.position.set(0.21, 0, 0);
-                holder.add(pl);
-                orbG.add(holder);
-                orbRings.push({ holder, spd });
-            }
-            const orbStars = new THREE.Group();
-            orbStars.position.y = 0.21;
-            for (let i = 0; i < 4; i++) {
-                const a = i * Math.PI / 2;
-                const st = edge(new THREE.OctahedronGeometry(0.022));
-                st.position.set(Math.cos(a) * 0.27, Math.sin(a * 2) * 0.07, Math.sin(a) * 0.27);
-                orbStars.add(st);
-            }
-            orbG.add(orbStars);
-            scene.add(orbG);
-            regMagic(orbG, () => { orbOn = !orbOn; });
-            orbG.userData.sfx = 'magic';
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
+            const orreryApi = installProp(orrery);
             // ---- 12.3 魔法药剂瓶 ----
-            let corkOut = false, corkT = 0;
-            const PX = MTX + 0.05, PZ = MTZ + 0.24;
-            const potG = new THREE.Group();
-            potG.position.set(PX, MTTOP, PZ);
-            const PROF = [[0.018, 0.038], [0.035, 0.062], [0.05, 0.076], [0.065, 0.085], [0.08, 0.089],
-            [0.10, 0.090], [0.12, 0.086], [0.14, 0.075], [0.16, 0.056], [0.178, 0.034], [0.19, 0.026]];
-            for (const [yy, rr] of PROF) {
-                const pts = [];
-                for (let i = 0; i <= 20; i++) { const a = i / 20 * Math.PI * 2; pts.push([Math.cos(a) * rr, yy, Math.sin(a) * rr]); }
-                lloop(pts, potG);
-            }
-            for (const ang of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
-                const c = Math.cos(ang), s = Math.sin(ang);
-                const pts = PROF.map(([yy, rr]) => [c * rr, yy, s * rr]);
-                put(line(pts), 0, 0, 0, 0, 0, 0, potG);
-            }
-            put(edge(new THREE.CylinderGeometry(0.024, 0.024, 0.055, 8)), 0, 0.228, 0, 0, 0, 0, potG);
-            put(edge(new THREE.TorusGeometry(0.027, 0.006, 6, 14)), 0, 0.258, 0, Math.PI / 2, 0, 0, potG);
-
-            const LIQ_Y = 0.078;
-            const waterMat = new THREE.MeshBasicMaterial({
-                color: 0x5aa8dd, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide
-            });
-            const waterBody = new THREE.Mesh(new THREE.SphereGeometry(0.082, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), waterMat);
-            put(waterBody, 0, 0.006, 0, 0, 0, 0, potG);
-            const waterDisc = new THREE.Mesh(new THREE.CircleGeometry(0.077, 20), waterMat);
-            put(waterDisc, 0, LIQ_Y - 0.004, 0, -Math.PI / 2, 0, 0, potG);
-            const liquidMat = new THREE.LineBasicMaterial({ color: 0x2e6fa3 });
-            const liquidMat2 = new THREE.LineBasicMaterial({ color: 0x7db8dd });
-            const liquidGeom = new THREE.BufferGeometry();
-            liquidGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24 * 3), 3));
-            const liquidLoop = new THREE.LineLoop(liquidGeom, liquidMat);
-            liquidLoop.frustumCulled = false;
-            potG.add(liquidLoop);
-            const liquidGeom2 = new THREE.BufferGeometry();
-            liquidGeom2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24 * 3), 3));
-            const liquidLoop2 = new THREE.LineLoop(liquidGeom2, liquidMat2);
-            liquidLoop2.frustumCulled = false;
-            potG.add(liquidLoop2);
-            scene.add(potG);
-
-            function updateLiquid(time) {
-                const arr = liquidGeom.attributes.position.array;
-                const amp = corkOut ? 0.007 : 0.0025;
-                const spd = corkOut ? 3.2 : 1.1;
-                for (let i = 0; i < 24; i++) {
-                    const a = i / 24 * Math.PI * 2;
-                    const rr = 0.080 + Math.sin(a * 3 + time * spd) * amp;
-                    arr[i * 3] = Math.cos(a) * rr;
-                    arr[i * 3 + 1] = LIQ_Y + Math.sin(a * 3 - time * spd * 1.3) * amp * 0.6;
-                    arr[i * 3 + 2] = Math.sin(a) * rr;
-                }
-                liquidGeom.attributes.position.needsUpdate = true;
-                const arr2 = liquidGeom2.attributes.position.array;
-                for (let i = 0; i < 24; i++) {
-                    const a = i / 24 * Math.PI * 2;
-                    const rr = 0.072 + Math.sin(a * 3 + time * spd + 1.2) * amp * 0.7;
-                    arr2[i * 3] = Math.cos(a) * rr;
-                    arr2[i * 3 + 1] = LIQ_Y - 0.003 + Math.sin(a * 3 - time * spd * 1.3 + 0.8) * amp * 0.4;
-                    arr2[i * 3 + 2] = Math.sin(a) * rr;
-                }
-                liquidGeom2.attributes.position.needsUpdate = true;
-                waterMat.opacity = corkOut ? 0.38 : 0.32;
-            }
-
-            const CORK_M = [PX, MTTOP + 0.29, PZ];
-            const CORK_L = [PX + 0.17, MTTOP + 0.018, PZ - 0.07];
-            const corkG = new THREE.Group();
-            put(edge(new THREE.CylinderGeometry(0.021, 0.024, 0.038, 8)), 0, 0, 0, 0, 0, 0, corkG);
-            put(line([[0, 0.014, 0.022], [0, -0.008, 0.023]]), 0, 0, 0, corkG);
-            corkG.position.set(CORK_M[0], CORK_M[1], CORK_M[2]);
-            scene.add(corkG);
-
-            const bubbleMat = new THREE.LineBasicMaterial({ color: 0x2e6fa3 });
-            const potBubbles = [];
-            for (let i = 0; i < 4; i++) {
-                const b = edge(new THREE.SphereGeometry(0.009, 6, 5), 1, bubbleMat);
-                b.userData.phase = i / 4;
-                b.userData.wob = floor1Rng() * 6.28;
-                b.visible = false;
-                scene.add(b);
-                potBubbles.push(b);
-            }
-            regMagic(potG, () => { corkOut = !corkOut; });
-            regMagic(corkG, () => { corkOut = !corkOut; });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/potionBottle.js，此处只留装配调用。
+            const potionBottleApi = installProp(potionBottle);
             // ---- 12.4 魔法书 ----
-            let bookOn = true, bookP = 1;
-            let flipCur = 0, flipping = false;
-            const BX = MTX + 0.30, BZ = MTZ - 0.12;
-            const dineBookG = new THREE.Group();
-            dineBookG.position.set(BX, MTTOP, BZ);
-            dineBookG.rotation.y = 0.4;
-            put(box(0.30, 0.018, 0.38), -0.15, 0.012, 0, 0, 0, -0.14, dineBookG);
-            put(box(0.30, 0.018, 0.38), 0.15, 0.012, 0, 0, 0, 0.14, dineBookG);
-            put(box(0.26, 0.014, 0.34), -0.14, 0.032, 0, 0, 0, -0.12, dineBookG);
-            put(box(0.26, 0.014, 0.34), 0.14, 0.032, 0, 0, 0, 0.12, dineBookG);
-            put(line([[0, 0.055, -0.19], [0, 0.055, 0.19]]), 0, 0, 0, dineBookG);
-            for (const [px, pz] of [[-0.16, -0.08], [-0.10, 0.06], [-0.19, 0.10], [0.08, -0.10], [0.15, 0.05], [0.19, -0.04]])
-                put(line([[px - 0.025, 0.045, pz - 0.025], [px + 0.025, 0.045, pz + 0.025]]), 0, 0, 0, dineBookG);
-            const pagePivot = new THREE.Group();
-            put(box(0.24, 0.007, 0.31), 0.12, 0.0395, 0, 0, 0, 0, pagePivot);
-            pagePivot.rotation.z = 0.12;
-            pagePivot.visible = false;
-            dineBookG.add(pagePivot);
-            scene.add(dineBookG);
-
-            const glyphs = [];
-            for (let i = 0; i < 7; i++) {
-                const g = new THREE.Group();
-                for (let s = 0; s < 3; s++) {
-                    const a = floor1Rng() * 1.2 - 0.6;
-                    const l = 0.02 + floor1Rng() * 0.02;
-                    put(line([[0, s * 0.028, 0], [Math.sin(a) * l, s * 0.028 + 0.026, 0]]), 0, 0, 0, g);
-                }
-                g.userData = {
-                    age: floor1Rng() * 2.5, life: 2.5 + floor1Rng() * 1.2,
-                    ox: (floor1Rng() - 0.5) * 0.22, oz: (floor1Rng() - 0.5) * 0.18,
-                    sway: floor1Rng() * 6.28
-                };
-                g.visible = false;
-                scene.add(g);
-                glyphs.push(g);
-            }
-            regMagic(dineBookG, () => {
-                bookOn = !bookOn;
-                if (!flipping) { flipping = true; flipCur = 0; }
-            });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/diningBook.js，此处只留装配调用。
+            const diningBookApi = installProp(diningBook);
             // ---- 12.5 三脚圆凳 ----
             // J3（B2）：几何已搬入 src/cabin/world/floor1/stools.js，此处只留装配调用。
             const stoolsApi = installProp(stools);
@@ -1081,97 +929,8 @@ export function installCabin(app) {
             // J3（B3）：几何已搬入 src/cabin/world/floor1/starBell.js，此处只留装配调用。
             const starBellApi = installProp(starBell);
             /* ---- 12.9e 大魔女坩埚 ---- */
-            const STOVE_TOP = 0.58;
-            const CAL_UP = 0.34;
-            const cauldronG = new THREE.Group();
-            cauldronG.position.set(CCX, 0, CCZ);
-            scene.add(cauldronG);
-            {
-                const BN = 15, BR = 0.62;
-                for (let course = 0; course < 4; course++) {
-                    const y = 0.075 + course * 0.145;
-                    const off = course % 2 ? Math.PI / BN : 0;
-                    for (let i = 0; i < BN; i++) {
-                        const a = i / BN * Math.PI * 2 + off;
-                        let da = Math.abs(a - (-Math.PI / 2));
-                        da = Math.min(da, Math.PI * 2 - da);
-                        if (da < 0.30) continue;
-                        const b = box(0.28, 0.13, 0.17);
-                        b.position.set(Math.cos(a) * BR, y, Math.sin(a) * BR);
-                        b.rotation.y = -a + Math.PI / 2;
-                        cauldronG.add(b);
-                    }
-                }
-                logBetween([-0.30, 0.12, -0.10], [0.30, 0.12, -0.14], 0.05, cauldronG);
-                logBetween([-0.26, 0.12, 0.12], [0.28, 0.12, 0.08], 0.05, cauldronG);
-                logBetween([-0.28, 0.18, -0.02], [0.30, 0.18, -0.06], 0.045, cauldronG);
-                logBetween([0.10, 0.11, -0.30], [0.12, 0.09, -0.78], 0.045, cauldronG);
-                const CPROF = [[0.08, 0.40], [0.20, 0.50], [0.34, 0.545], [0.48, 0.555], [0.62, 0.55], [0.74, 0.515], [0.86, 0.455], [0.94, 0.42]];
-                const lathePts = [new THREE.Vector2(0.05, 0.08 + CAL_UP)];
-                for (const [yy, rr] of CPROF) lathePts.push(new THREE.Vector2(rr, yy + CAL_UP));
-                lathePts.push(new THREE.Vector2(0.38, 0.94 + CAL_UP));
-                cauldronG.add(new THREE.Mesh(new THREE.LatheGeometry(lathePts, 28), FILL));
-                for (const [yy, rr] of CPROF) {
-                    const pts = [];
-                    for (let i = 0; i <= 28; i++) { const a = i / 28 * Math.PI * 2; pts.push([Math.cos(a) * rr, yy + CAL_UP, Math.sin(a) * rr]); }
-                    lloop(pts, cauldronG);
-                }
-                for (const ang of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75]) {
-                    const c = Math.cos(ang), s = Math.sin(ang);
-                    put(line(CPROF.map(([yy, rr]) => [c * rr, yy + CAL_UP, s * rr])), 0, 0, 0, 0, 0, 0, cauldronG);
-                }
-                const rim = edge(new THREE.TorusGeometry(0.42, 0.04, 6, 32));
-                rim.rotation.x = Math.PI / 2;
-                put(rim, 0, 0.94 + CAL_UP, 0, 0, 0, 0, cauldronG);
-                const calLiqMat = new THREE.MeshBasicMaterial({
-                    color: 0x4a7d4e, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide
-                });
-                const calLiq = new THREE.Mesh(new THREE.CircleGeometry(0.37, 28), calLiqMat);
-                calLiq.userData.noHit = true;
-                put(calLiq, 0, 0.72 + CAL_UP, 0, -Math.PI / 2, 0, 0, cauldronG);
-            }
-            const calSurfMat = new THREE.LineBasicMaterial({ color: 0x2e5d38 });
-            const calSurfGeom = new THREE.BufferGeometry();
-            calSurfGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(28 * 3), 3));
-            const calSurf = new THREE.LineLoop(calSurfGeom, calSurfMat);
-            calSurf.frustumCulled = false;
-            cauldronG.add(calSurf);
-            const stirG = new THREE.Group();
-            cauldronG.add(stirG);
-            const stickAsm = new THREE.Group();
-            stickAsm.position.set(0, 0, 0);
-            stirG.add(stickAsm);
-            logBetween([0.16, 0.96, 0], [0.30, 1.40, 0], 0.026, stickAsm);
-            put(edge(new THREE.SphereGeometry(0.032, 8, 6)), 0.31, 1.44, 0, 0, 0, 0, stickAsm);
-            const calFireOutMat = new THREE.LineBasicMaterial({ color: 0x3b6fd6 });
-            const calFireMidMat = new THREE.LineBasicMaterial({ color: 0x6fa8ff });
-            const calFireInMat = new THREE.LineBasicMaterial({ color: 0xcfe8ff });
-            const calWavy = [];
-            makeWavyFlame(CCX, CCZ, 0.13, 0.54, 0.21, calFireOutMat, 0.0, 2.6, calWavy);
-            makeWavyFlame(CCX + 0.02, CCZ - 0.02, 0.13, 0.38, 0.13, calFireMidMat, 2.3, 3.1, calWavy);
-            makeWavyFlame(CCX - 0.02, CCZ + 0.02, 0.13, 0.22, 0.06, calFireInMat, 4.1, 3.6, calWavy);
-            makeWavyFlame(CCX - 0.22, CCZ + 0.14, 0.13, 0.34, 0.09, calFireOutMat, 1.2, 3.0, calWavy);
-            makeWavyFlame(CCX + 0.23, CCZ - 0.15, 0.13, 0.30, 0.08, calFireOutMat, 3.4, 2.9, calWavy);
-            makeWavyFlame(CCX - 0.10, CCZ - 0.40, 0.13, 0.44, 0.11, calFireOutMat, 5.0, 2.8, calWavy);
-            makeWavyFlame(CCX + 0.12, CCZ - 0.41, 0.13, 0.40, 0.09, calFireMidMat, 0.8, 3.2, calWavy);
-            const calGlowMat = new THREE.MeshBasicMaterial({
-                color: 0x6fa8ff, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide
-            });
-            const calGlow = new THREE.Mesh(new THREE.CircleGeometry(0.80, 28), calGlowMat);
-            calGlow.userData.noHit = true;
-            put(calGlow, 0, 0.014, 0, -Math.PI / 2, 0, 0, cauldronG);
-            const calBubbles = [];
-            for (let i = 0; i < 8; i++) {
-                const b = edge(new THREE.SphereGeometry(0.026, 6, 5), 1, calSurfMat);
-                b.userData.phase = i / 8;
-                b.userData.br = 0.05 + floor1Rng() * 0.26;
-                b.userData.ba = floor1Rng() * 6.28;
-                scene.add(b);
-                calBubbles.push(b);
-            }
-            let stirRun = 0, stirAng = 0, bubbleI = 0.3;
-            regMagic(cauldronG, () => { stirRun = 4.5; });
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/cauldron.js，此处只留装配调用。
+            const cauldronApi = installProp(cauldron);
             /* ---- 灶台旁：固定木台 ---- */
             // J3（B1）：几何已搬入 cabin/world/floor1/stovePlatform.js，此处只留装配调用。
             installProp(stovePlatform);
@@ -1331,51 +1090,8 @@ export function installCabin(app) {
             mcG.userData.sfx = 'magic';
 
             /* ---- 12.9f 长餐桌 ---- */
-            put(box(2.6, 0.06, 0.8), DT_X, 0.74, DT_Z);
-            put(box(2.72, 0.04, 0.92), DT_X, 0.69, DT_Z);
-            for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                put(edge(new THREE.CylinderGeometry(0.032, 0.026, 0.68, 6)),
-                    DT_X + sx * 1.15, 0.35, DT_Z + sz * 0.32, 0, 0, 0);
-
-            const plates = [];
-            function makePlate(x, z, food) {
-                const g = new THREE.Group();
-                put(edge(new THREE.CylinderGeometry(0.14, 0.115, 0.022, 18)), 0, 0.011, 0, 0, 0, 0, g);
-                put(edge(new THREE.TorusGeometry(0.10, 0.005, 6, 26)), 0, 0.022, 0, Math.PI / 2, 0, 0, g);
-                if (food === 'fish') {
-                    lloop([[0.085, 0.034, 0], [0.07, 0.034, 0.026], [0.03, 0.034, 0.04], [-0.02, 0.034, 0.036],
-                    [-0.055, 0.034, 0.012], [-0.055, 0.034, -0.012], [-0.02, 0.034, -0.036],
-                    [0.03, 0.034, -0.04], [0.07, 0.034, -0.026]], g);
-                    lloop([[-0.05, 0.034, 0], [-0.09, 0.034, 0.032], [-0.078, 0.034, 0], [-0.09, 0.034, -0.032]], g);
-                    lloop([[0.012, 0.034, 0.016], [-0.012, 0.034, 0.036], [-0.038, 0.034, 0.010]], g);
-                    put(edge(new THREE.CircleGeometry(0.006, 6)), 0.058, 0.037, 0.006, -Math.PI / 2, 0, 0, g);
-                    put(line([[0.012, 0.036, -0.028], [0.04, 0.036, -0.004]]), 0, 0, 0, 0, 0, 0, g);
-                    put(line([[-0.012, 0.036, -0.026], [0.016, 0.036, -0.002]]), 0, 0, 0, 0, 0, 0, g);
-                }
-                if (food === 'egg') {
-                    const RS = [0.075, 0.088, 0.078, 0.092, 0.070, 0.082, 0.090, 0.076];
-                    const w = [];
-                    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; w.push([Math.cos(a) * RS[i], 0.030, Math.sin(a) * RS[i]]); }
-                    lloop(w, g);
-                    put(edge(new THREE.CircleGeometry(0.032, 14)), 0.012, 0.034, 0.006, -Math.PI / 2, 0, 0, g);
-                    put(edge(new THREE.CircleGeometry(0.013, 10)), 0.012, 0.036, 0.006, -Math.PI / 2, 0, 0, g);
-                }
-                if (food === 'pancakes') {
-                    for (let i = 0; i < 3; i++)
-                        put(edge(new THREE.CylinderGeometry(0.095 - i * 0.008, 0.085 - i * 0.008, 0.02, 16)),
-                            0.008 * i, 0.032 + 0.021 * i, 0, 0, 0, 0, g);
-                    put(box(0.034, 0.016, 0.026), 0.012, 0.096, 0, 0, 0, 0, g);
-                }
-                g.position.set(x, DTOP, z);
-                scene.add(g);
-                g.userData.spinV = 0;
-                plates.push(g);
-                regMagic(g, () => { g.userData.spinV = 9; });
-            }
-            makePlate(DT_X - 0.85, DT_Z - 0.12, 'fish');
-            makePlate(DT_X + 0.85, DT_Z - 0.12, 'egg');
-            makePlate(DT_X + 0.30, DT_Z - 0.32, 'pancakes');
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/longTable.js，此处只留装配调用。
+            const longTableApi = installProp(longTable);
             /* 茶杯（餐桌/暖桌通用） */
             const cups = [];
             function makeCup(x, z, baseY, parent) {
@@ -1452,77 +1168,8 @@ export function installCabin(app) {
             regMagic(teapotPos, () => { potRun = POT_T; });
 
             /* ---- 桌面散放餐具 ---- */
-            const tableItems = [];
-            function regItem(g) {
-                g.userData.run = 0;
-                tableItems.push(g);
-                regMagic(g, () => { g.userData.run = 1.4; });
-            }
-            function baseAt(g, x, z, ry) {
-                g.position.set(x, DTOP, z);
-                g.rotation.y = ry;
-                g.userData.baseY = DTOP;
-                g.userData.ry = ry;
-            }
-            function makeSpoon(x, z, ry) {
-                const g = new THREE.Group();
-                const handle = edge(new THREE.CylinderGeometry(0.006, 0.0095, 0.22, 6));
-                handle.rotation.x = Math.PI / 2;
-                put(handle, 0, 0.011, -0.018, 0, 0, 0, g);
-                const bowlMesh = new THREE.Mesh(new THREE.SphereGeometry(0.033, 12, 8), FILL);
-                bowlMesh.scale.set(0.7, 0.42, 1.2);
-                put(bowlMesh, 0, 0.017, 0.082, 0, 0, 0, g);
-                const eo = [], ei = [];
-                for (let i = 0; i <= 16; i++) {
-                    const a = i / 16 * Math.PI * 2;
-                    eo.push([Math.cos(a) * 0.023, 0.027, 0.082 + Math.sin(a) * 0.040]);
-                    ei.push([Math.cos(a) * 0.014, 0.029, 0.082 + Math.sin(a) * 0.026]);
-                }
-                lloop(eo, g);
-                lloop(ei, g);
-                baseAt(g, x, z, ry);
-                scene.add(g);
-                regItem(g);
-            }
-            makeSpoon(DT_X - 0.50, DT_Z + 0.06, 0.9);
-            makeSpoon(DT_X + 0.58, DT_Z + 0.14, -0.8);
-            function makeChopsticks(x, z, ry) {
-                const g = new THREE.Group();
-                logBetween([-0.008, 0.008, -0.115], [-0.008, 0.014, 0.115], 0.006, g);
-                logBetween([0.008, 0.008, -0.115], [0.010, 0.014, 0.115], 0.006, g);
-                baseAt(g, x, z, ry);
-                scene.add(g);
-                regItem(g);
-            }
-            makeChopsticks(DT_X - 1.02, DT_Z + 0.06, 2.0);
-            makeChopsticks(DT_X + 1.02, DT_Z + 0.04, 1.1);
-            function makeBowlStack(x, z) {
-                const g = new THREE.Group();
-                const BP = [[0.045, 0], [0.055, 0.018], [0.062, 0.03], [0.085, 0.042],
-                [0.108, 0.068], [0.122, 0.096], [0.128, 0.112], [0.112, 0.112]];
-                const lathePts = BP.map(p => new THREE.Vector2(p[0], p[1]));
-                for (let i = 0; i < 3; i++) {
-                    const b = new THREE.Group();
-                    b.position.y = i * 0.062;
-                    b.rotation.y = i * 0.4;
-                    put(new THREE.Mesh(new THREE.LatheGeometry(lathePts, 18), FILL), 0, 0, 0, 0, 0, 0, b);
-                    for (const [ry, rr] of [[0, 0.045], [0.068, 0.108], [0.112, 0.128], [0.112, 0.112]]) {
-                        const pts = [];
-                        for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2; pts.push([Math.cos(a) * rr, ry, Math.sin(a) * rr]); }
-                        lloop(pts, b);
-                    }
-                    for (const ang of [0, 2.1, 4.2]) {
-                        const c = Math.cos(ang), s = Math.sin(ang);
-                        put(line(BP.map(([px, py]) => [c * px, py, s * px])), 0, 0, 0, 0, 0, 0, b);
-                    }
-                    g.add(b);
-                }
-                baseAt(g, x, z, 0.1);
-                scene.add(g);
-                regItem(g);
-            }
-            makeBowlStack(DT_X - 0.32, DT_Z - 0.28);
-
+            // J3（B4）：几何已搬入 src/cabin/world/floor1/tableware.js，此处只留装配调用。
+            const tablewareApi = installProp(tableware);
             const chairs = [];
             function makeChair(x, z, ry, ax, az) {
                 const g = new THREE.Group();
@@ -6681,83 +6328,19 @@ export function installCabin(app) {
                     c.position.z = u.bz + u.az * u.cur;
                 }
 
-                orbP += ((orbOn ? 1 : 0) - orbP) * 0.02;
-                for (const r of orbRings) {
-                    r.holder.rotation.y += r.spd * 0.02 * orbP;
-                    const sc = Math.max(orbP, 0.001);
-                    r.holder.scale.set(sc, sc, sc);
-                    r.holder.visible = orbP > 0.02;
-                }
-                orbStars.rotation.y += 0.018 * orbP;
-                orbStars.scale.setScalar(Math.max(orbP, 0.001));
-                orbStars.visible = orbP > 0.03;
-
-                updateLiquid(time);
-                for (const b of potBubbles) {
-                    b.visible = corkOut;
-                    if (corkOut) {
-                        const prog = (time * 0.5 + b.userData.phase) % 1;
-                        b.position.set(PX + Math.sin(prog * 9 + b.userData.wob) * 0.018,
-                            MTTOP + 0.012 + prog * 0.052,
-                            PZ + Math.cos(prog * 7 + b.userData.wob) * 0.018);
-                        const sc = 0.55 + prog * 0.95;
-                        b.scale.set(sc, sc, sc);
-                    }
-                }
-
-                corkT += ((corkOut ? 1 : 0) - corkT) * 0.022;
                 {
-                    const raw = Math.min(Math.max(corkT, 0), 1);
-                    const tC = raw * raw * (3 - 2 * raw);
-                    let cx, cy, cz;
-                    if (tC < 0.5) {
-                        const u = tC / 0.5;
-                        cx = CORK_M[0]; cz = CORK_M[2];
-                        cy = CORK_M[1] + u * 0.20;
-                    } else {
-                        const u = (tC - 0.5) / 0.5;
-                        cx = CORK_M[0] + (CORK_L[0] - CORK_M[0]) * u;
-                        cz = CORK_M[2] + (CORK_L[2] - CORK_M[2]) * u;
-                        cy = (CORK_M[1] + 0.20) - u * ((CORK_M[1] + 0.20) - CORK_L[1]);
-                    }
-                    corkG.position.set(cx, cy, cz);
-                    corkG.rotation.z = Math.sin(tC * Math.PI) * 0.45;
+                    // J3（B4）：星象仪的每帧分支已搬入 world/floor1/orrery.js（原地 tick）
+                    orreryApi.tick(dt, time);
                 }
 
-                bookP += ((bookOn ? 1 : 0) - bookP) * 0.02;
-                if (flipping) {
-                    flipCur += dt * 1.6;
-                    if (flipCur >= 1) { flipCur = 0; flipping = false; }
+                {
+                    // J3（B4）：魔法药剂瓶的每帧分支已搬入 world/floor1/potionBottle.js（原地 tick）
+                    potionBottleApi.tick(dt, time);
                 }
-                pagePivot.visible = flipping;
-                if (flipping) {
-                    const e = flipCur * flipCur * (3 - 2 * flipCur);
-                    pagePivot.rotation.z = 0.12 + e * (Math.PI - 0.24);
-                }
-                for (const g of glyphs) {
-                    const u = g.userData;
-                    u.age += dt;
-                    if (u.age >= u.life) {
-                        if (bookOn && bookP > 0.5) {
-                            u.age = 0;
-                            u.life = 2.5 + runtimeRng() * 1.2;
-                            u.ox = (runtimeRng() - 0.5) * 0.22;
-                            u.oz = (runtimeRng() - 0.5) * 0.18;
-                            u.sway = runtimeRng() * 6.28;
-                            g.visible = true;
-                        } else {
-                            g.visible = false;
-                        }
-                    }
-                    if (g.visible) {
-                        const p = u.age / u.life;
-                        const rise = p * 0.38;
-                        const sway = Math.sin(time * 2 + u.sway) * 0.03 * p;
-                        g.position.set(BX + u.ox + sway, MTTOP + 0.06 + rise, BZ + u.oz);
-                        const env = Math.min(p * 6, 1) * (1 - Math.max(0, (p - 0.65) / 0.35));
-                        g.scale.setScalar(Math.max(env, 0.001));
-                        g.rotation.y = Math.sin(time * 1.5 + u.sway) * 0.4;
-                    }
+
+                {
+                    // J3（B4）：魔法书的每帧分支已搬入 world/floor1/diningBook.js（原地 tick）
+                    diningBookApi.tick(dt, time);
                 }
 
                 {
@@ -7159,49 +6742,14 @@ export function installCabin(app) {
 
                 /* ---- 大魔女坩埚 ---- */
                 {
-                    if (stirRun > 0) stirRun -= dt;
-                    const active = stirRun > 0;
-                    const prog = active ? Math.min(Math.max(1 - stirRun / 4.5, 0), 1) : 0;
-                    const ramp = Math.min(prog / 0.16, 1);
-                    const down = Math.min(Math.max((prog - 0.72) / 0.28, 0), 1);
-                    const spdEnv = active ? ramp * (1 - down * down) : 0;
-                    stirAng += dt * (0.45 + 3.0 * spdEnv);
-                    stirG.rotation.y = stirAng;
-                    stickAsm.rotation.z = active ? Math.sin(time * 7) * 0.03 : Math.sin(time * 1.2) * 0.012;
-                    bubbleI += ((active ? 1 : 0.3) - bubbleI) * 0.0035;
-
-                    const arr = calSurfGeom.attributes.position.array;
-                    const amp = 0.008 + 0.02 * ((bubbleI - 0.3) / 0.7);
-                    for (let i = 0; i < 28; i++) {
-                        const a = i / 28 * Math.PI * 2;
-                        const rr = 0.37 + Math.sin(a * 3 + time * (active ? 2.2 : 1.4)) * amp * 0.8;
-                        arr[i * 3] = Math.cos(a) * rr;
-                        arr[i * 3 + 1] = 0.74 + CAL_UP + Math.sin(a * 3 - time * 1.8) * amp * 0.5;
-                        arr[i * 3 + 2] = Math.sin(a) * rr;
-                    }
-                    calSurfGeom.attributes.position.needsUpdate = true;
-
-                    for (const b of calBubbles) {
-                        const pr = (time * (0.40 + 0.50 * bubbleI) + b.userData.phase) % 1;
-                        const ba = b.userData.ba + time * 0.2;
-                        b.position.set(CCX + Math.cos(ba) * b.userData.br,
-                            0.74 + CAL_UP + pr * 0.14,
-                            CCZ + Math.sin(ba) * b.userData.br);
-                        const sc = (0.4 + pr * 1.3) * (pr < 0.85 ? 1 : (1 - pr) / 0.15);
-                        b.scale.setScalar(Math.max(sc, 0.001));
-                    }
-                    const calPW = 0.85 + 0.15 * Math.sin(time * 6.3);
-                    for (const f of calWavy) {
-                        f.obj.visible = true;
-                        updateWavyFlame(f, time, calPW);
-                    }
-                    calGlowMat.opacity = 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(time * 6.3));
+                    // J3（B4）：大魔女坩埚的每帧分支已搬入 world/floor1/cauldron.js（原地 tick）
+                    cauldronApi.tick(dt, time);
                 }
 
                 /* ---- 长餐桌 ---- */
-                for (const p of plates) {
-                    p.rotation.y += p.userData.spinV * dt;
-                    p.userData.spinV *= Math.max(0, 1 - 2.0 * dt);
+                {
+                    // J3（B4）：三只餐盘的转动已搬入 world/floor1/longTable.js（原地 tick）
+                    longTableApi.tick(dt, time);
                 }
                 for (const c of cups) {
                     const u = c.userData;
@@ -7217,14 +6765,9 @@ export function installCabin(app) {
                         u.steam.scale.set(ss, 1, ss);
                     }
                 }
-                for (const it of tableItems) {
-                    const u = it.userData;
-                    if (u.run > 0) u.run -= dt;
-                    const pr = u.run > 0 ? 1 - u.run / 1.4 : 1;
-                    const env = u.run > 0 ? Math.sin(Math.PI * pr) : 0;
-                    it.position.y = u.baseY + env * 0.05;
-                    it.rotation.z = env * Math.sin(pr * 12) * 0.18;
-                    it.rotation.y = u.ry + env * Math.sin(pr * 8) * 0.3;
+                {
+                    // J3（B4）：桌面散放餐具的弹跳已搬入 world/floor1/tableware.js（原地 tick）
+                    tablewareApi.tick(dt, time);
                 }
 
                 /* ---- 茶壶 ---- */

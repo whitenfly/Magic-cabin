@@ -2,11 +2,14 @@
  * J3-F 逐字节核对器（临时工具，非交付物）
  *
  * 对每件已搬迁的物件做三件事：
- *   ① **几何段**：把 monolith 原区间（去 8 空格缩进 + 施加"已知改写"）与模块 `build` 体逐行 diff，
- *      必须**零残差**（`regMagic` / 顶层 `let` 这些"必然换写法"的行在 `drop` 里显式列出并计数）；
+ *   ① **几何段**：把 monolith 原区间（去缩进 + 施加"已知改写"）与模块 `build` 体逐行 diff，
+ *      必须**零残差**（`regMagic` / 顶层 `let` 这些"必然换写法"的行在 `geomDrop` 里显式列出并计数）；
  *   ② **每帧分支**：把 monolith 的原块（施加 `s.` 前缀改写）与模块 `update` 体逐行 diff，同样零残差；
  *   ③ **spec**：`startMarker` / `endMarker` / `tick.old` 在 monolith 里各恰好出现 1 次，
- *      且 `id` / `name` / `file` / `assign` 与模块文件自洽（`id`、`export default defineProp(`）。
+ *      且 `id` / `file` 与模块文件自洽（`id`、`export default defineProp(`）。
+ *
+ * 两侧共用的"搬迁脚手架"行（`const { … } = L` / `const xRng = rng.x` / `parts` 解构 / 注释 /
+ * 结尾的 `return { … }`）在 `scaffold` 里统一剔除 —— 它们是搬迁新增的接线，不是被搬的几何。
  *
  * 用法：node _tmp-j3f-verify.mjs
  */
@@ -20,14 +23,20 @@ const SPEC_DIR = path.join(ROOT, 'scripts/oneoff/_j3-specs')
 
 const countOf = (hay, needle) => hay.split(needle).length - 1
 const range = (a, b) => monoLines.slice(a - 1, b)
-
-/** 去缩进 + 去空白（保留行内容，便于 diff） */
 const norm = (l) => l.trim()
-
-/** 施加改名（正则在去缩进后的行文本上跑） */
 const rename = (l, subs) => subs.reduce((acc, [re, to]) => acc.replace(re, to), l)
 
-/** 逐行 diff（LCS）→ 返回 [仅左有, 仅右有] */
+/** 搬迁脚手架（只可能出现在模块一侧） */
+const scaffold = [
+  /^const \{[^}]*\} = L$/,
+  /^const \{[^}]*\} = parts$/,
+  /^const \{[^}]*\} = \(.*\)$/,
+  /^const [A-Za-z_$][\w$]* = rng\.\w+$/,
+  /^const [A-Za-z_$][\w$]* = parts\./,
+  /^\/\//,
+]
+
+/** 逐行 diff（LCS） */
 function diffLines(A, B) {
   const n = A.length, m = B.length
   const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1))
@@ -48,7 +57,7 @@ function diffLines(A, B) {
   return [onlyA, onlyB]
 }
 
-/** 从模块源码里抽出 `build(` / `update(` 的函数体（按花括号配对，从参数表之后的 `{` 起算） */
+/** 抽出模块里 `build(` / `update(` 的函数体 */
 function extractBody(fileSrc, prop) {
   const at = fileSrc.indexOf(`\n  ${prop}(`)
   if (at < 0) throw new Error(`找不到 ${prop}(`)
@@ -61,6 +70,19 @@ function extractBody(fileSrc, prop) {
     else if (ch === '}') { depth--; if (depth === 0) break }
   }
   return fileSrc.slice(open + 3, k)
+}
+
+/** 模块体 → 可比行：去空行 / 去脚手架 / 在 `return` 处截断 */
+function bodyLines(fileSrc, prop) {
+  const out = []
+  for (const raw of extractBody(fileSrc, prop).split('\n')) {
+    const l = norm(raw)
+    if (!l) continue
+    if (l === 'return' || l.startsWith('return ') || l.startsWith('return{')) break
+    if (scaffold.some((re) => re.test(l))) continue
+    out.push(l)
+  }
+  return out
 }
 
 const ITEMS = [
@@ -115,6 +137,12 @@ const ITEMS = [
     ],
     geomSub: [],
     tick: [7160, 7199],
+    tickDrop: [
+      // 原块自带的注释头 + 外层花括号：模块里 `update` 的函数体**就是**那个块
+      /^\/\* ---- 大魔女坩埚 ---- \*\/$/,
+      /^\{$/,
+      /^\}$/,
+    ],
     tickSub: [
       [/\bstirRun\b/g, 's.stirRun'], [/\bstirAng\b/g, 's.stirAng'], [/\bbubbleI\b/g, 's.bubbleI'],
     ],
@@ -146,31 +174,30 @@ for (const it of ITEMS) {
   console.log(`\n── ${it.id} ──────────────────────────────────`)
 
   // ① 几何段
-  const gLeft = range(it.geom[0], it.geom[1]).map(norm).filter(Boolean)
-    .filter((l) => !it.geomDrop.some((re) => re.test(l)))
-    .map((l) => rename(l, it.geomSub))
-  const dropped = range(it.geom[0], it.geom[1]).map(norm).filter(Boolean)
-    .filter((l) => it.geomDrop.some((re) => re.test(l))).length
-  const gRight = extractBody(propSrc, 'build').split('\n').map(norm).filter(Boolean)
-    .filter((l) => !l.startsWith('//') && !l.startsWith('return {') && !l.startsWith('}'))
+  const rawGeom = range(it.geom[0], it.geom[1]).map(norm).filter(Boolean)
+  const dropped = rawGeom.filter((l) => it.geomDrop.some((re) => re.test(l)))
+  const gLeft = rawGeom.filter((l) => !it.geomDrop.some((re) => re.test(l))).map((l) => rename(l, it.geomSub))
+  const gRight = bodyLines(propSrc, 'build')
   const [gA, gB] = diffLines(gLeft, gRight)
-  console.log(`  几何段 ${it.geom[0]}–${it.geom[1]}：原 ${gLeft.length} 行（显式换写法 ${dropped} 行）/ 模块 ${gRight.length} 行 → 残差 ${gA.length + gB.length}`)
+  console.log(`  几何段 ${it.geom[0]}–${it.geom[1]}：原 ${gLeft.length} 行 / 显式换写法 ${dropped.length} 行 / 模块 ${gRight.length} 行 → 残差 ${gA.length + gB.length}`)
   for (const l of gA) console.log(`    − ${l}`)
   for (const l of gB) console.log(`    + ${l}`)
-  if (gA.length || gB.length) bad++
+  if (gA.length || gB.length || !dropped.length && it.geomDrop.length) bad++
 
   // ② 每帧分支
-  const tLeft = range(it.tick[0], it.tick[1]).map(norm).filter(Boolean).map((l) => rename(l, it.tickSub))
-  const tRight = extractBody(propSrc, 'update').split('\n').map(norm).filter(Boolean)
-    .filter((l) => !l.startsWith('const {') && !l.startsWith('const runtimeRng ='))
+  const rawTick = range(it.tick[0], it.tick[1]).map(norm).filter(Boolean)
+  const tickDrop = it.tickDrop || []
+  const tickDropped = rawTick.filter((l) => tickDrop.some((re) => re.test(l)))
+  const tLeft = rawTick.filter((l) => !tickDrop.some((re) => re.test(l))).map((l) => rename(l, it.tickSub))
+  const tRight = bodyLines(propSrc, 'update')
   const [tA, tB] = diffLines(tLeft, tRight)
-  console.log(`  每帧分支 ${it.tick[0]}–${it.tick[1]}：原 ${tLeft.length} 行 / 模块 ${tRight.length} 行 → 残差 ${tA.length + tB.length}`)
+  console.log(`  每帧分支 ${it.tick[0]}–${it.tick[1]}：原 ${tLeft.length} 行 / 显式换写法 ${tickDropped.length} 行 / 模块 ${tRight.length} 行 → 残差 ${tA.length + tB.length}`)
   for (const l of tA) console.log(`    − ${l}`)
   for (const l of tB) console.log(`    + ${l}`)
   if (tA.length || tB.length) bad++
 
-  // ③ spec ↔ monolith ↔ 模块 自洽
-  if (!fs.existsSync(specPath)) { console.log(`  spec 缺失：${path.relative(ROOT, specPath)}`); bad++; continue }
+  // ③ spec ↔ monolith ↔ 模块
+  if (!fs.existsSync(specPath)) { console.log(`  ✗ spec 缺失：${path.relative(ROOT, specPath)}`); bad++; continue }
   const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'))
   const sN = countOf(src, '\n' + spec.startMarker)
   const eN = countOf(src, '\n' + spec.endMarker)
@@ -178,8 +205,9 @@ for (const it of ITEMS) {
   const idOk = spec.id === it.id
   const fileOk = spec.file === it.file
   const declOk = propSrc.includes('export default defineProp(') && new RegExp(`id:\\s*'${it.id}'`).test(propSrc)
-  console.log(`  spec：startMarker×${sN} endMarker×${eN} tick.old×${tN}  id✓${idOk} file✓${fileOk} 模块✓${declOk}`)
-  if (sN !== 1 || eN !== 1 || tN !== 1 || !idOk || !fileOk || !declOk) bad++
+  const lineOk = monoLines[it.geom[0] - 2].trim() === spec.startMarker.trim()
+  console.log(`  spec：startMarker×${sN} endMarker×${eN} tick.old×${tN}  id✓${idOk} file✓${fileOk} 模块✓${declOk} 行号✓${lineOk}`)
+  if (sN !== 1 || eN !== 1 || tN !== 1 || !idOk || !fileOk || !declOk || !lineOk) bad++
 }
 
 console.log(`\n${bad ? `✗ ${bad} 项不通过` : '✓ 全部通过'}`)
