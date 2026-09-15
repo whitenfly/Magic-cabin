@@ -61,7 +61,18 @@ export const SEGMENTS = [
   { id: 'menuUi', hint: 4846, module: 'systems/ui/MenuPanel.js', fn: 'installMenuPanel', note: '菜单面板 + 设置 → 场景 唯一通道' },
   { id: 'playerCtrl', hint: 4884, module: 'systems/player/PlayerController.js', fn: 'installPlayerController', note: 'updatePlayer / 相机解算 / 史莱姆落地' },
   // ── 天气与主循环 ────────────────────────────────────────────────────────
-  { id: 'weather', hint: 4924, module: 'systems/weather/WeatherSystem.js', fn: 'installWeatherSystem', note: '天空 / 时间 / 天气 / 星空' },
+  {
+    id: 'weather', hint: 4924, module: 'systems/weather/WeatherSystem.js', fn: 'installWeatherSystem',
+    note: '天空 / 时间 / 天气 / 星空',
+    // ★ 这两个名字住在 monolith 的**模块顶层**（IIFE 之外），既不是 import、也不是 `app` 的解构：
+    //     `const { sky: skyRng } = scene`  /  `const runtimeRng = runtime`
+    //   `_j4-apply.mjs` 的 `unknown` 判据会（正确地）把它们报出来，
+    //   `bind` 就是回答"它们从哪来" —— 段模块里就地重建同样的绑定。
+    bind: {
+      skyRng: { expr: 'scene.sky', import: { from: '../app/rng.js', names: ['scene'] } },
+      runtimeRng: { expr: 'runtime', import: { from: '../app/rng.js', names: ['runtime'] } },
+    },
+  },
   { id: 'tick', hint: 5435, module: 'app/scene/FrameBody.js', fn: 'installFrameBody', note: 'tickOnce：716 行的每帧体' },
   { id: 'boot', hint: 6151, module: 'app/scene/SceneLoop.js', fn: 'installSceneLoop', note: 'animate + manual 钩子 + 统计钩子' },
 ]
