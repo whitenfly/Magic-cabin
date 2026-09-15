@@ -1,0 +1,10 @@
+{
+  "id": "floor1/dining-table",
+  "name": "diningTable",
+  "file": "src/cabin/world/floor1/diningTable.js",
+  "batch": "B3",
+  "startMarker": "            // ---- 12.1 原木餐桌 ----",
+  "endMarker": "            // ---- 12.2 星象仪 ----",
+  "layout": [],
+  "notes": "纯几何：无状态、无交互、无光源、无 update，也不用 rng（不消耗种子随机源 ⇒ 后续随机数序列不变）。坐标 MTX/MTZ 本就在 layout.js（『魔法餐桌（12.1）中心与桌面高度』），故 layout 留空，避免应用器写出重复常量。桌面高度是行内字面量 0.75/0.70，**不是** MTTOP(0.78)（后者是摆在桌面上的摆件用），照抄不改。build 不自建 Group、不返回根 ⇒ scene.children 成员与顺序与搬迁前逐项相同。"
+}

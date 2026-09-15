@@ -99,6 +99,15 @@ export function createLayout() {
   const DT_Z = -3.35
   const DTOP = 0.77
 
+  /** 灶台旁固定木台（原无编号分区）—— 位置与朝向 */
+  const PLATFORM_X = -1.35
+  const PLATFORM_Z = -1.5
+  const PLATFORM_ROT = 0.4
+
+  /** 魔法扫帚（12.10）：静止位与悬浮位。`rz` 是 Z 轴倾角 */
+  const BROOM_REST = { x: -3.3, y: 0.105, z: 3.35, rz: 0.33 }
+  const BROOM_FLY = { x: -2.7, y: 0.95, z: 2.65, rz: 0.05 }
+
   /* ══════════ 二楼锚点 ══════════ */
 
   /** 二楼楼面（语义别名，方便"二楼的东西都以它为准"） */
@@ -123,6 +132,8 @@ export function createLayout() {
     // 一楼
     CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
     CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
+    PLATFORM_X, PLATFORM_Z, PLATFORM_ROT,
+    BROOM_REST, BROOM_FLY,
     // 二楼
     FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
   }

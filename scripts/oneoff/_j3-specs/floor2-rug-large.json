@@ -1,0 +1,13 @@
+{
+  "id": "floor2/rug-large",
+  "name": "rugLarge",
+  "file": "src/cabin/world/floor2/rugLarge.js",
+  "batch": "B1",
+  "startMarker": "            /* 18.15 毛茸茸大地毯（右前角与书桌之间） */",
+  "endMarker": "            /* 18.16 右前角杂物纸箱（左右两片盖向外翻开） */",
+  "layout": [
+    { "name": "RUG2_X", "value": "2.7", "doc": "二楼毛茸茸大地毯（18.15）中心 x" },
+    { "name": "RUG2_Z", "value": "0.7", "doc": "二楼毛茸茸大地毯（18.15）中心 z" }
+  ],
+  "notes": "用到的 ctx 键：scene / L(RUG2_X, RUG2_Z, FY) / rng.texture / roundBoxGeo / MAT。纯装饰：无状态、无交互、无光源、无 update，也没有 tickOnce 分支 ⇒ **不需要任何人工改动**（应用器一跑就完事）。边界说明：18.15 的上下各有一行 54 处重复的 `/* ===== */` 分隔线，不能当标记（应用器要求标记全文件唯一），故 startMarker 取分区标题行、endMarker 取下一个分区（18.16）的标题行 —— 被删掉的正是 18.15 标题行之后到 18.16 标题行之前的全部内容（含那两行分隔线，属纯注释）。rng 纪律：原 drawRug() 里的 textureRng() 调用（3400 次纤维 + 58×2 + 46×2 处毛边）在同一次 build 调用、同一位置执行，次数与顺序一个没变。私有顶层量 rugG / rugCv / rctx / rugTex / canvasRoundRect / drawRug 已 grep 核对：只在本段出现，全部收进 build()。★ 唯一一处新增代码：build() 里逐字复刻了一份 `crboxCol`（monolith 18.10 分区开头的共享工具，住在 IIFE 闭包里、不在 ctx 可用键里），好让原调用行 `rugG.add(crboxCol(2.2, 0.04, 1.8, 0.02, 0x7d5064));` 一字不改；复刻体与原实现逐字相同、用的是同一个 roundBoxGeo 与同一个 MAT（共享线材质实例），输出对象层级/几何/材质参数与搬迁前逐项一致。若评审不接受这份复刻，请**先删本 spec 再决定**（另一条路是把 cbox/crboxCol/crumpleBall/arcPos 提取进 core/geometry 并由 ctx 注入，之后本段可改回 ctx 版本）。"
+}

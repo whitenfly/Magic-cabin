@@ -39,6 +39,12 @@ import { createInteractionSystem, makeTarget } from '../systems/interaction/Inte
 import { createHintUI } from '../systems/interaction/HintUI.js'
 import { createCameraRig } from '../core/render/CameraRig.js'
 import { createEnvironment } from '../systems/weather/environment.js'
+// J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
+// 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
+import { createPropInstaller } from '../app/installProp.js'
+import rugUnderTable from '../world/floor1/rugUnderTable.js'
+import stovePlatform from '../world/floor1/stovePlatform.js'
+import broom from '../world/floor1/broom.js'
 
 // F0.2：把原本的裸随机调用替换为注入的种子随机源（见 src/cabin/app/rng.js）
 //   *Rng（6 个） = 构建期/初始化随机（永久确定，保证每次加载场景一致）
@@ -134,12 +140,14 @@ export function installCabin(app) {
 
             // J2.9：建筑外壳尺寸与陈设锚点已集中到 cabin/world/layout.js（不变量 N9）。
             // 数值一个没改 —— 交互判定与几何构建从此共用同一份坐标（J2.6 的 anchor 直接用它们）。
+            // J3：整表保留为 `L`，供搬出的物件按需解构（旧调用点仍在文件内直接解构，一行未改）。
+            const L = createLayout();
             const {
                 HOLE_R, FLOOR_TOP, DOOR_HOLE, WIN_F_L, WIN_F_R, WIN_LEFT, WIN_GABLE, LOG_R, LOG_GAP, WALL_TOP, WALL_Y0,
                 CHX, CHZ, HEARTH, FX, FZ, MTX, MTZ, MTTOP, CCX, CCZ, MC_X, MC_Z, KOT_X, KOT_Z, KTOP,
                 CBX, CBZ, PLX, PLZ, DT_X, DT_Z, DTOP,
                 FY, BEDX, BEDZ, NSX, NSZ, TBLX, TBLZ, TBL_TOP,
-            } = createLayout();
+            } = L;
 
             function logWall(along, fixed, halfLen, openings, cornerExt, parent) {
                 const g = new THREE.Group(); const nLogs = Math.floor((WALL_TOP - WALL_Y0) / LOG_GAP);
@@ -621,6 +629,35 @@ export function installCabin(app) {
             const sm01 = t => t * t * (3 - 2 * t);
 
             /* ========================================================== */
+            /* ============ J3：物件装配器（`defineProp` 的唯一入口） ============ */
+            /* ========================================================== */
+            // 搬出 `world/**` 的物件都在**原位置**调用一次 `installProp(...)`：
+            //   · 同步调用 ⇒ 执行顺序不变（几何创建顺序参与渲染）
+            //   · 原地调用 ⇒ `rng` 调用顺序不变（种子随机源，顺序一变后面全变）
+            //   · 装配只写元数据（registry / mounts / scheduler），不碰对象父子关系
+            // 于是"搬迁"对画面的影响恒等于零 —— 这正是 `pnpm test:visual` 的判据。
+            const { install: installProp, stats: propStats } = createPropInstaller({
+                registry,
+                scheduler,
+                mounts: app.mounts,
+                ctx: {
+                    scene, L,
+                    rng: {
+                        outdoor: outdoorRng, floor1: floor1Rng, floor2: floor2Rng,
+                        sky: skyRng, texture: textureRng, slime: slimeRng, runtime: runtimeRng,
+                    },
+                    // 几何 DSL（J2.1 / J2.2 提取，标识符名与原实现一致）
+                    V, geo, line, iline, dline, edge, box, log, put, logBetween,
+                    lloop, solid, solidCyl, roundBoxGeo, rbox,
+                    // 材质（共享 uniform：物件只能"用"，不能改 shader）
+                    MAT, DASHMAT, IN_MAT, FILL, LITMAT,
+                    HITMAT, DARK, PINK, CATMAT, CATMAT2, WIN_GLASS, WIN_GLASS_UP,
+                    // 音效（交互的 `sfx` 由物件声明）
+                    SND,
+                },
+            });
+
+            /* ========================================================== */
             /* ============ 一楼生活陈设（魔法餐桌·书架·暖桌·猫等） ============ */
             /* ========================================================== */
 
@@ -820,20 +857,8 @@ export function installCabin(app) {
             makeStool(MTX, MTZ + 0.85, 1);
 
             // ---- 12.6 桌下椭圆地毯 ----
-            {
-                const r1 = [], r2 = [];
-                for (let i = 0; i <= 44; i++) {
-                    const a = i / 44 * Math.PI * 2;
-                    r1.push([MTX + Math.cos(a) * 1.05, 0.008, MTZ + Math.sin(a) * 0.75]);
-                    r2.push([MTX + Math.cos(a) * 0.82, 0.008, MTZ + Math.sin(a) * 0.57]);
-                }
-                lloop(r1); lloop(r2);
-                for (let i = 0; i < 8; i++) {
-                    const a = i / 8 * Math.PI * 2;
-                    put(line([[MTX + Math.cos(a) * 0.82, 0.008, MTZ + Math.sin(a) * 0.57],
-                    [MTX + Math.cos(a) * 1.05, 0.008, MTZ + Math.sin(a) * 0.75]]), 0, 0, 0);
-                }
-            }
+            // J3（B1）：几何已搬入 cabin/world/floor1/rugUnderTable.js，此处只留装配调用。
+            installProp(rugUnderTable);
 
             // ---- 12.7 吊挂木灯 ----
             let lanternLit = true;
@@ -1244,14 +1269,8 @@ export function installCabin(app) {
             regMagic(cauldronG, () => { stirRun = 4.5; });
 
             /* ---- 灶台旁：固定木台 ---- */
-            const platformG = new THREE.Group();
-            platformG.position.set(-1.35, 0, -1.5);
-            platformG.rotation.y = 0.4;
-            scene.add(platformG);
-            put(box(0.72, 0.30, 0.62), 0, 0.15, 0, 0, 0, 0, platformG);
-            put(box(0.78, 0.045, 0.68), 0, 0.322, 0, 0, 0, 0, platformG);
-            for (const px of [-0.19, 0, 0.19])
-                put(line([[px - 0.09, 0.346, -0.335], [px - 0.09, 0.346, 0.335]]), 0, 0, 0, 0, 0, 0, platformG);
+            // J3（B1）：几何已搬入 cabin/world/floor1/stovePlatform.js，此处只留装配调用。
+            installProp(stovePlatform);
 
             /* ---- 左墙试剂药水架 ---- */
             const reagents = [];
@@ -1623,58 +1642,9 @@ export function installCabin(app) {
             makeChair(DT_X + 1.42, DT_Z, -Math.PI / 2, 1, 0);
 
             /* ---- 12.10 魔法扫帚 ---- */
-            let broomHover = false, broomP = 0;
-            const BROOM_REST = { x: -3.3, y: 0.105, z: 3.35, rz: 0.33 };
-            const BROOM_FLY = { x: -2.7, y: 0.95, z: 2.65, rz: 0.05 };
-            const broomG = new THREE.Group();
-            broomG.position.set(BROOM_REST.x, BROOM_REST.y, BROOM_REST.z);
-            broomG.rotation.z = BROOM_REST.rz;
-            scene.add(broomG);
-            {
-                put(edge(new THREE.CylinderGeometry(0.022, 0.026, 1.45, 8)), 0, 0.865, 0, 0, 0, 0, broomG);
-                put(edge(new THREE.SphereGeometry(0.026, 8, 6)), 0, 1.59, 0, 0, 0, 0, broomG);
-                put(line([[-0.026, 1.25, 0], [0.026, 1.25, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[-0.026, 0.95, 0], [0.026, 0.95, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-
-                const SEGS = [
-                    [0.140, 0.026],
-                    [0.090, 0.048],
-                    [0.045, 0.072],
-                    [0.000, 0.092],
-                    [-0.055, 0.104],
-                    [-0.100, 0.112]
-                ];
-                const ringAt = (y, r, seg) => {
-                    const pts = [];
-                    for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; pts.push([Math.cos(a) * r, y, Math.sin(a) * r]); }
-                    put(line(pts), 0, 0, 0, 0, 0, 0, broomG);
-                };
-                for (const [yy, rr] of SEGS) ringAt(yy, rr, yy === 0.140 ? 10 : 14);
-                for (let i = 0; i < 16; i++) {
-                    const a = i / 16 * Math.PI * 2;
-                    const pts = SEGS.map(([yy, rr]) => [Math.cos(a) * rr, yy, Math.sin(a) * rr]);
-                    put(line(pts), 0, 0, 0, 0, 0, 0, broomG);
-                }
-                put(line([[-0.038, 0.09, 0], [0.050, 0.045, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0.038, 0.09, 0], [-0.050, 0.045, 0]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0, 0.09, -0.038], [0, 0.045, 0.050]]), 0, 0, 0, 0, 0, 0, broomG);
-                put(line([[0, 0.09, 0.038], [0, 0.045, -0.050]]), 0, 0, 0, 0, 0, 0, broomG);
-            }
-            const broomGlow = new THREE.Group();
-            broomGlow.visible = false;
-            {
-                const gp = [], gp2 = [];
-                for (let i = 0; i <= 30; i++) {
-                    const a = i / 30 * Math.PI * 2;
-                    gp.push([Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]);
-                    const r2 = 0.24 + Math.sin(a * 4) * 0.02;
-                    gp2.push([Math.cos(a) * r2, 0.012, Math.sin(a) * r2]);
-                }
-                put(line(gp), 0, 0, 0, 0, 0, 0, broomGlow);
-                put(line(gp2), 0, 0, 0, 0, 0, 0, broomGlow);
-            }
-            broomG.add(broomGlow);
-            regMagic(broomG, () => { broomHover = !broomHover; });
+            // J3（B3）：几何 + 状态 + 交互 + 每帧分支全部搬入 cabin/world/floor1/broom.js。
+            // 返回的记录带 `tick` 句柄 —— 每帧逻辑仍由 tickOnce() 在**原位置**调用（顺序不变）。
+            const broomApi = installProp(broom);
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
             const orbStandG = new THREE.Group();
@@ -8715,23 +8685,9 @@ export function installCabin(app) {
                 }
 
                 {
-                    broomP += ((broomHover ? 1 : 0) - broomP) * 0.02;
-                    const p = broomP;
-                    broomG.position.x = BROOM_REST.x + (BROOM_FLY.x - BROOM_REST.x) * p;
-                    broomG.position.z = BROOM_REST.z + (BROOM_FLY.z - BROOM_REST.z) * p;
-                    broomG.position.y = BROOM_REST.y + (BROOM_FLY.y - BROOM_REST.y) * p
-                        + Math.sin(time * 1.3) * 0.03 * p;
-                    broomG.rotation.z = BROOM_REST.rz + (BROOM_FLY.rz - BROOM_REST.rz) * p
-                        + Math.sin(time * 1.1) * 0.02 * p;
-                    broomG.rotation.x = Math.sin(time * 0.9) * 0.03 * p;
-                    broomG.rotation.y = Math.sin(time * 0.5) * 0.12 * p;
-                    broomGlow.visible = p > 0.05;
-                    if (broomGlow.visible) {
-                        broomGlow.position.set(0, -0.20 + Math.sin(time * 2.2) * 0.012, 0);
-                        broomGlow.rotation.y = time * 0.6;
-                        const gs = 0.85 + 0.15 * Math.sin(time * 2.5);
-                        broomGlow.scale.setScalar(gs * Math.min(p * 1.5, 1));
-                    }
+                    // J3：魔法扫帚的每帧分支已搬入 world/floor1/broom.js。
+                    // **原位置调用** —— 顺序与搬迁前一致，画面因此逐字节不变。
+                    broomApi.tick(dt, time);
                 }
 
                 /* ---- 门铃：按钮按压 + 音波涟漪 ---- */
