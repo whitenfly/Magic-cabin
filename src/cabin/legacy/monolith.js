@@ -42,6 +42,7 @@ import { createEnvironment } from '../systems/weather/environment.js'
 // J3：物件装配器（`defineProp` → 注册中心的唯一通路）与已搬出的物件。
 // 搬迁期每搬一件，就在下面加一行 import，并把原区段换成一次 `installProp(...)`。
 import { createPropInstaller } from '../app/installProp.js'
+import { installAudio } from './../systems/audio/AudioSystem.js'
 import { installMenuPanel } from './../systems/ui/MenuPanel.js'
 import { installNoteEditor } from './../systems/ui/editors/NoteEditor.js'
 import calendar from '../world/floor2/calendar.js'
@@ -127,28 +128,8 @@ export function installCabin(app) {
 
             /* ============ 音效系统：文件放 sounds/ 目录，缺失时静默跳过 ============ */
             /* ==================== [J4:seg audio] ==================== */
-            const SND = (() => {
-                const NAMES = ['door', 'window', 'fire', 'lamp', 'cast', 'magic', 'cat', 'toggle', 'ui', 'chim', 'doorbell'];
-                const pool = {};
-                for (const n of NAMES) { const a = new Audio('sounds/' + n + '.mp3'); a.preload = 'auto'; pool[n] = a; }
-                // J2.8：音量与音效开关由 store 决定（刷新后保持上次的选择；?deterministic=1 下不持久化）
-                let vol = store.get('audio.volume'), on = store.get('audio.enabled');
-                function play(name) {
-                    if (!on) return;
-                    const a = pool[name];
-                    if (!a || a.error) return;
-                    try { const c = a.cloneNode(); c.volume = vol; c.play().catch(() => { }); } catch (e) { }
-                }
-                return {
-                    play,
-                    setVolume(v) { vol = Math.max(0, Math.min(1, v)); },
-                    getVolume() { return vol; },
-                    setEnabled(v) { on = !!v; },
-                    isEnabled() { return on; }
-                };
-            })();
-            ctx.SND = SND;
-
+            // J4（audio）：本段已搬入 systems/audio/AudioSystem.js
+            installAudio(ctx, app);
             /* ==================== [J4:seg core3d] ==================== */
             const scene = new THREE.Scene();
             ctx.scene = scene;
