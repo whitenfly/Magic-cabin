@@ -22,6 +22,7 @@ const SCRIPTS = [
   'verify-f03.mjs',
   'verify-f04.mjs',
   'verify-f06.mjs',
+  'verify-cf.mjs',
 ]
 
 let failed = 0

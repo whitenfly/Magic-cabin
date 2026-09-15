@@ -41,6 +41,9 @@ import { mountUI } from './dom.js'
 import { setDeterministicRuntime, sceneDigest, SCENE_SEED } from './app/rng.js'
 import { clock, STEP } from './app/clock.js'
 import { createApp } from './app/App.js'
+import { createSettingsForm } from './systems/ui/SettingsForm.js'
+import { registerFeatures } from '../blog/registry.js'
+import { moduleManifests } from '../features/_index.js'
 
 /** 等待 DOM 就绪（原实现把脚本放在 body 末尾，依赖 DOM 已解析；模块脚本是 defer 的，通常已就绪） */
 function domReady() {
@@ -171,6 +174,37 @@ function applyHouse(opts) {
   return opts.house
 }
 
+/**
+ * J2.5：造设置面板。
+ *
+ * 控件全部由 `src/config/settings.config.js` 的 schema 生成，值双向绑定到 `app.store`
+ * （单写者：面板只调 `store.set()`，从不自己记值）。面板挂在菜单的分组锚点上，
+ * 用户看到的排版与搬迁前一致。
+ *
+ * 为什么失败只告警不抛出：设置面板是**附加**能力 ——
+ * 它坏了不该让整个小屋进不去（场景本身仍然可用）。
+ *
+ * @returns {ReturnType<typeof createSettingsForm>|null}
+ */
+function mountSettingsForm(app) {
+  const root = document.getElementById('menuPanel')
+  if (!root) {
+    console.warn('[cabin] 找不到 #menuPanel，设置面板未挂载')
+    return null
+  }
+  try {
+    const form = createSettingsForm({ store: app.store, bus: app.bus, root })
+    if (window.__CABIN_WANT_STATS) {
+      // `?stats=1` 下的验收接口：面板实际生成了哪些键（e2e 用它断言 CF2）
+      window.__cabinSettingsForm = () => ({ controls: [...form.controls.keys()] })
+    }
+    return form
+  } catch (err) {
+    console.error('[cabin] 设置面板挂载失败（场景继续启动）：', err)
+    return null
+  }
+}
+
 export async function bootCabin() {
   const bootT0 = performance.now() // J0.6：boot 逻辑起点（相对导航开始）
   await domReady()
@@ -208,9 +242,22 @@ export async function bootCabin() {
     window.__cabinApp = () => app.stats()
   }
 
+  // ③.2 设置面板（J2.5）：由 `src/config/settings.config.js` 的 schema **自动生成**控件，
+  //      并双向绑定到 `app.store`（改一个配置项 = 改 1 个文件 + 加 1 个字段，验收 CF2）。
+  //      ★ 必须在 `installCabin` **之前**：monolith 会 `getElementById` 取这些控件
+  //        （迁移期兼容，见 `settings.config.js` 的 `domId` 说明），晚一步就全取不到。
+  const settingsForm = mountSettingsForm(app)
+
   // ③.5 安装 3D 实现（画面与重构前完全一致）
   const { installCabin } = await import('./legacy/monolith.js')
   installCabin(app)
+
+  // ③.6 装配功能模块（J2.5）：按 `src/config/modules.config.js` 过滤后逐个 register。
+  //      现在是**空清单**（第一个模块 M01 随 J6 落地），但"关掉一个模块 = 改一个布尔值"
+  //      这条链路已经通了 —— 未启用的模块连 `load()` 都不会被调用（其 chunk 不被浏览器请求）。
+  //      位置在 `installCabin` **之后**：模块要认领的是已经建好的场景对象（挂载点表属于 J3）。
+  const features = await registerFeatures(app, { manifests: moduleManifests, log: (m) => console.info(m) })
+  await app.start()
 
   // ③.5 J0.4：应用测试机位与小屋形态（截图回归用；不指定则完全保持默认，画面与正常游玩一致）
   const camLabel = applyTestCamera(opts)

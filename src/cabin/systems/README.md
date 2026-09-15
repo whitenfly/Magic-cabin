@@ -13,7 +13,16 @@
 | `systems/player/` | `Slime.js` `PlayerController.js` `collision.js` `Input.js` | 原 6937–6960、8206–8246、8276–8339 | J4 |
 | `systems/weather/` | `WeatherSystem.js` `sky.js` `precip.js` `clouds.js` `stars.js` `environment.js` | 原 8378–8855 | J4 |
 | `systems/magic/` | `Wand.js` `spellArray.js` `explosion.js` `BlastSequence.js` | 原 6962–8205 | J4 |
-| `systems/ui/` | `MenuPanel.js` **`SettingsForm.js`** `InteractTargetList.js` `editors/` | 原 752–835、660–748、8323–8336 | J4（`SettingsForm` 属 **J2.5**） |
+| `systems/ui/` | `MenuPanel.js` **`SettingsForm.js` ✅** `InteractTargetList.js` `editors/` | 原 752–835、660–748、8323–8336 | J4（`SettingsForm` 已在 **`J2.5`** 落地） |
+
+> ✅ **`systems/ui/SettingsForm.js`（`J2.5` 已落地）**：由 `src/config/settings.config.js` 的
+> **schema 自动生成**设置面板控件并自动持久化 —— "加一个配置项 = 改 1 个文件 + 加 1 个字段"
+> 由 `pnpm verify:cf` 的 `CF2` 守着。它只往菜单里的分组锚点 `[data-setting-group="…"]` **填控件**，
+> 分组的位置与标题仍手写在 `cabin/dom.js`（那里还夹着天气 chips、时刻滑杆、魔法槽位 ——
+> 它们不是持久化设置）。`MenuPanel.js` / `InteractTargetList.js` / `editors/` 仍属 `J4`。
+>
+> ⚠️ 迁移期兼容：生成的控件沿用原 id（`houseToggle` / `sfxSlider` / `viewXxxBtn` …），
+> 因为 `legacy/monolith.js` 还在按 id 取节点；`J4` 搬完 `ui` 后这些 `domId` 应当移除。
 
 **三个阻塞项**（不做则后续模块只能做最朴素版本）：
 

@@ -12,19 +12,21 @@
  *   见 docs/BuildPlaning/04-模块增量开发与配置编排.md §3.4）。
  *
  * ── 消费方 ────────────────────────────────────────────────────────────────
- *   src/blog/registry.js
- *     for (const m of moduleManifests)
- *       if (modulesConfig[m.id]) register(await m.load(), ctx)
+ *   src/cabin/boot.js                       ← 读本清单（唯一同时认识"内核"与"实现"的地方）
+ *     const features = await registerFeatures(app, { manifests: moduleManifests })
+ *   src/blog/registry.js                    ← 只负责过滤与装配，不 import 本文件
+ *     （`blog/**` 不得 import `features/**`，见 src/blog/README.md §2）
  *
  * ── 契约 ──────────────────────────────────────────────────────────────────
- * 每个模块的 `index.js` 默认导出（详见 src/features/README.md §2）：
+ * 每个模块的 `index.js` 默认导出（`defineFeature()` 的产物，详见 src/features/README.md §2）：
  *   {
  *     id: 'M04',                    // 必须与 mapping.yaml 的 id 一致
- *     requires?: string[],          // 依赖的其他模块 id（App 据此拓扑排序）
- *     order?: number,               // 每帧更新顺序（越小越早）
- *     settings?: Record<string, SettingSpec>,   // 自动进入设置面板并持久化
- *     mount(ctx): void | Promise<void>,         // 认领挂载点、注册 interactable、订阅更新
- *     dispose?(): void,
+ *     requires?: string[],          // 依赖的其他模块 id（App 据此校验装配次序）
+ *     order?: number,               // 每批装配内的先后（小整数，默认 0）
+ *     settings?: Record<string, SettingSpec>,   // 自动进入设置面板并持久化（`J2.5` 起）
+ *     setup(ctx): void | Promise<void>,         // 一次性准备：建对象、登记交互（不碰 DOM）
+ *     start?(ctx): void | Promise<void>,        // 开始每帧参与（登记 scheduler 任务、订阅事件）
+ *     dispose?(ctx): void,                      // 退订、释放
  *   }
  *
  * ── 当前状态 ──────────────────────────────────────────────────────────────
