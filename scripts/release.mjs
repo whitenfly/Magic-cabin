@@ -606,15 +606,37 @@ function appendRecord(entry, commands = null) {
 }
 
 /* ────────────────────────────── 门禁 ────────────────────────────── */
+/**
+ * 等价的本地可执行入口（§11：`pnpm <别名>` 与直调**等价**）。
+ *
+ * ★ L20：受限环境里 **pnpm 子进程无法删除 `dist/`**（实测 `EPERM`，连 `fs.rmSync` 也一样），
+ *   于是经 pnpm 跑的 `build` **必然失败**，让 `task:done` 的门禁 die。
+ *   门禁因此改用直调 —— 门禁的**实质**仍是 typecheck / verify / build 三项，
+ *   只是换了执行方式（正是 §11.1 的降级路径）。
+ */
+function localBin(name) {
+  const ext = process.platform === 'win32' ? '.CMD' : '';
+  return join(ROOT, 'node_modules', '.bin', `${name}${ext}`);
+}
+
+/** build 步骤：先清理输出目录（规避 astro `emptyDir` 的偶发 EPERM），再构建 */
+function runBuild() {
+  const c = run('node', ['scripts/clean-dist.mjs']);
+  if (!c.ok) return c;
+  return run(localBin('astro'), ['build']);
+}
+
 function runGates(quick = false) {
+  const typecheck = () => run(localBin('tsc'), ['--noEmit']);
+  const verify = () => run('node', ['scripts/_verify.mjs']);
   const plan = quick
-    ? [['typecheck', ['pnpm', 'typecheck']], ['verify', ['pnpm', 'verify']]]
-    : [['typecheck', ['pnpm', 'typecheck']], ['verify', ['pnpm', 'verify']], ['build', ['pnpm', 'build']]];
+    ? [['typecheck', typecheck], ['verify', verify]]
+    : [['typecheck', typecheck], ['verify', verify], ['build', runBuild]];
   const parts = [];
-  for (const [name, cmd] of plan) {
+  for (const [name, fn] of plan) {
     process.stdout.write(`  ${C.d}跑 ${name} …${C.x}`);
     const t0 = Date.now();
-    const r = run(cmd[0], cmd.slice(1));
+    const r = fn();
     const sec = ((Date.now() - t0) / 1000).toFixed(1);
     parts.push({ name, ok: r.ok, sec: Number(sec), out: r.out });
     process.stdout.write(`\r  ${r.ok ? `${C.g}✓${C.x}` : `${C.r}✗${C.x}`} ${name} ${C.d}(${sec}s)${C.x}\n`);
