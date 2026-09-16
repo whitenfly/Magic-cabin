@@ -31,6 +31,11 @@ import wardrobe from './wardrobe.js'
 import witchHat from './witchHat.js'
 import { clock } from '../../app/clock.js'
 import { runtime, scene } from '../../app/rng.js'
+// ★ J4.31：`smooth` / `hash01` / `jitterGeo` 原先**定义在本文件的两个分区里**
+//   （18.8 计划板 / 18.9 魔法杖），已提取到 `core/`（见 core/math/easing.js 与
+//   core/geometry/jitter.js 的文件头）。本文件仍按**原名**使用它们 ⇒ 段内代码一字未改。
+import { smooth } from '../../core/math/easing.js'
+import { hash01, jitterGeo } from '../../core/geometry/jitter.js'
 
 export function installFloor2(ctx, app) {
   const runtimeRng = runtime
@@ -40,7 +45,13 @@ export function installFloor2(ctx, app) {
             ctx.makeCandleGlow = makeCandleGlow; ctx.getGlyphTex = getGlyphTex; ctx.spawnGlyphs = spawnGlyphs; ctx.updateGlyphs = updateGlyphs; ctx.updateBook = updateBook; ctx.glowBall = glowBall;
             ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
-            ctx.spiralPts2 = spiralPts2; ctx.buildMagicCircle = buildMagicCircle; ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo; ctx.makeSolidFlame = makeSolidFlame; ctx.buildCreation = buildCreation;
+            // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
+            //    它们靠**函数声明提升**引用本段的局部函数，而那两个函数已提取到
+            //    `core/geometry/jitter.js`（本文件顶部 import 同名进来）。
+            //    全局搜索确认 `ctx.hash01` / `ctx.jitterGeo` **没有任何读者**（`propCtx` 的
+            //    `propTool('hash01'/'jitterGeo', …)` 已改为直接指向 `core/` 的实现），
+            //    留着会让本段在装配期抛 ReferenceError（同 J4.20/26/28/30 的同类坑 —— 第五次）。
+            ctx.spiralPts2 = spiralPts2; ctx.buildMagicCircle = buildMagicCircle; ctx.makeSolidFlame = makeSolidFlame; ctx.buildCreation = buildCreation;
             ctx.clearCast = clearCast; ctx.updateWand2 = updateWand2; ctx.cbox = cbox; ctx.crboxCol = crboxCol; ctx.crumpleBall = crumpleBall; ctx.arcPos = arcPos;
             // ⚠️ J4.30：原来的 `ctx.clockHand = clockHand; ctx.drawClock = drawClock;` 两个分句已删除 ——
             //    它们 `J3` 时代随 18.12 段导出，靠**函数声明提升**引用本段的局部函数；
@@ -827,8 +838,9 @@ export function installFloor2(ctx, app) {
             ctx.glyphLocalX = glyphLocalX;
             const glyphLocalY = i => 0.95 - (Math.sin(i * 1.3) * 14) / 200 * 0.4;
             ctx.glyphLocalY = glyphLocalY;
-            const smooth = k => k * k * (3 - 2 * k);
-            ctx.smooth = smooth;
+            // ★ J4.31：`const smooth = k => k * k * (3 - 2 * k);` 原先定义在这里（18.8 计划板段内），
+            //   却是 18.9（魔法杖）每帧分支的 3 处缓动所依赖的东西 —— 已提取到
+            //   `core/math/easing.js`，本文件顶部 import 同名进来（段内调用一字未改）。
             ctx.regMagic(chalkG, () => {
                 if (!chalkState.active) {
                     chalkState.active = true;
@@ -1092,27 +1104,11 @@ export function installFloor2(ctx, app) {
                 return g;
             }
 
-            function hash01(s) {
-                let h = 0;
-                for (let i = 0; i < s.length; i++) {
-                    h = (h * 31 + s.charCodeAt(i)) % 997;
-                }
-                return h / 997;
-            }
-
-            function jitterGeo(geo, amp) {
-                const pa = geo.attributes.position;
-                for (let i = 0; i < pa.count; i++) {
-                    const k = pa.getX(i).toFixed(3) + ',' + pa.getY(i).toFixed(3) + ',' + pa.getZ(i).toFixed(3);
-                    pa.setXYZ(i,
-                        pa.getX(i) + (hash01(k + 'x') - 0.5) * 2 * amp,
-                        pa.getY(i) + (hash01(k + 'y') - 0.5) * 2 * amp,
-                        pa.getZ(i) + (hash01(k + 'z') - 0.5) * 2 * amp
-                    );
-                }
-                geo.computeVertexNormals();
-                return geo;
-            }
+            // ★ J4.31：`hash01(s)` 与 `jitterGeo(geo, amp)` 原先**定义在这里**（18.9 魔法杖段内），
+            //   却是 `ctx` 里的**共享工具**（`junkBoxes.js` 的 `crumpleBall` 也在用）——
+            //   已提取到 `core/geometry/jitter.js`，本文件顶部 import 同名进来（段内调用一字未改）。
+            //   ⚠️ 那两个函数的实现是"一个字符都不能改"的典型（`toFixed(3)` 字符串哈希），
+            //      提取时**逐字搬运**，见该模块文件头。
 
             function makeSolidFlame(h, w, color, phase, speed) {
                 const K = 20;

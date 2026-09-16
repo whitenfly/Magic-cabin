@@ -1,7 +1,7 @@
 {
   "name": "magic-cabin",
   "private": true,
-  "version": "0.4.0-dev.29",
+  "version": "0.4.0-dev.30",
   "type": "module",
   "license": "MIT",
   "description": "线稿风格魔法小木屋 —— 从单文件 9811 行重构为模块化工程（J3：物件模块化）",
