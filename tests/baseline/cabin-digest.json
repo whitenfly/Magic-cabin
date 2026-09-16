@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-16",
   "totals": {
-    "files": 105,
-    "lines": 18525
+    "files": 106,
+    "lines": 18633
   },
-  "combined": "ea12fb1bb0a7c170ad31688526f21f73279d8117ff2d4ddbb0416e7cfbcf8bb0",
+  "combined": "9391c8ae42c92f0914f0c3830429a924a2f756ba52f1655d66a265f32481fe66",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,7 +20,7 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "f61b9cca0225a733",
+    "app/scene/FrameBody.js": "d66300a579203f15",
     "app/scene/installCabin.js": "0afec776b0558568",
     "app/scene/PropInstaller.js": "8b9d61260a0a889f",
     "app/scene/SceneCore.js": "908bb049d736ec30",
@@ -45,6 +45,7 @@
     "core/render/CameraRig.js": "b60be1371f1a5515",
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "c6eac6dd98798a5b",
+    "props/cup.js": "181af2cbed7b26a8",
     "props/README.md": "600f9c9259b2ee19",
     "systems/audio/AudioSystem.js": "2b622e38bc52fb82",
     "systems/interaction/Bridge.js": "dad73a74b9688daa",
@@ -73,7 +74,7 @@
     "world/floor1/doorHangBar.js": "d70fa57ab77beb52",
     "world/floor1/hangingLantern.js": "5134b47451740321",
     "world/floor1/hourglass.js": "9d1928a35779e7be",
-    "world/floor1/install.js": "c0da888ac187b8a9",
+    "world/floor1/install.js": "0ebd7702b7f53072",
     "world/floor1/junkBoxes.js": "638c34f06c295b88",
     "world/floor1/longTable.js": "a05a758d925f02c6",
     "world/floor1/magicCircle.js": "608e0b19cb0e9ec0",
