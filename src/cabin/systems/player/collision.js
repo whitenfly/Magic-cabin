@@ -17,7 +17,10 @@ export function installCollision(ctx, app) {
                 { x1: ctx.KOT_X - 0.62, z1: ctx.KOT_Z - 0.62, x2: ctx.KOT_X + 0.62, z2: ctx.KOT_Z + 0.62, top: ctx.KTOP },  // 暖桌
                 { x1: ctx.CBX - 0.28, z1: ctx.CBZ - 0.28, x2: ctx.CBX + 0.28, z2: ctx.CBZ + 0.28, top: 0.65 },         // 水晶球占卜台
                 { x1: -1.84, z1: -1.97, x2: -0.86, z2: -1.03, top: 0.345 },                             // 灶台旁固定木台
-                { x1: ctx.SFX - 0.25, z1: ctx.SFZ - 0.70, x2: ctx.SFX + 0.25, z2: ctx.SFZ + 0.70, top: 2.02 },         // 左墙书架（实心阻挡）
+                // J4.19：左墙书架已升格为 `world/floor1/bookshelf.js`，它的 `SFX`/`SFZ` 随之搬进
+                // `world/layout.js`（不变量 N9）—— 碰撞表按 layout 取值，与几何**同源**。
+                // ★ 数值逐字未变（-3.72 / -2.85）⇒ 碰撞行为与搬迁前完全一致。
+                { x1: ctx.L.SHELF_X - 0.25, z1: ctx.L.SHELF_Z - 0.70, x2: ctx.L.SHELF_X + 0.25, z2: ctx.L.SHELF_Z + 0.70, top: 2.02 },         // 左墙书架（实心阻挡）
                 { x1: ctx.CCX - 0.66, z1: ctx.CCZ - 0.66, x2: ctx.CCX + 0.66, z2: ctx.CCZ + 0.66, top: 1.28 },         // 大魔女坩埚（实心阻挡）
                 { x1: -0.41, z1: -1.06, x2: 0.41, z2: -0.50, top: 0.49 },                              // 楼梯下储物箱
                 { x1: -0.99, z1: -3.04, x2: -0.51, z2: -2.56, top: 0.48 },                             // 塔罗牌小圆凳

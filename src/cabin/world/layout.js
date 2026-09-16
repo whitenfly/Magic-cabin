@@ -149,6 +149,19 @@ export function createLayout() {
   const SNOW_Z = -2.80
   /** 左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）（floor1/book-pile） */
   const BOOK_PILE_POS = { x: -3.62, y: 0, z: -1.4 }
+  /**
+   * 左墙书架（12.9 + 12.9f 余段）中心 x（floor1/bookshelf）
+   *
+   * 原 `12.9` 分区里的局部常量 `SFX`（`-3.72`）。搬进 layout 的原因与不变量 `N9` 一致：
+   * **碰撞表也在读它**（`systems/player/collision.js` 的 `platformBoxes` 里那行"左墙书架（实心阻挡）"）
+   * —— 位置必须与几何**同源**，否则书架的实体阻挡会与画面对不上。
+   *
+   * ⚠️ `STARBELL_POS.x` / `CHEST_POS.x` / `HG_POS.x` 亦取自同一个 `-3.72`，
+   * 但它们是**各自物件自己的位置**，已按 `N9` 独立落在 layout 里，不引用本常量。
+   */
+  const SHELF_X = -3.72
+  /** 左墙书架（12.9）中心 z（floor1/bookshelf；原分区局部常量 `SFZ`） */
+  const SHELF_Z = -2.85
   /** 旋转星铃（12.9d）的组原点（x 与 12.9 左墙书架的 SFX 同值，y 是吊挂高度）（floor1/star-bell） */
   const STARBELL_POS = { x: -3.72, y: 1.975, z: -3.05 }
   /** 塔罗牌牌堆（12.12）的组原点（`tarotG.position`）（floor1/tarot） */
@@ -222,6 +235,8 @@ export function createLayout() {
     CHEST_POS, HANGBAR_X, HANGBAR_Y, HANGBAR_Z, HG_POS, JUNK_X, JUNK_Z, RUG2_X, RUG2_Z,
     // J3 搬迁新增
     BOOK_PILE_POS, STARBELL_POS, TAROT_POS, BAG_HOOK_X, BAG_HOOK_Y, BAG_HOOK_Z, BIN_X, BIN_Z, BIN_H, CRATE_X, CRATE_Z, CR_W, CR_D, CR_H, CRATE_TOP, MIRROR_X, MIRROR_Z, TISSUE_X, TISSUE_Z, WD_X, WD_Z,
+    // J4.19 搬迁新增（左墙书架 —— 碰撞表也读它）
+    SHELF_X, SHELF_Z,
     // J3 搬迁新增
     CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
   }

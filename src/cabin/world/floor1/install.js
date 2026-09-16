@@ -10,6 +10,7 @@
  */
 import * as THREE from 'three'
 import bookPile from './bookPile.js'
+import bookshelf from './bookshelf.js'
 import broom from './broom.js'
 import cauldron from './cauldron.js'
 import chest from './chest.js'
@@ -228,41 +229,11 @@ export function installFloor1(ctx, app) {
             });
 
             /* ---- 12.9 左墙书架 + 可抽拉的书 ---- */
-            const shelfBooks = [];
-            ctx.shelfBooks = shelfBooks;
-            const SFX = -3.72, SFZ = -2.85, SFW = 1.3;
-            ctx.SFX = SFX; ctx.SFZ = SFZ; ctx.SFW = SFW;
-            {
-                ctx.put(ctx.box(0.3, 1.86, 0.05), SFX, 1.05, SFZ - SFW / 2);
-                ctx.put(ctx.box(0.3, 1.86, 0.05), SFX, 1.05, SFZ + SFW / 2);
-                ctx.put(ctx.box(0.02, 1.86, 1.3), SFX - 0.15, 1.05, SFZ);
-                for (const sy of [0.18, 0.78, 1.38, 1.95]) ctx.put(ctx.box(0.3, 0.05, 1.3), SFX, sy, SFZ);
-
-                function addBook(z, yBase, h, th) {
-                    const g = new THREE.Group();
-                    ctx.put(ctx.box(0.18, h, th), 0, h / 2, 0, 0, 0, 0, g);
-                    ctx.put(ctx.line([[0.092, h * 0.55, -th * 0.3], [0.092, h * 0.55, th * 0.3]]), 0, 0, 0, 0, 0, 0, g);
-                    g.position.set(SFX + 0.02, yBase, z);
-                    g.userData = { out: false, cur: 0, vel: 0, bx: SFX + 0.02 };
-                    ctx.scene.add(g);
-                    shelfBooks.push(g);
-                    ctx.regMagic(g, () => { g.userData.out = !g.userData.out; });
-                }
-                const HS = [0.36, 0.30, 0.40, 0.33, 0.27, 0.38, 0.31, 0.35, 0.29, 0.37, 0.34, 0.28];
-                const TS = [0.07, 0.06, 0.075, 0.065, 0.07, 0.062, 0.072];
-                let hi = 0, ti = 0;
-                for (const s of [{ y: 0.205, z0: -3.42, z1: -2.30 },
-                { y: 0.805, z0: -3.42, z1: -2.78 },
-                { y: 1.405, z0: -3.42, z1: -2.30 }]) {
-                    let z = s.z0;
-                    while (z < s.z1 - 0.07) {
-                        const h = HS[hi++ % HS.length];
-                        const th = TS[ti++ % TS.length];
-                        addBook(z + th / 2, s.y, h, th);
-                        z += th + 0.012;
-                    }
-                }
-            }
+            // J4.19：几何 + 12 条交互 + 每帧分支已搬入 src/cabin/world/floor1/bookshelf.js。
+            // 原 `SFX` / `SFZ` 随之搬进 world/layout.js（`SHELF_X` / `SHELF_Z`）——
+            // 碰撞表读它们（systems/player/collision.js 的 platformBoxes），故位置必须与几何同源（N9）。
+            const bookshelfApi = ctx.installProp(bookshelf);
+            ctx.bookshelfApi = bookshelfApi;
 
             /* ---- 12.9a 左窗下魔法书堆 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/bookPile.js，此处只留装配调用。
