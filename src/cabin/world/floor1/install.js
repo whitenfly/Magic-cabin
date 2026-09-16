@@ -18,6 +18,7 @@ import chest from './chest.js'
 import diningBook from './diningBook.js'
 import diningTable from './diningTable.js'
 import doorHangBar from './doorHangBar.js'
+import hangingLantern from './hangingLantern.js'
 import hourglass from './hourglass.js'
 import longTable from './longTable.js'
 import orrery from './orrery.js'
@@ -60,56 +61,12 @@ export function installFloor1(ctx, app) {
             ctx.installProp(rugUnderTable);
 
             // ---- 12.7 吊挂木灯 ----
-            ctx.lanternLit = true;
-            const lanternPivot = new THREE.Group();
-            ctx.lanternPivot = lanternPivot;
-            lanternPivot.position.set(ctx.MTX, 2.88, ctx.MTZ);
-            ctx.scene.add(lanternPivot);
-            ctx.put(ctx.line([[0, 0, 0], [0, -0.26, 0]]), 0, 0, 0, 0, 0, 0, lanternPivot);
-            const lantG = new THREE.Group();
-            ctx.lantG = lantG;
-            lantG.position.y = -0.44;
-            lanternPivot.add(lantG);
-            ctx.put(ctx.edge(new THREE.ConeGeometry(0.09, 0.07, 4)), 0, 0.13, 0, 0, 0, 0, lantG);
-            ctx.put(ctx.box(0.16, 0.2, 0.16), 0, 0, 0, 0, 0, 0, lantG);
-            for (const s of [[0, 0.085], [0, -0.085], [0.085, 0], [-0.085, 0]])
-                ctx.put(ctx.line([[s[0], 0.1, s[1]], [s[0], -0.1, s[1]]]), 0, 0, 0, 0, 0, 0, lantG);
-            const lanternFlame = new THREE.Group();
-            ctx.lanternFlame = lanternFlame;
-            ctx.put(ctx.line([[0, -0.06, 0], [0.014, -0.02, 0], [0.014, 0.015, 0], [0, 0.06, 0]]), 0, 0, 0, 0, 0, 0, lanternFlame);
-            lantG.add(lanternFlame);
-
-            const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd88f, transparent: true, opacity: 0.14, depthWrite: false });
-            ctx.haloMat = haloMat;
-            const halo = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), haloMat);
-            ctx.halo = halo;
-            halo.userData.noHit = true;
-            ctx.put(halo, 0, 0, 0, 0, 0, 0, lantG);
-
-            const beamMat = new THREE.MeshBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0.09, depthWrite: false, side: THREE.DoubleSide });
-            ctx.beamMat = beamMat;
-            const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.85, 2.35, 24, 1, true), beamMat);
-            ctx.beam = beam;
-            beam.userData.noHit = true;
-            ctx.put(beam, 0, -1.52, 0, 0, 0, 0, lanternPivot);
-
-            const glowMatA = new THREE.MeshBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0.09, depthWrite: false, side: THREE.DoubleSide });
-            ctx.glowMatA = glowMatA;
-            const glowMatB = new THREE.MeshBasicMaterial({ color: 0xffd88f, transparent: true, opacity: 0.075, depthWrite: false, side: THREE.DoubleSide });
-            ctx.glowMatB = glowMatB;
-            const floorPool = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), glowMatA);
-            ctx.floorPool = floorPool;
-            floorPool.userData.noHit = true;
-            ctx.put(floorPool, ctx.MTX, 0.012, ctx.MTZ, -Math.PI / 2, 0, 0);
-            const floorPool2 = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), glowMatB);
-            ctx.floorPool2 = floorPool2;
-            floorPool2.userData.noHit = true;
-            ctx.put(floorPool2, ctx.MTX, 0.014, ctx.MTZ, -Math.PI / 2, 0, 0);
-            const tablePool = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24), glowMatB);
-            ctx.tablePool = tablePool;
-            tablePool.userData.noHit = true;
-            ctx.put(tablePool, ctx.MTX, 0.795, ctx.MTZ, -Math.PI / 2, 0, 0);
-            ctx.regMagic(lanternPivot, () => { ctx.lanternLit = !ctx.lanternLit; });
+            // J4.22：几何 + 交互 + **五段每帧分支** + **光源槽位 0** 已搬入
+            // src/cabin/world/floor1/hangingLantern.js。
+            // ★ 它是 J4.18 那条前置通道的第一个真实用户：光源随物件走、槽位由 `slot: 0` 显式声明，
+            //   `ptLantern` 中间量消失（改为物件的 state.pt，由它自己的 update 平滑）。
+            const hangingLanternApi = ctx.installProp(hangingLantern);
+            ctx.hangingLanternApi = hangingLanternApi;
 
             /* ---- 12.8 壁炉旁的猫 ---- */
             ctx.catAwake = false, ctx.catP = 0;

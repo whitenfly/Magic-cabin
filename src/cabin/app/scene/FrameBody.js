@@ -174,36 +174,14 @@ for (const c of ctx.chairs) {
                 }
   })
 
-  // L252–L252（1 行）
+  // L252–L256（5 行）
+  // ★ J4.22：吊挂木灯已升格为 `world/floor1/hangingLantern.js` —— 它那**五段连续的每帧分支**
+  //   （原 `frame/18`–`frame/22`，在下面相邻）全部搬进物件的 `update()`；
+  //   同时把 `frame/92` 的强度平滑也并进同一个 `update`（一件物件只有一个 update），
+  //   于是那一段**提前**到本位置执行 —— 等价性论证见该模块文件头「★ 帧顺序」。
+  //   ⚠️ 合并后只在这里登记一次；`frame/19`–`frame/22` 与 `frame/92` 的任务已删除。
   F('frame/18', (dt, time) => {
-ctx.lanternPivot.rotation.x = Math.sin(time * 1.2) * 0.045;
-  })
-
-  // L253–L253（1 行）
-  F('frame/19', (dt, time) => {
-ctx.lanternPivot.rotation.z = Math.sin(time * 0.9 + 1) * 0.05;
-  })
-
-  // L254–L254（1 行）
-  F('frame/20', (dt, time) => {
-ctx.lanternFlame.visible = ctx.lanternLit;
-  })
-
-  // L255–L255（1 行）
-  F('frame/21', (dt, time) => {
-ctx.halo.visible = ctx.beam.visible = ctx.floorPool.visible = ctx.floorPool2.visible = ctx.tablePool.visible = ctx.lanternLit;
-  })
-
-  // L256–L256（1 行）
-  F('frame/22', (dt, time) => {
-if (ctx.lanternLit) {
-                    const fk = 1 + Math.sin(time * 9) * 0.10 + Math.sin(time * 13.7) * 0.04;
-                    ctx.lanternFlame.scale.set(1, fk, 1);
-                    ctx.haloMat.opacity = 0.11 + 0.04 * fk;
-                    ctx.beamMat.opacity = 0.07 + 0.025 * fk;
-                    ctx.glowMatA.opacity = 0.07 + 0.025 * fk;
-                    ctx.glowMatB.opacity = 0.06 + 0.02 * fk;
-                }
+ctx.hangingLanternApi.tick(dt, time);
   })
 
   // L267–L267（1 行）
@@ -898,10 +876,10 @@ ctx.lampCrystal.rotation.y += 0.012;
 ctx.pendant.rotation.y -= 0.008;
   })
 
-  // L887–L887（1 行）
-  F('frame/92', (dt, time) => {
-ctx.ptLantern += ((ctx.lanternLit ? 1 : 0) - ctx.ptLantern) * 0.07;
-  })
+  // ★ J4.22：原 `frame/92`（`ctx.ptLantern += …`）已并入吊挂木灯物件的 `update()`
+  //   —— 一件物件只有一个 `update`，故它与那五段几何分支合并在 `frame/18` 的位置执行
+  //   （提前约 74 个帧任务，等价性论证见 `world/floor1/hangingLantern.js` 文件头「★ 帧顺序」）。
+  //   本帧任务已删除，槽位 0 的强度改由 `lights()` 的 `strength: () => s.pt` 惰性读取。
 
   // L888–L888（1 行）
   F('frame/93', (dt, time) => {
