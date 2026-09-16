@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import bookPile from './bookPile.js'
 import bookshelf from './bookshelf.js'
 import broom from './broom.js'
+import cartShelf from './cartShelf.js'
 import cauldron from './cauldron.js'
 import chest from './chest.js'
 import diningBook from './diningBook.js'
@@ -32,7 +33,11 @@ import { scene } from '../../app/rng.js'
 export function installFloor1(ctx, app) {
   const floor1Rng = scene.floor1
             // ↓ J4 段导出（floor1）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.makeCup = makeCup; ctx.makeChair = makeChair; ctx.startQuill = startQuill; ctx.makeCushion = makeCushion;
+            // ⚠️ J4.20：原来的 `ctx.startQuill = startQuill;` 已删除 —— `startQuill` 是 12.11b 区间内的
+            //    局部函数，随滑轮置物台一起搬进了 `world/floor1/cartShelf.js`（成为模块级函数）。
+            //    它在这里**没有任何读者**（全局仅此一处提及），留着会让本段在装配期抛 ReferenceError
+            //    —— 这类"未定义的自由变量" `tsc` 与 `build` 都查不出，只有页面起不来才会暴露（§8.2）。
+            ctx.makeCup = makeCup; ctx.makeChair = makeChair; ctx.makeCushion = makeCushion;
             ctx.installProp(diningTable);
             // ---- 12.2 星象仪 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
@@ -646,165 +651,11 @@ export function installFloor1(ctx, app) {
             ctx.regMagic(plantG, () => { ctx.plantRun = 4.0; });
 
             /* ---- 12.11b 滑轮置物台【魔法餐桌另一侧】：可滑动 + 墨水瓶羽毛笔 + 纸堆 ---- */
-            const CART_P0 = { x: 2.85, z: 2.2 };
-            ctx.CART_P0 = CART_P0;   // 魔法餐桌右侧边
-            const CART_DIR = { x: 0, z: -1 };
-            ctx.CART_DIR = CART_DIR;      // 【调整】朝被炉方向（-z，向屋内）滑出，不再撞花盆
-            const CART_DIST = 0.55;
-            ctx.CART_DIST = CART_DIST;
-            ctx.cartOut = false, ctx.cartP = 0, ctx.cartPrevP = 0;
-            const cartG = new THREE.Group();
-            ctx.cartG = cartG;
-            cartG.position.set(CART_P0.x, 0, CART_P0.z);
-            cartG.rotation.y = Math.atan2(CART_DIR.x, CART_DIR.z);
-            ctx.scene.add(cartG);
-
-            const cartWheels = [];
-            ctx.cartWheels = cartWheels;
-            const cartBody = new THREE.Group();
-            ctx.cartBody = cartBody;
-            cartG.add(cartBody);
-            {
-                const woodMat = ctx.LITMAT(0x9c7a58, { side: THREE.DoubleSide });
-                const darkMat = ctx.LITMAT(0x6b543f, { side: THREE.DoubleSide });
-                for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                    const wh = new THREE.Group();
-                    wh.rotation.z = Math.PI / 2;
-                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.034, 0.034, 0.024, 10)), 0, 0, 0, 0, 0, 0, wh);
-                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.028, 6)), 0, 0, 0, 0, 0, 0, wh);
-                    wh.position.set(sx * 0.15, 0.034, sz * 0.10);
-                    cartG.add(wh);
-                    cartWheels.push(wh);
-                }
-                for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.46, 6)),
-                        sx * 0.155, 0.26, sz * 0.115, 0, 0, 0, cartBody);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.185, 0, 0, 0, 0, cartBody);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.024, 0.30), woodMat), 0, 0.47, 0, 0, 0, 0, cartBody);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.21, -0.145, 0, 0, 0, cartBody);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.40, 0.05, 0.012), darkMat), 0, 0.495, -0.145, 0, 0, 0, cartBody);
-                ctx.logBetween([-0.14, 0.48, 0.14], [-0.14, 0.78, 0.14], 0.011, cartBody);
-                ctx.logBetween([0.14, 0.48, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
-                ctx.logBetween([-0.14, 0.78, 0.14], [0.14, 0.78, 0.14], 0.011, cartBody);
-            }
-
-            /* —— 墨水瓶（上层）—— */
-            const inkG = new THREE.Group();
-            ctx.inkG = inkG;
-            inkG.position.set(-0.10, 0.482, 0.02);
-            cartG.add(inkG);
-            {
-                const glassMat = new THREE.MeshBasicMaterial({ color: 0x2a3a6e, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
-                const inkMat = ctx.LITMAT(0x1a2a5e);
-                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.036, 0.042, 0.075, 10), glassMat), 0, 0.0375, 0, 0, 0, 0, inkG);
-                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.02, 0.028, 0.024, 8), glassMat), 0, 0.086, 0, 0, 0, 0, inkG);
-                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.031, 0.031, 0.052, 10), inkMat), 0, 0.030, 0, 0, 0, 0, inkG);
-            }
-
-            /* —— 羽毛笔（插在墨水瓶里）—— */
-            const quillG = new THREE.Group();
-            ctx.quillG = quillG;
-            cartG.add(quillG);
-            const QUILL_REST = { pos: [-0.10, 0.505, 0.02], rotX: -0.15, rotZ: 0.30 };
-            ctx.QUILL_REST = QUILL_REST;
-            {
-                const featherMat = ctx.LITMAT(0xf4f0e6, { side: THREE.DoubleSide });
-                ctx.put(ctx.solid(new THREE.CylinderGeometry(0.0035, 0.0035, 0.15, 6),
-                    ctx.LITMAT(0xd9c9a8)), 0, 0.085, 0, 0, 0, 0, quillG);
-                ctx.put(ctx.solid(new THREE.ConeGeometry(0.0035, 0.03, 6),
-                    ctx.LITMAT(0x4a3b28)), 0, 0.005, 0, 0, 0, Math.PI, quillG);
-                const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), featherMat);
-                f.scale.set(0.32, 1.5, 0.55);
-                f.position.set(0.012, 0.155, 0);
-                f.rotation.z = -0.18;
-                quillG.add(f);
-                ctx.put(ctx.line([[0, 0.09, 0], [0.006, 0.22, 0]]), 0, 0, 0, 0, 0, 0, quillG);
-                for (let k = 0; k < 5; k++) {
-                    const yy = 0.11 + k * 0.024;
-                    ctx.put(ctx.line([[0.002, yy, 0], [0.028 - k * 0.002, yy + 0.014, 0]]), 0, 0, 0, 0, 0, 0, quillG);
-                    ctx.put(ctx.line([[0.002, yy, 0], [-0.016 + k * 0.001, yy + 0.012, 0]]), 0, 0, 0, 0, 0, 0, quillG);
-                }
-            }
-            quillG.position.set(QUILL_REST.pos[0], QUILL_REST.pos[1], QUILL_REST.pos[2]);
-            quillG.rotation.set(QUILL_REST.rotX, 0, QUILL_REST.rotZ);
-
-            /* —— 发光魔法符号（Sprite 池：花体/哥特数学字母 + 柔光，无描边）—— */
-            const GLYPH_CHARS = ['𝔑', '𝔎', '𝓇', '𝔓', '𝒻', '𝓀', '𝔖', '𝓌'];
-            ctx.GLYPH_CHARS = GLYPH_CHARS;
-            const GLYPH_COLORS = ['#d84fd0', '#4f9bd8', '#d8a84f', '#e05555', '#4fd8b0', '#f0e04f', '#9b6fd8', '#e084f0'];
-            ctx.GLYPH_COLORS = GLYPH_COLORS;
-            const magicGlyphs = [];
-            ctx.magicGlyphs = magicGlyphs;
-            for (let i = 0; i < 8; i++) {
-                const cv = document.createElement('canvas');
-                cv.width = cv.height = 128;
-                const cx = cv.getContext('2d');
-                cx.font = 'bold 84px "STIX Two Math", "Cambria Math", serif';
-                cx.textAlign = 'center';
-                cx.textBaseline = 'middle';
-                cx.shadowColor = GLYPH_COLORS[i];
-                cx.shadowBlur = 12;
-                cx.fillStyle = GLYPH_COLORS[i];
-                cx.fillText(GLYPH_CHARS[i], 64, 68);
-                cx.fillText(GLYPH_CHARS[i], 64, 68);
-                const tex = new THREE.CanvasTexture(cv);
-                const mat = new THREE.SpriteMaterial({
-                    map: tex, transparent: true, opacity: 0, depthWrite: false
-                });
-                const sp = new THREE.Sprite(mat);
-                sp.scale.setScalar(0.001);
-                sp.visible = false;
-                ctx.scene.add(sp);
-                magicGlyphs.push({ sp, mat, active: false, age: 0, life: 2.4, base: new THREE.Vector3() });
-            }
-
-            /* 书写路径（世界坐标）：餐桌上方空中（右侧） */
-            const QW_A = new THREE.Vector3(2.75, 1.30, 1.75);
-            ctx.QW_A = QW_A;
-            const QW_B = new THREE.Vector3(1.65, 1.55, 1.05);
-            ctx.QW_B = QW_B;
-            for (let i = 0; i < 8; i++) {
-                magicGlyphs[i].base.lerpVectors(QW_A, QW_B, (i + 0.5) / 8);
-                magicGlyphs[i].base.y += Math.sin(i * 2.2) * 0.05;
-            }
-
-            ctx.quillRun = 0;
-            const QUILL_T = 7.0;
-            ctx.QUILL_T = QUILL_T;
-            function startQuill() {
-                if (ctx.quillRun <= 0.4) {
-                    ctx.quillRun = QUILL_T;
-                    for (const g of magicGlyphs) { g.active = false; g.sp.visible = false; g.mat.opacity = 0; }
-                }
-            }
-
-            /* —— 纸堆（下层）—— */
-            const paperG = new THREE.Group();
-            ctx.paperG = paperG;
-            cartG.add(paperG);
-            const papers = [];
-            ctx.papers = papers;
-            for (let i = 0; i < 8; i++) {
-                const pg = new THREE.Group();
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.13, 0.0022, 0.18), ctx.FILL), 0, 0, 0, 0, 0, 0, pg);
-                for (const ly of [-0.03, 0, 0.03])
-                    ctx.put(ctx.line([[-0.045, 0.0025, ly], [0.045, 0.0025, ly]]), 0, 0, 0, 0, 0, 0, pg);
-                const ry0 = (floor1Rng() - 0.5) * 0.3;
-                pg.position.set(0.08 + (i % 3) * 0.003, 0.198 + i * 0.0028, -0.02 + (floor1Rng() - 0.5) * 0.012);
-                pg.rotation.y = ry0;
-                paperG.add(pg);
-                papers.push({ g: pg, home: pg.position.clone(), ry0, a0: 1.0 + i * 0.8, r: 2.1 + (i % 3) * 0.28 });
-            }
-            ctx.paperRun = 0;
-            const PAPER_T = 8.5;
-            ctx.PAPER_T = PAPER_T;
-            const _cw = new THREE.Vector3();
-            ctx._cw = _cw;
-
-            ctx.regMagic(cartBody, () => { ctx.cartOut = !ctx.cartOut; });
-            ctx.regMagic(inkG, () => { startQuill(); });
-            ctx.regMagic(quillG, () => { startQuill(); });
-            ctx.regMagic(paperG, () => { if (ctx.paperRun <= 0) ctx.paperRun = PAPER_T; });
+            // J4.20：几何 + 4 条交互 + **四段连续的每帧分支**已搬入 src/cabin/world/floor1/cartShelf.js。
+            // 原 `CART_P0` / `CART_DIR` / `CART_DIST` 随之搬进 world/layout.js（`CART_POS`/`CART_DIR`/`CART_DIST`）——
+            // 碰撞表的 movingPlatforms 读它的 `cartG`，故改读 `cartShelfApi.parts.cartG`（同两只圆凳的先例）。
+            const cartShelfApi = ctx.installProp(cartShelf);
+            ctx.cartShelfApi = cartShelfApi;
 
             /* ---- 12.12 塔罗牌牌堆 ---- */
             // J3（B3）：几何已搬入 src/cabin/world/floor1/tarot.js，此处只留装配调用。

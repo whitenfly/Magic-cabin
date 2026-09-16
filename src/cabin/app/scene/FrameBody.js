@@ -275,155 +275,19 @@ if (ctx.lanternLit) {
   })
 
   // L327–L327（1 行）
+  // ★ J4.20：滑轮置物台已升格为 `world/floor1/cartShelf.js` —— 它那**四段连续的每帧分支**
+  //   （原 `frame/27`–`frame/30`）全部搬进物件的 `update()`。四段在原 `tickOnce()` 里本就连续
+  //   （L6425 → 纸堆块结束，中间只隔空行）⇒ 合并成一个任务与原来**逐帧等价**。
+  //   ⚠️ 合并后**只在这里登记一次**；后三段（羽毛笔 / 魔法符号 / 纸堆）的帧任务已删除。
   F('frame/27', (dt, time) => {
-{
-                    ctx.cartP += ((ctx.cartOut ? 1 : 0) - ctx.cartP) * 0.07;
-                    ctx.cartG.position.set(ctx.CART_P0.x + ctx.CART_DIR.x * ctx.CART_DIST * ctx.cartP, 0,
-                        ctx.CART_P0.z + ctx.CART_DIR.z * ctx.CART_DIST * ctx.cartP);
-                    ctx.cartG.updateMatrixWorld(true);
-                    const dC = ctx.cartP - ctx.cartPrevP;
-                    if (Math.abs(dC) > 1e-5)
-                        for (const w of ctx.cartWheels) w.children[0].rotation.y -= dC * 16;
-                    ctx.cartPrevP = ctx.cartP;
-                }
+ctx.cartShelfApi.tick(dt, time);
   })
 
-  // L339–L339（1 行）
-  F('frame/28', (dt, time) => {
-{
-                    if (ctx.quillRun > 0) {
-                        ctx.quillRun -= dt;
-                        const p = 1 - Math.max(ctx.quillRun, 0) / ctx.QUILL_T;
-                        ctx._cw.set(ctx.QUILL_REST.pos[0], ctx.QUILL_REST.pos[1], ctx.QUILL_REST.pos[2]);
-                        ctx.cartG.localToWorld(ctx._cw);
-                        const restX = ctx._cw.x, restY = ctx._cw.y, restZ = ctx._cw.z;
-                        const sX = ctx.QW_A.x, sY = ctx.QW_A.y + 0.08, sZ = ctx.QW_A.z;
-                        const eX = ctx.QW_B.x, eY = ctx.QW_B.y + 0.08, eZ = ctx.QW_B.z;
-                        let px, py, pz, rx = ctx.QUILL_REST.rotX, rz = ctx.QUILL_REST.rotZ;
-                        if (p < 0.10) {
-                            const u = ctx.sm01(p / 0.10);
-                            px = restX + (sX - restX) * u;
-                            py = restY + (sY - restY) * u + Math.sin(u * Math.PI) * 0.30;
-                            pz = restZ + (sZ - restZ) * u;
-                            rx = -0.25; rz = 0.10;
-                        } else if (p < 0.70) {
-                            const u = (p - 0.10) / 0.60;
-                            px = sX + (eX - sX) * u;
-                            py = sY + (eY - sY) * u + Math.sin(u * Math.PI * 6) * 0.02;
-                            pz = sZ + (eZ - sZ) * u;
-                            rx = -0.85 + Math.sin(u * Math.PI * 10) * 0.10;
-                            rz = 0.22;
-                            for (let i = 0; i < 8; i++) {
-                                if (!ctx.magicGlyphs[i].active && u > (i + 0.25) / 8) {
-                                    ctx.magicGlyphs[i].active = true;
-                                    ctx.magicGlyphs[i].age = 0;
-                                    ctx.magicGlyphs[i].sp.visible = true;
-                                }
-                            }
-                        } else if (p < 0.80) {
-                            const u = (p - 0.70) / 0.10;
-                            px = eX; py = eY + Math.sin(u * Math.PI) * 0.05; pz = eZ;
-                            rx = -0.5; rz = 0.15;
-                        } else {
-                            const u = ctx.sm01((p - 0.80) / 0.20);
-                            px = eX + (restX - eX) * u;
-                            py = eY + (restY - eY) * u + Math.sin(u * Math.PI) * 0.30;
-                            pz = eZ + (restZ - eZ) * u;
-                            rx = -0.25 * (1 - u) + ctx.QUILL_REST.rotX * u;
-                            rz = 0.10 * (1 - u) + ctx.QUILL_REST.rotZ * u;
-                        }
-                        ctx._cw.set(px, py, pz);
-                        ctx.cartG.worldToLocal(ctx._cw);
-                        ctx.quillG.position.copy(ctx._cw);
-                        ctx.quillG.rotation.set(rx, 0, rz);
-                        if (ctx.quillRun <= 0) {
-                            ctx.quillG.position.set(ctx.QUILL_REST.pos[0], ctx.QUILL_REST.pos[1], ctx.QUILL_REST.pos[2]);
-                            ctx.quillG.rotation.set(ctx.QUILL_REST.rotX, 0, ctx.QUILL_REST.rotZ);
-                        }
-                    }
-                }
-  })
+  // ★ J4.20：原 `frame/28`（羽毛笔：飞出书写魔法符号后归位）已并入上面的 `cartShelfApi.tick`。
 
-  // L393–L393（1 行）
-  F('frame/29', (dt, time) => {
-{
-                    for (const g of ctx.magicGlyphs) {
-                        if (g.active) {
-                            g.age += dt;
-                            const k = g.age / g.life;
-                            if (k >= 1) { g.active = false; g.sp.visible = false; continue; }
-                            const pop = Math.min(g.age * 7, 1);
-                            g.mat.opacity = 0.95 * pop * (1 - Math.max(0, (k - 0.55) / 0.45));
-                            g.sp.position.set(g.base.x + Math.sin(g.age * 2.2) * 0.02,
-                                g.base.y + k * 0.20,
-                                g.base.z);
-                            const s = 0.16 * pop * (1 + 0.10 * Math.sin(g.age * 7));
-                            g.sp.scale.set(s, s, 1);
-                        }
-                    }
-                }
-  })
+  // ★ J4.20：原 `frame/29`（魔法符号：上升渐隐）已并入上面的 `cartShelfApi.tick`。
 
-  // L411–L411（1 行）
-  F('frame/30', (dt, time) => {
-{
-                    if (ctx.paperRun > 0) {
-                        ctx.paperRun -= dt;
-                        const elapsed = ctx.PAPER_T - ctx.paperRun;
-                        for (let i = 0; i < ctx.papers.length; i++) {
-                            const pp = ctx.papers[i];
-                            const delay = i * 0.12;
-                            const D = ctx.PAPER_T - delay;
-                            let ti = (elapsed - delay) / D;
-                            if (ti < 0) ti = 0;
-                            if (ti > 1) ti = 1;
-                            ctx._cw.copy(pp.home);
-                            ctx.cartG.localToWorld(ctx._cw);
-                            const hx = ctx._cw.x, hy = ctx._cw.y, hz = ctx._cw.z;
-                            const a0 = pp.a0, r = pp.r;
-                            const cirY = (a) => 1.45 + Math.sin(a * 3 + i) * 0.22;
-                            let pos;
-                            if (ti < 0.18) {
-                                const u = ctx.sm01(ti / 0.18);
-                                const cx = Math.cos(a0) * r, cy = cirY(a0), cz = Math.sin(a0) * r;
-                                pos = {
-                                    x: hx + (cx - hx) * u,
-                                    y: hy + (cy - hy) * u + Math.sin(u * Math.PI) * 0.40,
-                                    z: hz + (cz - hz) * u
-                                };
-                            } else if (ti < 0.78) {
-                                const s = (ti - 0.18) / 0.60;
-                                const a = a0 + s * Math.PI * 2;
-                                pos = { x: Math.cos(a) * r, y: cirY(a), z: Math.sin(a) * r };
-                            } else {
-                                const u = ctx.sm01((ti - 0.78) / 0.22);
-                                const cx = Math.cos(a0 + Math.PI * 2) * r, cy = cirY(a0 + Math.PI * 2), cz = Math.sin(a0 + Math.PI * 2) * r;
-                                pos = {
-                                    x: cx + (hx - cx) * u,
-                                    y: cy + (hy - cy) * u + Math.sin(u * Math.PI) * 0.35,
-                                    z: cz + (hz - cz) * u
-                                };
-                            }
-                            ctx._cw.set(pos.x, pos.y, pos.z);
-                            ctx.cartG.worldToLocal(ctx._cw);
-                            pp.g.position.copy(ctx._cw);
-                            if (ti > 0.02 && ti < 0.98) {
-                                pp.g.rotation.set(Math.sin(time * 7 + i * 1.3) * 0.9,
-                                    time * 2.5 + i,
-                                    Math.cos(time * 5 + i * 0.9) * 0.7);
-                            } else {
-                                pp.g.rotation.set(0, pp.ry0, 0);
-                            }
-                        }
-                        if (ctx.paperRun <= 0) {
-                            for (const pp of ctx.papers) {
-                                pp.g.position.copy(pp.home);
-                                pp.g.rotation.set(0, pp.ry0, 0);
-                            }
-                        }
-                    }
-                }
-  })
+  // ★ J4.20：原 `frame/30`（纸堆：腾空扇动绕一楼一圈后飞回）已并入上面的 `cartShelfApi.tick`。
 
   // L470–L470（1 行）
   F('frame/31', (dt, time) => {
