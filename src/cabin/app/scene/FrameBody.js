@@ -629,14 +629,11 @@ for (const c of ctx.cups) {
   })
 
   // L762–L762（1 行）
+  // ★ J4.21：书桌椅已升格为 `world/floor2/deskChair.js` —— 它的两段每帧分支（原 `frame/51` +
+  //   `frame/52`，在下面**相邻**）合并进物件的 `update()`。合并后只在原 `frame/51` 的位置
+  //   登记一次，每帧执行序列不变；`frame/52` 的任务已删除。
   F('frame/51', (dt, time) => {
-ctx.chairT += ((ctx.chairOpen ? 1 : 0) - ctx.chairT) * 0.07;
-  })
-
-  // L763–L764（2 行）
-  F('frame/52', (dt, time) => {
-const ck = ctx.smooth(Math.max(0, Math.min(1, ctx.chairT)));
-ctx.chairG.position.z = ctx.CHAIR_IN + (ctx.CHAIR_OUT - ctx.CHAIR_IN) * ck;
+ctx.deskChairApi.tick(dt, time);
   })
 
   // L765–L765（1 行）

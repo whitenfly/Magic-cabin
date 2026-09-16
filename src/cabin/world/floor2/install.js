@@ -16,6 +16,7 @@ import cardDeck from './cardDeck.js'
 import coinTowers from './coinTowers.js'
 import crate from './crate.js'
 import desk from './desk.js'
+import deskChair from './deskChair.js'
 import deskHourglass from './deskHourglass.js'
 import junkBoxes from './junkBoxes.js'
 import mirror from './mirror.js'
@@ -103,21 +104,11 @@ export function installFloor2(ctx, app) {
             // J3（B5）：几何已搬入 src/cabin/world/floor2/desk.js，此处只留装配调用。
             ctx.installProp(desk);
             /* —— 椅子 —— */
-            const CHAIR_IN = -3.20;
-            ctx.CHAIR_IN = CHAIR_IN;
-            const CHAIR_OUT = -3.60;
-            ctx.CHAIR_OUT = CHAIR_OUT;
-            const chairG = new THREE.Group();
-            ctx.chairG = chairG;
-            chairG.position.set(2.6, ctx.FY, CHAIR_IN);
-            ctx.scene.add(chairG);
-            for (const szx of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), szx[0] * 0.18, 0.22, szx[1] * 0.18, 0, 0, 0, chairG);
-            }
-            ctx.put(ctx.box(0.44, 0.05, 0.44), 0, 0.465, 0, 0, 0, 0, chairG);
-            ctx.put(ctx.box(0.44, 0.52, 0.045), 0, 0.72, -0.198, 0, 0, 0, chairG);
-            ctx.chairOpen = false, ctx.chairT = 0;
-            ctx.regMagic(chairG, () => { ctx.chairOpen = !ctx.chairOpen; });
+            // J4.21：几何 + 交互 + 每帧分支已搬入 src/cabin/world/floor2/deskChair.js。
+            // 原 `CHAIR_IN` / `CHAIR_OUT` 与摆放位 `2.6` 随之搬进 world/layout.js ——
+            // 碰撞表的 movingPlatforms 读它的 `chairG`，故改读 `deskChairApi.parts.body`。
+            const deskChairApi = ctx.installProp(deskChair);
+            ctx.deskChairApi = deskChairApi;
 
             /* —— 魔方 —— */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/rubik.js，此处只留装配调用。
