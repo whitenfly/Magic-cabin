@@ -19,6 +19,7 @@ import desk from './desk.js'
 import deskChair from './deskChair.js'
 import deskHourglass from './deskHourglass.js'
 import junkBoxes from './junkBoxes.js'
+import magicClock from './magicClock.js'
 import mirror from './mirror.js'
 import nightstand from './nightstand.js'
 import picture from './picture.js'
@@ -41,7 +42,14 @@ export function installFloor2(ctx, app) {
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             ctx.spiralPts2 = spiralPts2; ctx.buildMagicCircle = buildMagicCircle; ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo; ctx.makeSolidFlame = makeSolidFlame; ctx.buildCreation = buildCreation;
             ctx.clearCast = clearCast; ctx.updateWand2 = updateWand2; ctx.cbox = cbox; ctx.crboxCol = crboxCol; ctx.crumpleBall = crumpleBall; ctx.arcPos = arcPos;
-            ctx.regWobble = regWobble; ctx.updateWobblers = updateWobblers; ctx.colEdge = colEdge; ctx.clockHand = clockHand; ctx.drawClock = drawClock; ctx.updateNewDecor = updateNewDecor;
+            // ⚠️ J4.30：原来的 `ctx.clockHand = clockHand; ctx.drawClock = drawClock;` 两个分句已删除 ——
+            //    它们 `J3` 时代随 18.12 段导出，靠**函数声明提升**引用本段的局部函数；
+            //    时钟升格为 `world/floor2/magicClock.js` 之后这两个函数随它搬走，
+            //    留着会让本段在装配期抛 ReferenceError（同 J4.20 的 startQuill / J4.26 的 makeCup /
+            //    J4.28 的 makeCushion —— 同类坑的**第四次**，已按惯例先查段导出清单）。
+            //    `ctx.colEdge` **必须保留**：`colEdge` 仍定义在本文件（18.12 段的开头 6 行），
+            //    且被 mirror / junkBoxes / picture 三件的 build 读取（见 magicClock.js 文件头「关键偏离」）。
+            ctx.regWobble = regWobble; ctx.updateWobblers = updateWobblers; ctx.colEdge = colEdge; ctx.updateNewDecor = updateNewDecor;
             for (const sxsz of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 ctx.put(ctx.edge(new THREE.CylinderGeometry(0.045, 0.035, 0.32, 8)), ctx.BEDX + sxsz[0] * 0.56, ctx.FY + 0.16, ctx.BEDZ + sxsz[1] * 1.02, 0, 0, 0);
             }
@@ -1653,79 +1661,12 @@ export function installFloor2(ctx, app) {
                 grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, th === undefined ? 20 : th), ctx.MAT));
                 return grp;
             }
-            const clockCanvas = document.createElement('canvas');
-            ctx.clockCanvas = clockCanvas;
-            clockCanvas.width = 256;
-            clockCanvas.height = 256;
-            const cctx = clockCanvas.getContext('2d');
-            ctx.cctx = cctx;
-            const clockTex = new THREE.CanvasTexture(clockCanvas);
-            ctx.clockTex = clockTex;
-            ctx.clockLastKey = '';
-            function clockHand(ang, len, w, col) {
-                cctx.strokeStyle = col;
-                cctx.lineWidth = w;
-                cctx.lineCap = 'round';
-                cctx.beginPath();
-                cctx.moveTo(128 - Math.cos(ang) * 14, 128 - Math.sin(ang) * 14);
-                cctx.lineTo(128 + Math.cos(ang) * len, 128 + Math.sin(ang) * len);
-                cctx.stroke();
-            }
-            function drawClock() {
-                const now = clock.mode === 'manual' && clock.frozenDateMs !== null ? new Date(clock.frozenDateMs) : new Date();
-                const key = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-                if (key === ctx.clockLastKey) return;
-                ctx.clockLastKey = key;
-                const c = cctx;
-                c.fillStyle = '#faf4e4';
-                c.beginPath(); c.arc(128, 128, 122, 0, 7); c.fill();
-                c.strokeStyle = '#3a3a3a';
-                c.lineWidth = 4;
-                c.beginPath(); c.arc(128, 128, 119, 0, 7); c.stroke();
-                for (let i = 0; i < 12; i++) {
-                    const a = i / 12 * Math.PI * 2 - Math.PI / 2;
-                    c.lineWidth = i % 3 === 0 ? 5 : 2.5;
-                    c.beginPath();
-                    c.moveTo(128 + Math.cos(a) * 100, 128 + Math.sin(a) * 100);
-                    c.lineTo(128 + Math.cos(a) * 112, 128 + Math.sin(a) * 112);
-                    c.stroke();
-                }
-                c.fillStyle = '#5a4a6a';
-                c.font = 'bold 26px serif';
-                c.textAlign = 'center';
-                c.textBaseline = 'middle';
-                c.fillText('12', 128, 52);
-                c.fillText('3', 204, 128);
-                c.fillText('6', 128, 204);
-                c.fillText('9', 52, 128);
-                c.fillStyle = '#b8912a';
-                c.font = '15px serif';
-                c.fillText('✦', 128, 94);
-                const h = now.getHours() % 12, m = now.getMinutes(), s = now.getSeconds();
-                clockHand((h + m / 60) / 12 * Math.PI * 2 - Math.PI / 2, 56, 6.5, '#3a3a3a');
-                clockHand((m + s / 60) / 60 * Math.PI * 2 - Math.PI / 2, 86, 4.5, '#3a3a3a');
-                clockHand(s / 60 * Math.PI * 2 - Math.PI / 2, 98, 2, '#b04a4a');
-                c.fillStyle = '#3a3a3a';
-                c.beginPath(); c.arc(128, 128, 7, 0, 7); c.fill();
-                c.fillStyle = '#b04a4a';
-                c.beginPath(); c.arc(128, 128, 3, 0, 7); c.fill();
-                clockTex.needsUpdate = true;
-            }
-            drawClock();
-            const clockG = new THREE.Group();
-            ctx.clockG = clockG;
-            clockG.position.set(-2.95, ctx.FY + 1.42, ctx.CHZ);
-            clockG.rotation.y = Math.PI / 2;
-            ctx.scene.add(clockG);
-            {
-                clockG.add(ctx.edge(new THREE.TorusGeometry(0.30, 0.042, 8, 30)));
-                const face = new THREE.Mesh(new THREE.CircleGeometry(0.285, 30), new THREE.MeshBasicMaterial({ map: clockTex }));
-                face.position.z = 0.028;
-                clockG.add(face);
-                ctx.put(colEdge(new THREE.OctahedronGeometry(0.05), 0xb8912a), 0, 0.40, 0.02, 0, 0, 0, clockG);
-                ctx.put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), -0.36, 0, 0.02, 0, 0, 0, clockG);
-                ctx.put(colEdge(new THREE.OctahedronGeometry(0.028), 0xb8912a), 0.36, 0, 0.02, 0, 0, 0, clockG);
-            }
+            // J4.30：**时钟本体**（canvas + 表盘 + 三根指针 + 三个装饰八面体）已搬入
+            // src/cabin/world/floor2/magicClock.js。
+            // ⚠️ **关键偏离**：区间从 `const clockCanvas` 那一行开始 —— 上面那 6 行 `colEdge`
+            //    是**共享工具**（被 mirror / junkBoxes / picture 三件读取），必须原地保留。
+            const clockApi = ctx.installProp(magicClock);
+            ctx.clockApi = clockApi;
 
             /* ========================================================== */
             /* 18.13 前墙挂画（镜子旁，点击编辑链接，支持 gif 动图） */
@@ -1768,7 +1709,9 @@ export function installFloor2(ctx, app) {
             //      详细判定与遗留见 `docs/实施结果/J4.27-实施结果.md`；
             //      历史留痕见 `scripts/oneoff/_j3-specs/floor2-decor-loop.SKIP.md`（`J3` 原文，不改）。
             function updateNewDecor(time, dt) {
-                drawClock();
+                // J4.30：时钟重绘（原 `drawClock();`）已搬入 world/floor2/magicClock.js（**原地 tick**）
+                // ⚠️ 参数顺序是 (dt, time) —— 本函数 `updateNewDecor(time, dt)` 的形参是反的。
+                clockApi.tick(dt, time);
                 // J3（B5）：挂画 GIF 帧重绘（每 0.1 秒）的每帧分支已搬入 world/floor2/picture.js（原地 tick）
                 // ⚠️ 参数顺序是 (dt, time) —— 原函数的形参顺序与 tick 相反。
                 pictureApi.tick(dt, time);
