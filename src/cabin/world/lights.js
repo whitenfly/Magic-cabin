@@ -69,7 +69,9 @@ ctx.lightField = lightField;
 //   ⇒ 这正是 `J4.18` 那条前置通道的目的：**灯可以整体搬走，而槽序一个字节不动**。
 //   ⚠️ 不要在这里补回这一行 —— 会与物件声明的槽位冲突（`LightField.register` 会 warn 并拒绝后来者）。
 lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', slot: 1, position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor1/magic-circle', slot: 2, position: [ctx.MC_X, 0.36, ctx.MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ctx.ptMc, yMin: 0.0, yMax: 3.04 }));
+// ★ J4.24：槽位 2（`floor1/magic-circle`）**已搬走** —— 由 `world/floor1/magicCircle.js`
+//   的 `lights()` 声明（`slot: 2` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
+//   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 lightField.register(createPointLightSource({ id: 'floor1/kotatsu', slot: 3, position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
 lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', slot: 4, position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
 lightField.register(createPointLightSource({ id: 'floor2/candle', slot: 5, position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));

@@ -21,6 +21,7 @@ import doorHangBar from './doorHangBar.js'
 import hangingLantern from './hangingLantern.js'
 import hourglass from './hourglass.js'
 import longTable from './longTable.js'
+import magicCircle from './magicCircle.js'
 import moonPlant from './moonPlant.js'
 import orrery from './orrery.js'
 import potionBottle from './potionBottle.js'
@@ -266,123 +267,11 @@ export function installFloor1(ctx, app) {
             }
 
             /* ---- 紫色魔法阵 ---- */
-            const mcG = new THREE.Group();
-            ctx.mcG = mcG;
-            mcG.position.set(ctx.MC_X, 0.015, ctx.MC_Z);
-            ctx.scene.add(mcG);
-            const mcMat = new THREE.LineBasicMaterial({ color: 0x8a4fd6, transparent: true, opacity: 0.55 });
-            ctx.mcMat = mcMat;
-            const mcLoop = (pts, parent, mat) => { const l = new THREE.LineLoop(ctx.geo(pts), mat || mcMat); parent.add(l); return l; };
-            ctx.mcLoop = mcLoop;
-            const mcBase = new THREE.Group();
-            ctx.mcBase = mcBase;
-            mcG.add(mcBase);
-            {
-                const ring = (r, seg) => { const p = []; for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
-                const poly = (r, n, rot) => { const p = []; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2 + rot; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
-                const sc = (cx, cz, r) => { const p = []; for (let i = 0; i <= 10; i++) { const a = i / 10 * Math.PI * 2; p.push([cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r]); } return p; };
-                mcLoop(ring(0.72, 48), mcBase);
-                mcLoop(ring(0.68, 48), mcBase);
-                mcLoop(ring(0.55, 44), mcBase);
-                mcLoop(ring(0.36, 40), mcBase);
-                mcLoop(ring(0.14, 24), mcBase);
-                mcLoop(poly(0.55, 6, 0), mcBase);
-                mcLoop(poly(0.50, 3, -Math.PI / 2), mcBase);
-                mcLoop(poly(0.50, 3, Math.PI / 2), mcBase);
-                for (let i = 0; i < 12; i++) {
-                    const a = i / 12 * Math.PI * 2;
-                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14], [Math.cos(a) * 0.36, 0, Math.sin(a) * 0.36]]), mcMat));
-                }
-                for (let i = 0; i < 24; i++) {
-                    const a = i / 24 * Math.PI * 2;
-                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a - 0.02) * 0.68, 0, Math.sin(a - 0.02) * 0.68], [Math.cos(a + 0.02) * 0.68, 0, Math.sin(a + 0.02) * 0.68]]), mcMat));
-                    mcBase.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.68, 0, Math.sin(a) * 0.68], [Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72]]), mcMat));
-                }
-                for (let i = 0; i < 6; i++) {
-                    const a = i / 6 * Math.PI * 2;
-                    mcLoop(sc(Math.cos(a) * 0.62, Math.sin(a) * 0.62, 0.045), mcBase);
-                }
-            }
-            const mcFloats = [];
-            ctx.mcFloats = mcFloats;
-            {
-                const mkMat = c => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0 });
-                const ring = (r, seg) => { const p = []; for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
-                const poly = (r, n, rot) => { const p = []; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2 + rot; p.push([Math.cos(a) * r, 0, Math.sin(a) * r]); } return p; };
-                {
-                    const g = new THREE.Group(); const m = mkMat(0xd84fd0);
-                    mcLoop(ring(0.30, 36), g, m);
-                    mcLoop(poly(0.27, 3, -Math.PI / 2), g, m);
-                    mcLoop(ring(0.10, 20), g, m);
-                    mcFloats.push({ g, m, ty: 0.80, spd: 1.5, ph: 0 });
-                }
-                {
-                    const g = new THREE.Group(); const m = mkMat(0x4f9bd8);
-                    mcLoop(poly(0.24, 6, 0), g, m);
-                    mcLoop(poly(0.16, 6, Math.PI / 6), g, m);
-                    for (let i = 0; i < 6; i++) {
-                        const a = i / 6 * Math.PI * 2;
-                        g.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16], [Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]]), m));
-                    }
-                    mcFloats.push({ g, m, ty: 1.25, spd: -1.1, ph: 1 });
-                }
-                {
-                    const g = new THREE.Group(); const m = mkMat(0xd8a84f);
-                    mcLoop(ring(0.26, 32), g, m);
-                    mcLoop(ring(0.18, 28), g, m);
-                    for (let i = 0; i < 8; i++) {
-                        const a = i / 8 * Math.PI * 2;
-                        g.add(new THREE.Line(ctx.geo([[Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08], [Math.cos(a) * 0.26, 0, Math.sin(a) * 0.26]]), m));
-                    }
-                    mcFloats.push({ g, m, ty: 1.70, spd: 1.9, ph: 2 });
-                }
-                {
-                    const g = new THREE.Group(); const m = mkMat(0x4fd88a);
-                    const star = []; for (let i = 0; i <= 5; i++) { const a = (i * 2 / 5) * Math.PI * 2 - Math.PI / 2; star.push([Math.cos(a) * 0.26, 0, Math.sin(a) * 0.26]); }
-                    mcLoop(star, g, m);
-                    mcLoop(ring(0.26, 32), g, m);
-                    mcLoop(ring(0.10, 20), g, m);
-                    mcFloats.push({ g, m, ty: 2.10, spd: -1.6, ph: 3 });
-                }
-                {
-                    const g = new THREE.Group(); const m = mkMat(0x4fd8d8);
-                    mcLoop(poly(0.22, 4, 0), g, m);
-                    mcLoop(poly(0.22, 4, Math.PI / 4), g, m);
-                    mcLoop(ring(0.28, 32), g, m);
-                    mcFloats.push({ g, m, ty: 2.45, spd: 1.2, ph: 4 });
-                }
-                {
-                    const g = new THREE.Group(); const m = mkMat(0x9b4fd8);
-                    mcLoop(ring(0.34, 36), g, m);
-                    mcLoop(poly(0.30, 3, Math.PI / 2), g, m);
-                    mcLoop(ring(0.20, 28), g, m);
-                    mcFloats.push({ g, m, ty: 0.48, spd: 2.2, ph: 5 });
-                }
-                for (const f of mcFloats) { f.g.visible = false; mcG.add(f.g); }
-            }
-            const mcParts = [];
-            ctx.mcParts = mcParts;
-            {
-                const cols = [0xd84fd0, 0x4f9bd8, 0xd8a84f, 0x8a4fd6, 0x4fd88a, 0x4fd8d8, 0x9b4fd8];
-                for (let i = 0; i < 24; i++) {
-                    const m = new THREE.LineBasicMaterial({ color: cols[i % cols.length] });
-                    const p = ctx.edge(new THREE.OctahedronGeometry(0.016), 1, m);
-                    p.visible = false;
-                    ctx.scene.add(p);
-                    mcParts.push({
-                        p, a: floor1Rng() * Math.PI * 2, r: 0.15 + floor1Rng() * 0.55,
-                        ph: floor1Rng(), spd: 0.6 + floor1Rng() * 0.8
-                    });
-                }
-            }
-            const mcHit = new THREE.Mesh(new THREE.CircleGeometry(0.75, 28), ctx.HITMAT);
-            ctx.mcHit = mcHit;
-            mcHit.rotation.x = -Math.PI / 2;
-            mcHit.position.y = 0.002;
-            mcG.add(mcHit);
-            ctx.mcRun = 0;
-            ctx.regMagic(mcG, () => { if (ctx.mcRun <= 0) ctx.mcRun = 8.0; });
-            mcG.userData.sfx = 'magic';
+            // J4.24：几何 + 交互 + 每帧分支 + **光源槽位 2** 已搬入 src/cabin/world/floor1/magicCircle.js。
+            // ★ J4.18 契约的第三个真实用户（`J3` 记的那条"重注册 ⇒ 槽位从 2 变成 8（排末尾）"
+            //   的走不通的路，就是被 `slot: 2` 解决的）。
+            const magicCircleApi = ctx.installProp(magicCircle);
+            ctx.magicCircleApi = magicCircleApi;
 
             /* ---- 12.9f 长餐桌 ---- */
             // J3（B4）：几何已搬入 src/cabin/world/floor1/longTable.js，此处只留装配调用。
