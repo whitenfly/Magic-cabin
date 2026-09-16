@@ -180,3 +180,20 @@ export function installOutdoorYardStatic(ctx, app) {
             })();
 
 }
+
+/**
+ * 每帧：花材质 = 基色 × 环境光。
+ *
+ * `J4.14`（缺口「每帧分支归位」）从 `systems/weather/WeatherSystem.js` 搬回这里 ——
+ * 花是**世界**侧的物件，`ctx.flowerMats` 就在本文件里创建。原实现是天气模块里的一行：
+ * `for (const f of ctx.flowerMats) f.mat.color.copy(f.base).multiply(_amb)`。
+ *
+ * **输入**：`ctx._amb`（天气每帧写入的环境光色）。
+ * **约束**：登记顺序必须与搬迁前一致 —— 紧接 `world/signMaterials` 之后
+ * （见 `app/scene/FrameBody.js`）。
+ *
+ * @param {object} ctx 段间通信载体
+ */
+export function updateFlowerMaterials(ctx) {
+  for (const f of ctx.flowerMats) f.mat.color.copy(f.base).multiply(ctx._amb)
+}

@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-16",
   "totals": {
     "files": 98,
-    "lines": 17415
+    "lines": 17542
   },
-  "combined": "dfa544c5fda324c4ffd9cd9b1e5cadb3b124fb6adc47c99e4741c0e3032c4e79",
+  "combined": "9593b66ad1ab856c3bd751a397581adfdedc21df54466ffe31930d04c78de262",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,7 +20,7 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "bfccd3989332729e",
+    "app/scene/FrameBody.js": "9b1912f1e939cf42",
     "app/scene/installCabin.js": "0afec776b0558568",
     "app/scene/PropInstaller.js": "578d8aebcdf0e2ab",
     "app/scene/SceneCore.js": "908bb049d736ec30",
@@ -60,7 +60,7 @@
     "systems/ui/MenuPanel.js": "710248c601e0ed86",
     "systems/ui/SettingsForm.js": "c6389a80b73924a6",
     "systems/weather/environment.js": "65393605ebd7501d",
-    "systems/weather/WeatherSystem.js": "bbaec8e48568e665",
+    "systems/weather/WeatherSystem.js": "bb3c521a7b20217a",
     "world/floor1/bookPile.js": "a9c1d2e6c31fdae6",
     "world/floor1/broom.js": "2c4dade66bf52a51",
     "world/floor1/cauldron.js": "30c7bc2a2dc2b4e9",
@@ -100,12 +100,12 @@
     "world/floor2/tissueBox.js": "fd230fee74fa82d5",
     "world/floor2/wardrobe.js": "7aa910d3d37ce2ba",
     "world/floor2/witchHat.js": "0e4ec7173d43aba6",
-    "world/house/shell.js": "3d33c87be84bdd2f",
+    "world/house/shell.js": "2fc521071b549c56",
     "world/layout.js": "2f7b08423450cd82",
     "world/lights.js": "d2f222aec4ff574f",
-    "world/outdoor/fireflies.js": "ace33d717b46b933",
+    "world/outdoor/fireflies.js": "22e28e002f214d5d",
     "world/outdoor/yardSpot.js": "37e6e8cf4ff2fd2d",
-    "world/outdoor/yardStatic.js": "c1516e78611878c4",
+    "world/outdoor/yardStatic.js": "b66e7901e0962d72",
     "world/README.md": "4c6e852269c5636b"
   }
 }
