@@ -14,21 +14,27 @@
  * | `regMagic(cauldronG, () => { stirRun = 4.5; })` | `interactables()`（`label` 语义化 + `mode: 'both'`，消解风险 `R1`） |
  * | `tickOnce()` 里那 40 行 | `update()`，由 `tickOnce()` **原位置**调用 `cauldronApi.tick(dt, time)` |
  *
- * ## ★ 为什么含"火"却能搬：光源槽位没有被碰
+ * ## ★ 为什么含"火"却能搬：光源槽位没有被碰（`J3` 时代的情形）
  *
  * `lightField.register(…)` 的注册顺序 = shader 闪烁相位 `float(i)` 的槽位，
- * 而坩埚那一盏（`floor1/cauldron-fire`，`monolith` 里注册的第 2 个 = 槽位 1）**不在本文件里**，
- * 也不在本次搬迁的区间里 —— 本件一个字节都没动它。它之所以不受影响，是因为：
+ * 而坩埚那一盏（`floor1/cauldron-fire`，`monolith` 里注册的第 2 个 = 槽位 1）**当时不在本文件里**，
+ * 也不在 `J3` 那次搬迁的区间里 —— 那一次一个字节都没动它。它之所以不受影响，是因为：
  *   · 它的 `strength` 是**常量 `0.92`**（不是 `() => ptXxx` 那种闭包），压根不读本件的状态；
  *   · `tickOnce()` 末尾那 5 行「室内点光源」只读 `lanternLit / kotatsuOn / mcRun / cbRun / plantRun`，
  *     **没有一行读 `stirRun`**（那一段的注释里出现的"坩埚"只是标题）。
  * 于是搬走本件后：注册顺序不变（仍 8 盏 / 8 个槽位）、强度序列不变 ⇒ 画面逐字节不变。
+ *
+ * ★ **`J4.29` 补记：那一盏现在**也**住在本文件里了**（见下面的 `lights()`）——
+ * 它当年能"搬走物件却把灯留下"，是因为**常量强度**让它不需要 `slot` 契约；
+ * 其余六件（槽 0/2/3/4/5/6/7）都要靠 `J4.18` 的 `slot` 才能整体搬家。
+ * ⇒「一楼的点光源全部由各自的物件声明」这条边界由本任务闭合。
  *
  * 火焰本身用的是共享工具 `makeWavyFlame` / `updateWavyFlame`（`ctx` 取，不复制实现）。
  * `floor1Rng()` 在原位置仅被调用 16 次（8 个气泡 × `br`/`ba`），次数与顺序都没变。
  */
 import * as THREE from 'three'
 import { defineProp } from '../../app/defineProp.js'
+import { createPointLightSource } from '../../core/lighting/PointLightSource.js'
 
 export default defineProp({
   id: 'floor1/cauldron',
@@ -149,6 +155,28 @@ export default defineProp({
     radius: 1.8,
     onActivate: () => { s.stirRun = 4.5; },
   }],
+
+  /**
+   * ★ 光源**槽位 1** —— `J4.29` 把**唯一还留在 `world/lights.js` 的一楼槽位**搬进它的物件。
+   *
+   * 它与其余五件（槽 0/2/3/4/7）不同：`strength` 是**常量 `0.92`** —— 既不读任何物件状态、
+   * 也**不需要 `slot` 契约**来防"装配时机改变槽序"（那正是 `J4.18` 要解决的问题）。
+   * `J3` 当年在 `floor1-magic-circle.SKIP.md` 的槽位表里给它写的是「（大魔女坩埚）无阻塞行 ⇒ **已搬走**」
+   * —— 那句话指的是**本物件**已升格，而**它的光源注册一直留在 `lights.js`**（一处漏网）。
+   *
+   * 收进本文件之后，`world/lights.js` **只剩二楼的两盏**（槽 5 `candle` / 槽 6 `magic-veil`）
+   * ⇒ 「**一楼的点光源全部由各自的物件声明**」这条边界到此**完整闭合**。
+   *
+   * 位置 / 颜色 / 半径 / 强度 / `yMin` / `yMax` 与 `lights.js` 里那一行**逐字相同**。
+   */
+  lights: (s, { L }) => [
+    createPointLightSource({
+      id: 'floor1/cauldron-fire', slot: 1,
+      position: [L.CCX, 1.14, L.CCZ], color: 0x6fa8ff, radius: 5.6,
+      strength: 0.92,
+      yMin: 0.0, yMax: 3.04,
+    }),
+  ],
 
   /** 原 `tickOnce()` 里 `/* ---- 大魔女坩埚 ---- *\/` 那段分支，逐字搬运 */
   update(dt, time, s, { parts, L, updateWavyFlame }) {

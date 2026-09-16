@@ -68,17 +68,21 @@ ctx.lightField = lightField;
 //   强度闭包读的是**物件自己的 state**（`() => s.pt`），`ctx.ptLantern` 这个中间量已消失。
 //   ⇒ 这正是 `J4.18` 那条前置通道的目的：**灯可以整体搬走，而槽序一个字节不动**。
 //   ⚠️ 不要在这里补回这一行 —— 会与物件声明的槽位冲突（`LightField.register` 会 warn 并拒绝后来者）。
-lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', slot: 1, position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
+// ★ J4.29：槽位 1（`floor1/cauldron-fire`）**也已搬走** —— 由 `world/floor1/cauldron.js`
+//   的 `lights()` 声明（`slot: 1` + 同样的位置/颜色/半径/强度/yMin/yMax；它的强度是**常量 0.92**）。
+//   ⚠️ 它是**最后离开本文件的一楼槽位**：`J4.22`/`J4.23`/`J4.24`/`J4.25`/`J4.28` 依次搬走了
+//   槽 0/7/2/4/3，本任务收尾槽 1 ⇒ 「**一楼的点光源全部由各自的物件声明**」到此**完整闭合**。
+//   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // ★ J4.24：槽位 2（`floor1/magic-circle`）**已搬走** —— 由 `world/floor1/magicCircle.js`
 //   的 `lights()` 声明（`slot: 2` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // ★ J4.28：槽位 3（`floor1/kotatsu`）**已搬走** —— 由 `world/floor1/kotatsu.js` 的 `lights()` 声明
 //   （`slot: 3` + 同样的位置/颜色/半径/yMin/yMax + **逐字照搬**的强度表达式
 //   `s.pt * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2)))`）。
-//   ⇒ 一楼的点光源已全部搬进各自的物件（槽 0/2/3/4/7，各自文件里声明 `slot` + `s.pt`）。
-//     ⚠️ 本文件现在剩 **3** 行，不是 2 行 —— 槽 1 `floor1/cauldron-fire` 的 `strength` 是
-//     **常量 `0.92`**（既不读物件状态、也不在"6 件含光源物件"清单里 ⇒ **从未搬过注册**）。
-//     本注释初稿曾把它漏写成"只剩二楼的两盏"，已勘误（见 `J4.28-实施结果.md` §0/§5.3）。
+//   ⇒ 一楼的点光源已全部搬进各自的物件（槽 0/1/2/3/4/7，各自文件里声明 `slot`）。
+//     ⚠️ 本文件现在剩 **2** 行 —— 都是**二楼**的：槽 5 `floor2/candle` · 槽 6 `floor2/magic-veil`。
+//     （`J4.28` 收尾自检曾把这一段误写成"只剩二楼两盏"而当时其实是 3 行，漏了槽 1；
+//      勘误见 `J4.28-实施结果.md` §0/§5.3，`J4.29` 把它补搬之后那句话才真正成立。）
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // ★ J4.25：槽位 4（`floor1/crystal-ball`）**已搬走** —— 由 `world/floor1/crystalBall.js`
 //   的 `lights()` 声明（`slot: 4` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
