@@ -582,23 +582,6 @@ export function installWeatherSystem(ctx, app) {
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
             ctx.testCam = null;
             ctx.ptLantern = 1, ctx.ptKot = 1, ctx.ptMc = 0, ctx.ptCb = 0, ctx.ptPlant = 0;
-            // J2.3：室内点光源改为**注册式**（原实现是 tickOnce() 里 8 行硬编码的 PP[i]/PC[i]/PG[i]）。
-            // ★ 注册顺序 = 槽位顺序：shader 的闪烁相位含 float(i)，顺序一换画面就变 ——
-            //   所以这 8 个的次序必须与原 PP[0]…PP[7] **完全一致**，位置/颜色/半径/yMin/yMax 也逐字照搬。
-            //   位置来自 cabin/world/layout.js（不变量 N9），强度用闭包读状态量，于是 core/ 里
-            //   不出现任何具体物件的名字（不变量 N1）。
-            const lightField = createLightField({ fillMaterial: ctx.FILL, warn: (m) => console.warn(m) });
-            ctx.lightField = lightField;
-            lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [ctx.MTX, 2.52, ctx.MTZ], color: 0xffb066, radius: 4.6, strength: () => ctx.ptLantern, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [ctx.MC_X, 0.36, ctx.MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ctx.ptMc, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
-            lightField.register(createPointLightSource({ id: 'floor2/candle', position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
-            lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.magicP, yMin: 3.02, yMax: 6.9 }));
-            lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [ctx.PLX, 0.48, ctx.PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ctx.ptPlant, yMin: 0.0, yMax: 3.04 }));
-            // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
-            for (const src of lightField.sources) registry.registerLight(src);
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
 }

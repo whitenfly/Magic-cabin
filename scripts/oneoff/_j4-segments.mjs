@@ -74,6 +74,12 @@ export const SEGMENTS = [
   { id: 'core3d', hint: 139, module: 'app/scene/SceneCore.js', fn: 'installSceneCore', note: 'scene / camera / renderer / 材质 / 几何 DSL / L' },
   // ── 世界（`world/`）──────────────────────────────────────────────────────
   {
+    // ★ J4.10（缺口 C6）：8 个点光源的注册从 `weather` 段移回"光照"的归属 ——
+    //   原段切片按行切，把它切进了天气模块（光照与天气无关）。
+    id: 'lights', hint: 4924, module: 'world/lights.js', fn: 'installWorldLights',
+    note: '室内点光源 8 槽位注册（★ 槽序 = 注册顺序；shader 相位含 float(i)）',
+  },
+  {
     id: 'houseShell', hint: 184, module: 'world/house/shell.js', fn: 'installHouseShell',
     note: '墙 / 屋顶 / 门窗 / 楼梯 / 路牌', bind: rng('runtimeRng'),
   },

@@ -31,6 +31,7 @@
 import { clock } from '../clock.js'
 import { installEnv } from './Env.js'
 import { installSceneCore } from './SceneCore.js'
+import { installWorldLights } from '../../world/lights.js'
 import { installPropTools } from '../../core/geometry/propTools.js'
 import { installPropInstaller } from './PropInstaller.js'
 import { installHouseShell } from '../../world/house/shell.js'
@@ -62,6 +63,7 @@ export function installCabin(app) {
   installEnv(ctx, app)
   installAudio(ctx, app)
   installSceneCore(ctx, app)
+  installWorldLights(ctx, app)
   // ── 段 04–07：房屋外壳 / 室外（静态陈设 + 萤火虫两件） / 陈设工具 / 物件装配器 ──
   installHouseShell(ctx, app)
   installOutdoorYardStatic(ctx, app)
