@@ -139,6 +139,12 @@ export function createLayout() {
   const DESK_HG_X = 2.15
   /** 二楼书桌桌面沙漏（18.4）中心 z（floor2/desk-hourglass） */
   const DESK_HG_Z = -2.50
+  /** 书桌椅（18.4）中心 x（floor2/desk-chair；原分区行内常量 `2.6`，也是交互锚点的来源） */
+  const CHAIR_X = 2.6
+  /** 书桌椅（18.4）**推入**时的 z（floor2/desk-chair；原 `const CHAIR_IN = -3.20`） */
+  const CHAIR_IN = -3.20
+  /** 书桌椅（18.4）**拉开**时的 z（floor2/desk-chair；原 `const CHAIR_OUT = -3.60`） */
+  const CHAIR_OUT = -3.60
   /** 二楼前墙挂画（18.13）中心（原 `picG.position.set(1.45, FY + 1.55, 3.82)` 拆出，y 是相对二楼楼面的高度）（floor2/picture） */
   const PIC_POS = { x: 1.45, y: 1.55, z: 3.82 }
   /** 二楼书桌桌面魔方（18.4）的静止位（组原点）（floor2/rubik） */
@@ -245,6 +251,8 @@ export function createLayout() {
     SHELF_X, SHELF_Z,
     // J4.20 搬迁新增（滑轮置物台 —— 碰撞表也读它的 `cartG` 位置）
     CART_POS, CART_DIR, CART_DIST,
+    // J4.21 搬迁新增（书桌椅 —— 碰撞表也读它的 `chairG` 位置）
+    CHAIR_X, CHAIR_IN, CHAIR_OUT,
     // J3 搬迁新增
     CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
   }
