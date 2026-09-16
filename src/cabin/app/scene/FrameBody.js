@@ -517,15 +517,10 @@ for (const f of ctx.candleWavy) {
   })
 
   // L548–L548（1 行）
+  // J4.19：左墙书架已升格为 `world/floor1/bookshelf.js`，那段 `for (const b of shelfBooks)` 搬进它的
+  //   `update()`。这里**在原位置**调用（登记顺序 = 原执行顺序，帧顺序一个字节没变）。
   F('frame/36', (dt, time) => {
-for (const b of ctx.shelfBooks) {
-                    const u = b.userData;
-                    const target = u.out ? 1 : 0;
-                    u.vel += (target - u.cur) * 0.03;
-                    u.vel *= 0.85;
-                    u.cur += u.vel;
-                    b.position.x = u.bx + 0.11 * u.cur;
-                }
+ctx.bookshelfApi.tick(dt, time);
   })
 
   // L558–L558（1 行）
