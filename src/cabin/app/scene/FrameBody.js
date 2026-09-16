@@ -130,16 +130,10 @@ ctx.stoolsApi.tick(dt, time);
   })
 
   // L222–L222（1 行）
+  // ★ J4.33：长餐桌旁的 5 把椅子已升格为 `world/floor1/diningChairs.js` —— 本段搬进物件的
+  //   `update()`。这里**在原位置**调用（登记顺序 = 原执行顺序，帧顺序一个字节没变）。
   F('frame/13', (dt, time) => {
-for (const c of ctx.chairs) {
-                    const u = c.userData;
-                    const target = u.open ? 0.45 : 0;
-                    u.vel += (target - u.cur) * 0.02;
-                    u.vel *= 0.88;
-                    u.cur += u.vel;
-                    c.position.x = u.bx + u.ax * u.cur;
-                    c.position.z = u.bz + u.az * u.cur;
-                }
+ctx.diningChairsApi.tick(dt, time);
   })
 
   // L232–L232（1 行）

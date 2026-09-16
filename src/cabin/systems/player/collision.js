@@ -45,7 +45,9 @@ export function installCollision(ctx, app) {
                 // （同一个 `chairG` 实例；椅子沿 z 平移，碰撞盒必须跟着走，故这一行不可删）。
                 { g: ctx.deskChairApi.parts.body, hx: 0.24, hz: 0.24, top: ctx.FY + 0.49, bot: ctx.FY },
                 { g: ctx.stoolG, hx: 0.17, hz: 0.15, top: ctx.FY + 0.33, bot: ctx.FY },
-                ...ctx.chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))
+                // J4.33：长餐桌旁的 5 把椅子已升格为 world/floor1/diningChairs.js —— 移动平台改读
+                // **装配记录里的部件**（与上面三处同一处置）。**展开方式与数值一字未改**。
+                ...ctx.diningChairsApi.parts.chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))
             ];
             ctx.movingPlatforms = movingPlatforms;
             ctx.activePlatforms = platformBoxes;
