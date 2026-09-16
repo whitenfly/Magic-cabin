@@ -21,6 +21,7 @@ import doorHangBar from './doorHangBar.js'
 import hangingLantern from './hangingLantern.js'
 import hourglass from './hourglass.js'
 import longTable from './longTable.js'
+import moonPlant from './moonPlant.js'
 import orrery from './orrery.js'
 import potionBottle from './potionBottle.js'
 import rugUnderTable from './rugUnderTable.js'
@@ -574,38 +575,11 @@ export function installFloor1(ctx, app) {
             orbStandG.userData.sfx = 'magic';
 
             /* ---- 月光魔法盆栽【门侧前右墙角】 ---- */
-            const plantG = new THREE.Group();
-            ctx.plantG = plantG;
-            plantG.position.set(ctx.PLX, 0, ctx.PLZ);
-            ctx.scene.add(plantG);
-            const potMat = ctx.LITMAT(0xa9744f);
-            ctx.potMat = potMat;
-            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.14, 0.10, 0.20, 10), potMat), 0, 0.10, 0, 0, 0, 0, plantG);
-            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 10), potMat), 0, 0.215, 0, 0, 0, 0, plantG);
-            ctx.put(ctx.solid(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 10),
-                ctx.LITMAT(0x5a4632)), 0, 0.228, 0, 0, 0, 0, plantG);
-            const plantStems = [], plantBerries = [];
-            ctx.plantStems = plantStems; ctx.plantBerries = plantBerries;
-            for (let i = 0; i < 5; i++) {
-                const a = i * Math.PI * 2 / 5 + 0.4;
-                const tipX = Math.cos(a) * 0.17, tipZ = Math.sin(a) * 0.17;
-                const stem = new THREE.Group();
-                stem.position.set(0, 0.23, 0);
-                ctx.put(ctx.line([[0, 0, 0], [tipX * 0.35, 0.13, tipZ * 0.35], [tipX * 0.8, 0.25, tipZ * 0.8], [tipX, 0.35, tipZ]]), 0, 0, 0, 0, 0, 0, stem);
-                const lp = [];
-                for (let k = 0; k <= 12; k++) { const t = k / 12 * Math.PI * 2; lp.push([Math.cos(t) * 0.045, Math.sin(t) * 0.035, 0]); }
-                ctx.put(new THREE.LineLoop(ctx.geo(lp), ctx.MAT), tipX * 0.45, 0.16, tipZ * 0.45, 0, a, 0, stem);
-                const bm = new THREE.MeshBasicMaterial({
-                    color: i % 2 ? 0x9b6fd8 : 0x4fb0d8, transparent: true, opacity: 0.85
-                });
-                const berry = ctx.solid(new THREE.SphereGeometry(0.026, 8, 6), bm);
-                ctx.put(berry, tipX, 0.37, tipZ, 0, 0, 0, stem);
-                plantG.add(stem);
-                plantStems.push({ stem, ph: i * 1.3 });
-                plantBerries.push({ obj: berry, m: bm, ph: i });
-            }
-            ctx.plantRun = 0;
-            ctx.regMagic(plantG, () => { ctx.plantRun = 4.0; });
+            // J4.23：几何 + 交互 + 每帧分支 + **光源槽位 7** 已搬入 src/cabin/world/floor1/moonPlant.js。
+            // ★ J4.18 契约的第二个真实用户（`J3` 那条"提前注册 ⇒ 盆栽变槽位 0、其余 7 盏相位全移位"
+            //   的走不通的路，就是被 `slot: 7` 解决的）。
+            const moonPlantApi = ctx.installProp(moonPlant);
+            ctx.moonPlantApi = moonPlantApi;
 
             /* ---- 12.11b 滑轮置物台【魔法餐桌另一侧】：可滑动 + 墨水瓶羽毛笔 + 纸堆 ---- */
             // J4.20：几何 + 4 条交互 + **四段连续的每帧分支**已搬入 src/cabin/world/floor1/cartShelf.js。

@@ -237,19 +237,11 @@ ctx.hangingLanternApi.tick(dt, time);
   })
 
   // L313–L313（1 行）
+  // ★ J4.23：月光魔法盆栽已升格为 `world/floor1/moonPlant.js` —— 本段几何分支与 `frame/96`
+  //   的强度平滑并进同一个 `update`（一件物件只有一个 update），登记位置取本段（早）。
+  //   等价性论证见该模块文件头「★ 帧顺序」。`frame/96` 的任务已删除。
   F('frame/26', (dt, time) => {
-{
-                    if (ctx.plantRun > 0) ctx.plantRun -= dt;
-                    const act = ctx.plantRun > 0;
-                    for (const s of ctx.plantStems) {
-                        s.stem.rotation.z = Math.sin(time * 1.2 + s.ph) * 0.05 + (act ? Math.sin(time * 5 + s.ph) * 0.06 : 0);
-                        s.stem.rotation.x = Math.cos(time * 0.9 + s.ph) * 0.04;
-                    }
-                    for (const b of ctx.plantBerries) {
-                        b.obj.scale.setScalar(act ? 1 + 0.25 * Math.sin(time * 7 + b.ph) : 1);
-                        b.m.opacity = act ? 1 : 0.85;
-                    }
-                }
+ctx.moonPlantApi.tick(dt, time);
   })
 
   // L327–L327（1 行）
@@ -896,10 +888,10 @@ ctx.ptMc += ((ctx.mcRun > 0 ? 1 : 0) - ctx.ptMc) * 0.055;
 ctx.ptCb += ((ctx.cbRun > 0 ? 1 : 0) - ctx.ptCb) * 0.055;
   })
 
-  // L891–L891（1 行）
-  F('frame/96', (dt, time) => {
-ctx.ptPlant += ((ctx.plantRun > 0 ? 1 : 0) - ctx.ptPlant) * 0.055;
-  })
+  // ★ J4.23：原 `frame/96`（`ctx.ptPlant += …`）已并入月光魔法盆栽物件的 `update()`
+  //   —— 与 `frame/26` 的几何分支合并在那里执行（提前，等价性论证见
+  //   `world/floor1/moonPlant.js` 文件头「★ 帧顺序」）。槽位 7 的强度改由
+  //   `lights()` 的 `strength: () => s.pt` 惰性读取。
 
   // L894–L894（1 行）
   F('frame/97', (dt, time) => {

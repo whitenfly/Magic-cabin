@@ -73,8 +73,10 @@ lightField.register(createPointLightSource({ id: 'floor1/magic-circle', slot: 2,
 lightField.register(createPointLightSource({ id: 'floor1/kotatsu', slot: 3, position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
 lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', slot: 4, position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
 lightField.register(createPointLightSource({ id: 'floor2/candle', slot: 5, position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
+// ★ J4.23：槽位 7（`floor1/moon-plant`）**已搬走** —— 同样由 `world/floor1/moonPlant.js`
+//   的 `lights()` 声明（`slot: 7` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
+//   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 lightField.register(createPointLightSource({ id: 'floor2/magic-veil', slot: 6, position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.magicP, yMin: 3.02, yMax: 6.9 }));
-lightField.register(createPointLightSource({ id: 'floor1/moon-plant', slot: 7, position: [ctx.PLX, 0.48, ctx.PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ctx.ptPlant, yMin: 0.0, yMax: 3.04 }));
 // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
 // `if (src)`：注销会**留洞**（`unregister` 用 delete 而非 splice，见 LightField.js），洞要跳过
 for (const src of lightField.sources) if (src) registry.registerLight(src);
