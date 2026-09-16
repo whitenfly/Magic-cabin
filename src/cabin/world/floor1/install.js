@@ -34,6 +34,7 @@ import stools from './stools.js'
 import stovePlatform from './stovePlatform.js'
 import tableware from './tableware.js'
 import tarot from './tarot.js'
+import teapot from './teapot.js'
 import { scene } from '../../app/rng.js'
 import { createCupFactory } from '../../props/cup.js'
 
@@ -307,68 +308,16 @@ export function installFloor1(ctx, app) {
             cupFactory.makeCup(ctx.DT_X, ctx.DT_Z + 0.20);
 
             /* ---- 提梁茶壶 ---- */
-            const POT_BX = ctx.DT_X + 0.42, POT_BZ = ctx.DT_Z + 0.02;
-            ctx.POT_BX = POT_BX; ctx.POT_BZ = POT_BZ;
-            const CUP_T = cups[2];
-            ctx.CUP_T = CUP_T;
-            const POT_RY = Math.atan2(CUP_T.position.x - POT_BX, CUP_T.position.z - POT_BZ);
-            ctx.POT_RY = POT_RY;
-            const POT_TILT = 0.65;
-            ctx.POT_TILT = POT_TILT;
-            const POT_TIP_FWD = 0.20 * Math.cos(POT_TILT) + 0.175 * Math.sin(POT_TILT);
-            ctx.POT_TIP_FWD = POT_TIP_FWD;
-            const teapotPos = new THREE.Group();
-            ctx.teapotPos = teapotPos;
-            teapotPos.position.set(POT_BX, ctx.DTOP, POT_BZ);
-            teapotPos.rotation.y = POT_RY;
-            ctx.scene.add(teapotPos);
-            const teapot = new THREE.Group();
-            ctx.teapot = teapot;
-            teapotPos.add(teapot);
-            ctx.potHalo, ctx.potHaloMat;
-            {
-                const body = ctx.put(ctx.edge(new THREE.SphereGeometry(0.105, 14, 11)), 0, 0.10, 0, 0, 0, 0, teapot);
-                body.scale.set(1, 0.82, 1);
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.07, 0.095, 0.03, 12)), 0, 0.015, 0, 0, 0, 0, teapot);
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.068, 0.03, 12)), 0, 0.185, 0, 0, 0, 0, teapot);
-                ctx.put(ctx.edge(new THREE.SphereGeometry(0.02, 8, 6)), 0, 0.21, 0, 0, 0, 0, teapot);
-                const arcPts = [];
-                for (let i = 0; i <= 10; i++) {
-                    const a = (20 + i * 14) * ctx.D2R;
-                    arcPts.push([Math.cos(a) * 0.115, 0.115 + Math.sin(a) * 0.115, 0]);
-                }
-                for (let i = 0; i < arcPts.length - 1; i++)
-                    ctx.logBetween(arcPts[i], arcPts[i + 1], 0.011, teapot);
-                ctx.logBetween([0, 0.07, 0.085], [0, 0.13, 0.145], 0.017, teapot);
-                ctx.logBetween([0, 0.13, 0.145], [0, 0.175, 0.20], 0.013, teapot);
-                ctx.potHaloMat = new THREE.MeshBasicMaterial({
-                    color: 0xbfe3ff, transparent: true, opacity: 0.12, depthWrite: false
-                });
-                ctx.potHalo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), ctx.potHaloMat);
-                ctx.potHalo.userData.noHit = true;
-                ctx.put(ctx.potHalo, 0, 0.10, 0, 0, 0, 0, teapot);
-                ctx.potHalo.visible = false;
-            }
-            const potSpoutTip = new THREE.Object3D();
-            ctx.potSpoutTip = potSpoutTip;
-            potSpoutTip.position.set(0, 0.175, 0.20);
-            teapot.add(potSpoutTip);
-            const potStreamMat = new THREE.LineBasicMaterial({ color: 0x7db8dd });
-            ctx.potStreamMat = potStreamMat;
-            const potStreamGeom = new THREE.BufferGeometry();
-            ctx.potStreamGeom = potStreamGeom;
-            potStreamGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(10 * 3), 3));
-            const potStream = new THREE.Line(potStreamGeom, potStreamMat);
-            ctx.potStream = potStream;
-            potStream.frustumCulled = false;
-            potStream.visible = false;
-            ctx.scene.add(potStream);
-            const POT_T = 3.6;
-            ctx.POT_T = POT_T;
-            ctx.potRun = 0;
-            const _tv = new THREE.Vector3();
-            ctx._tv = _tv;
-            ctx.regMagic(teapotPos, () => { ctx.potRun = POT_T; });
+            // J4.34：几何 + 交互 + 每帧分支已搬入 src/cabin/world/floor1/teapot.js。
+            // ★ 它是 `floor1/teapot.SKIP.md` 那条前置的**兑现**：`makeCup` 共享工厂由 `J4.26` 抽出，
+            //   本件经装配**选项**拿到 `cupFactory`（借其中一只茶杯当倒水目标：`cups[2]`）。
+            // ⚠️ 上面那 3 次 `cupFactory.makeCup(...)` **留在本文件** —— 它们是**长餐桌**上的陈设
+            //    （坐标取自 `DT_X/DT_Z`），不属于茶壶。
+            // ⚠️ 原来的 `const _tv = new THREE.Vector3(); ctx._tv = _tv;` 两行**已删除** ——
+            //    它曾是暖桌与茶壶共用的临时向量；`J4.28` 已让暖桌自造私有的一份，
+            //    本件照做（茶壶模块内部私有）⇒ **这个共享临时量从此消失**。
+            const teapotApi = ctx.installProp(teapot, { ctx: { cupFactory } });
+            ctx.teapotApi = teapotApi;
 
             /* ---- 桌面散放餐具 ---- */
             // J3（B4）：几何已搬入 src/cabin/world/floor1/tableware.js，此处只留装配调用。

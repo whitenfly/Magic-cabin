@@ -240,7 +240,12 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     //   `install.js` 里删掉 **1** 处 regMagic 调用（`makeChair` 里那条，5 把椅子共用同一处文本）
     //   ⇒ **−1**；`diningChairs.js` 用 `interactables` 声明 **5 条**（每把一条），
     //   **不含 regMagic 调用** ⇒ 不回补。实测 `64 → 33`。
-    'regMagic(': -31,
+    //
+    // ★ J4.34 `floor1/teapot` ⇒ −31 更新为 **−32**：
+    //   `install.js` 里删掉 **1** 处 regMagic 调用（`teapotPos` 那一条）⇒ **−1**；
+    //   `teapot.js` 用 `interactables` 声明 **1 条**、**不含 regMagic 调用** ⇒ 不回补。
+    //   实测 `64 → 32`。⇒ 任务 D 至今累计删掉 **32** 处。
+    'regMagic(': -32,
   }
   // ★ J3：计数前先**剥掉块注释**。
   //

@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-16",
   "totals": {
-    "files": 111,
-    "lines": 19212
+    "files": 112,
+    "lines": 19314
   },
-  "combined": "bf628ba15714b0228074935d85fbfc1969f2b14b58fa41156e4a7cc355cca505",
+  "combined": "fa31d8eaa65c68ad3cc59be4b24c7df0728c5065094b7d134d743ef7506c79f3",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,7 +20,7 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "b3a045a92d6c7c9b",
+    "app/scene/FrameBody.js": "c6f5002dc1d33211",
     "app/scene/installCabin.js": "0afec776b0558568",
     "app/scene/PropInstaller.js": "99baeda12028604d",
     "app/scene/SceneCore.js": "908bb049d736ec30",
@@ -77,7 +77,7 @@
     "world/floor1/doorHangBar.js": "d70fa57ab77beb52",
     "world/floor1/hangingLantern.js": "5134b47451740321",
     "world/floor1/hourglass.js": "9d1928a35779e7be",
-    "world/floor1/install.js": "aca2340f5576f988",
+    "world/floor1/install.js": "30ffb59d86fc4da3",
     "world/floor1/junkBoxes.js": "638c34f06c295b88",
     "world/floor1/kotatsu.js": "f4d77f077d73d662",
     "world/floor1/longTable.js": "a05a758d925f02c6",
@@ -91,6 +91,7 @@
     "world/floor1/stovePlatform.js": "d9ab96aba30a6e07",
     "world/floor1/tableware.js": "15cddeabcae140da",
     "world/floor1/tarot.js": "76e71fd7c362b93f",
+    "world/floor1/teapot.js": "f4a03f3f10169294",
     "world/floor2/bag.js": "13eef6c8d8c2b50d",
     "world/floor2/bin.js": "b84a7bccf7e0f29f",
     "world/floor2/calendar.js": "af00921a5b766087",

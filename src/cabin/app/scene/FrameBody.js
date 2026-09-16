@@ -381,60 +381,10 @@ ctx.cupFactory.update(dt, time);
   })
 
   // L675–L675（1 行）
+  // ★ J4.34：提梁茶壶已升格为 `world/floor1/teapot.js` —— 本段搬进物件的 `update()`。
+  //   这里**在原位置**调用（登记顺序 = 原执行顺序，帧顺序一个字节没变）。
   F('frame/47', (dt, time) => {
-{
-                    if (ctx.potRun > 0) ctx.potRun -= dt;
-                    const p = ctx.potRun > 0 ? 1 - ctx.potRun / ctx.POT_T : 0;
-                    const dirX = Math.sin(ctx.POT_RY), dirZ = Math.cos(ctx.POT_RY);
-                    const hx = ctx.CUP_T.position.x - dirX * ctx.POT_TIP_FWD;
-                    const hz = ctx.CUP_T.position.z - dirZ * ctx.POT_TIP_FWD;
-                    const sm = tt => tt * tt * (3 - 2 * tt);
-                    let ly = 0, dx = 0, dz = 0, tilt = 0;
-                    if (p > 0) {
-                        if (p < 0.14) {
-                            ly = sm(p / 0.14) * 0.45;
-                        } else if (p < 0.30) {
-                            const u = sm((p - 0.14) / 0.16);
-                            ly = 0.45; dx = u * (hx - ctx.POT_BX); dz = u * (hz - ctx.POT_BZ);
-                        } else if (p < 0.40) {
-                            const u = sm((p - 0.30) / 0.10);
-                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = u * ctx.POT_TILT;
-                        } else if (p < 0.70) {
-                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = ctx.POT_TILT;
-                        } else if (p < 0.80) {
-                            const u = sm((p - 0.70) / 0.10);
-                            ly = 0.45; dx = hx - ctx.POT_BX; dz = hz - ctx.POT_BZ; tilt = (1 - u) * ctx.POT_TILT;
-                        } else if (p < 0.94) {
-                            const u = sm((p - 0.80) / 0.14);
-                            ly = 0.45; dx = (1 - u) * (hx - ctx.POT_BX); dz = (1 - u) * (hz - ctx.POT_BZ);
-                        } else {
-                            const u = sm((p - 0.94) / 0.06);
-                            ly = (1 - u) * 0.45;
-                        }
-                    }
-                    const floating = p > 0.02 && p < 0.98;
-                    const bob = floating ? Math.sin(time * 3) * 0.012 : 0;
-                    ctx.teapotPos.position.set(ctx.POT_BX + dx, ctx.DTOP + ly + bob, ctx.POT_BZ + dz);
-                    ctx.teapot.rotation.x = tilt;
-                    ctx.potHalo.visible = floating;
-                    if (floating) ctx.potHaloMat.opacity = 0.09 + 0.04 * (0.5 + 0.5 * Math.sin(time * 5));
-                    if (tilt > 0.45) {
-                        ctx.potStream.visible = true;
-                        ctx.potSpoutTip.getWorldPosition(ctx._tv);
-                        const ex = ctx.CUP_T.position.x, ey = ctx.CUP_T.position.y + 0.10, ezz = ctx.CUP_T.position.z;
-                        const arr = ctx.potStreamGeom.attributes.position.array;
-                        for (let i = 0; i < 10; i++) {
-                            const tt = i / 9;
-                            const wob = Math.sin(tt * Math.PI);
-                            arr[i * 3] = ctx._tv.x + (ex - ctx._tv.x) * tt + Math.sin(tt * 9 + time * 8) * 0.008 * wob;
-                            arr[i * 3 + 1] = ctx._tv.y + (ey - ctx._tv.y) * tt - 0.035 * wob;
-                            arr[i * 3 + 2] = ctx._tv.z + (ezz - ctx._tv.z) * tt + Math.cos(tt * 7 + time * 6) * 0.008 * wob;
-                        }
-                        ctx.potStreamGeom.attributes.position.needsUpdate = true;
-                    } else {
-                        ctx.potStream.visible = false;
-                    }
-                }
+ctx.teapotApi.tick(dt, time);
   })
 
   // L729–L729（1 行）
