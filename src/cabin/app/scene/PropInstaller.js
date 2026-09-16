@@ -53,6 +53,11 @@ export function installPropInstaller(ctx, app) {
             propTool('DARK', () => ctx.DARK); propTool('PINK', () => ctx.PINK);
             propTool('CATMAT', () => ctx.CATMAT); propTool('CATMAT2', () => ctx.CATMAT2);
             propTool('WIN_GLASS', () => ctx.WIN_GLASS); propTool('WIN_GLASS_UP', () => ctx.WIN_GLASS_UP);
+            // ★ J4.8（路线图 J4 的缺口 C1）：把 `camera` / `renderer` 交给物件。
+            //   全身镜的**自建射线**需要这两样（射线起点 + 监听器挂载点）—— 它是唯一
+            //   "不看遮挡"的交互，因此**不能**改走 `magicMeshes` 主射线（那会变成"被家具挡住就点不到"）。
+            //   两者都由 `core3d` 段创建、在装配器之前就绪，惰性 getter 取用安全。
+            propTool('camera', () => ctx.camera); propTool('renderer', () => ctx.renderer);
             // 音效（交互的 `sfx` 由物件声明）
             propTool('SND', () => ctx.SND);
 

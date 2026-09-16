@@ -182,7 +182,10 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     //   · 全身镜的**自建射线段**（`renderer.domElement.addEventListener('pointerdown'/'pointerup')`）
     //     随几何段一起搬走 —— 射线那一半留给 `J4`（见 `J3-实施结果.md` §3④）；
     //   · 前墙挂画的编辑器监听器同理。
-    'addEventListener(': -4,
+    // ★ J4.8（缺口 C1）：那 2 个监听器**回来了** ⇒ −3 回到 −1，加上 J2.5 的 −1 ⇒ **−2**。
+    //   这是**回归被修复**的计数证据（把镜子射线接回来 = 把两行 addEventListener 贴回去），
+    //   所以这里改的是"预期值"，不是"阈值" —— 与"放宽判据"是两件事。
+    'addEventListener(': -2,
     // ── J3 物件模块化：`regMagic(o, onClick)` 被 `defineProp` 的 `interactables` 取代
     //    每搬走一处，这个计数就少 1 —— **这正是本阶段的目的**，不是回归。
     //    当前已搬 35 件，其中 17 件带 `regMagic` ⇒ −17（收尾时按实际搬迁数核对）。
