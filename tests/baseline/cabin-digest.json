@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-16",
   "totals": {
     "files": 107,
-    "lines": 18853
+    "lines": 18856
   },
-  "combined": "7f8fe6cbd3ff7c73eadec289ade16864b76db7034f54e1cf2511d66d046e7887",
+  "combined": "fc882d064d0f2737c8b178997c1a673a27c670a85db554848c264c531245437e",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -111,7 +111,7 @@
     "world/floor2/witchHat.js": "0e4ec7173d43aba6",
     "world/house/shell.js": "2fc521071b549c56",
     "world/layout.js": "27138a304acd1cbb",
-    "world/lights.js": "b41b269aab2d60cf",
+    "world/lights.js": "bdc4ef80f4018f60",
     "world/outdoor/fireflies.js": "22e28e002f214d5d",
     "world/outdoor/yardSpot.js": "37e6e8cf4ff2fd2d",
     "world/outdoor/yardStatic.js": "b66e7901e0962d72",

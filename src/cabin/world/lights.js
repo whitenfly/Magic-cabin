@@ -75,7 +75,10 @@ lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', slot: 1
 // ★ J4.28：槽位 3（`floor1/kotatsu`）**已搬走** —— 由 `world/floor1/kotatsu.js` 的 `lights()` 声明
 //   （`slot: 3` + 同样的位置/颜色/半径/yMin/yMax + **逐字照搬**的强度表达式
 //   `s.pt * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2)))`）。
-//   ⇒ **一楼的光源已全部搬进各自的物件**（槽 0/2/3/4/7），本文件只剩二楼的两盏（槽 5/6）。
+//   ⇒ 一楼的点光源已全部搬进各自的物件（槽 0/2/3/4/7，各自文件里声明 `slot` + `s.pt`）。
+//     ⚠️ 本文件现在剩 **3** 行，不是 2 行 —— 槽 1 `floor1/cauldron-fire` 的 `strength` 是
+//     **常量 `0.92`**（既不读物件状态、也不在"6 件含光源物件"清单里 ⇒ **从未搬过注册**）。
+//     本注释初稿曾把它漏写成"只剩二楼的两盏"，已勘误（见 `J4.28-实施结果.md` §0/§5.3）。
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // ★ J4.25：槽位 4（`floor1/crystal-ball`）**已搬走** —— 由 `world/floor1/crystalBall.js`
 //   的 `lights()` 声明（`slot: 4` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
