@@ -165,8 +165,11 @@ export default defineProp({
   }],
 
   /** 原 `updateNewDecor()` 里的 6 行纸箱开合，逐字搬运（`junkT/junkOpen` → `s.t/s.open`） */
-  update(dt, time, s, { parts }) {
-    const smooth = k => k * k * (3 - 2 * k);   /* 复刻 monolith IIFE 里的同名缓动 */
+  update(dt, time, s, { parts, smooth }) {
+    // ★ J4.31：这里原先有一份**复刻**的 `const smooth = k => k * k * (3 - 2 * k);`——
+    //   因为那时 `smooth` 长在 18.8 段的区间里，本件拿不到它（`J3` 的 SKIP 记过这笔）。
+    //   现在它已提取到 `core/math/easing.js` 并由 `propCtx` 注入 ⇒ 直接从装配环境解构，
+    //   复刻那一行**删除**（公式与原来逐字相同，画面不变）。
 
     s.t += ((s.open ? 1 : 0) - s.t) * 0.075;
     const jk = smooth(Math.max(0, Math.min(1, s.t)));

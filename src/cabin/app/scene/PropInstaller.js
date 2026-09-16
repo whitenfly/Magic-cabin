@@ -10,6 +10,9 @@
  */
 import { createPropInstaller } from '../installProp.js'
 import { runtime, scene } from '../rng.js'
+// ★ J4.31：共享数学 / 几何工具改从 `core/` 取（原先它们的定义长在 18.8 / 18.9 的区间里）
+import { smooth } from '../../core/math/easing.js'
+import { hash01, jitterGeo } from '../../core/geometry/jitter.js'
 
 export function installPropInstaller(ctx, app) {
   const { registry, scheduler } = app
@@ -40,8 +43,12 @@ export function installPropInstaller(ctx, app) {
             // 共享几何工具（原先只在所属分区内部可见 —— 有了它们，搬物件才不必复制实现）
             propTool('cbox', () => ctx.cbox); propTool('crboxCol', () => ctx.crboxCol);
             propTool('colEdge', () => ctx.colEdge); propTool('crumpleBall', () => ctx.crumpleBall);
-            propTool('arcPos', () => ctx.arcPos); propTool('jitterGeo', () => ctx.jitterGeo);
-            propTool('hash01', () => ctx.hash01); propTool('smooth', () => ctx.smooth);
+            // ★ J4.31：这两个**共享数学/几何工具**不再从 `ctx` 取 —— 它们的定义已从 18.8 / 18.9 段
+            //   提取到 `core/math/easing.js` 与 `core/geometry/jitter.js`（`wand` 与 `board` 的共同前置）。
+            //   原先 `() => ctx.smooth` 这种写法让工具"长在某个物件的区间里"，那正是两份 SKIP 记的债：
+            //   18.8 一动 18.9 就 ReferenceError，反之亦然。
+            propTool('arcPos', () => ctx.arcPos); propTool('jitterGeo', () => jitterGeo);
+            propTool('hash01', () => hash01); propTool('smooth', () => smooth);
             // 弹簧 / 铰链 / 摆动（L283 的 createSpringSystem 产物 —— 抽屉、柜门、小凳靠它们登记）
             propTool('regSlide', () => ctx.regSlide); propTool('registerHinge', () => ctx.registerHinge);
             propTool('regWobble', () => ctx.regWobble);
