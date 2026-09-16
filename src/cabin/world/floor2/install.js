@@ -19,6 +19,7 @@ import desk from './desk.js'
 import deskChair from './deskChair.js'
 import deskHourglass from './deskHourglass.js'
 import junkBoxes from './junkBoxes.js'
+import magicBook from './magicBook.js'
 import magicClock from './magicClock.js'
 import mirror from './mirror.js'
 import nightstand from './nightstand.js'
@@ -42,7 +43,10 @@ export function installFloor2(ctx, app) {
   const floor2Rng = scene.floor2
   const textureRng = scene.texture
             // ↓ J4 段导出（floor2）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
-            ctx.makeCandleGlow = makeCandleGlow; ctx.getGlyphTex = getGlyphTex; ctx.spawnGlyphs = spawnGlyphs; ctx.updateGlyphs = updateGlyphs; ctx.updateBook = updateBook; ctx.glowBall = glowBall;
+            // ★ J4.36：`getGlyphTex` / `spawnGlyphs` / `updateGlyphs` / `updateBook` 四项已从本行**移除** ——
+            //   它们随 18.4 魔法书本整段搬进了 `floor2/magicBook.js`（成为该物件 `update` 的内部实现），
+            //   搬前已 grep 全仓确认**无任何外部读者**（`FrameBody.js` 的两处 tick 改走本物件的 `update`）。
+            ctx.makeCandleGlow = makeCandleGlow; ctx.glowBall = glowBall;
             ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
@@ -154,278 +158,14 @@ export function installFloor2(ctx, app) {
             const calendarApi = ctx.installProp(calendar);
             ctx.calendarApi = calendarApi;
             /* —— 魔法书本 —— */
-            /* ========================================================== */
-            const bookG = new THREE.Group();
-            ctx.bookG = bookG;
-            bookG.position.set(2.58, ctx.TBL_TOP + 0.001, -2.80);
-            bookG.rotation.y = -0.35;
-            ctx.scene.add(bookG);
-            ctx.coverPivot;
-            ctx.spineG;
-            const flipperPivots = [];
-            ctx.flipperPivots = flipperPivots;
-            const fanPivots = [];
-            ctx.fanPivots = fanPivots;
-            const FAN_FIN = [0.40, 0.80, 1.20, 1.60, 2.00, 2.40, 2.80];
-            ctx.FAN_FIN = FAN_FIN;
-            const COVER_FIN = Math.PI;
-            ctx.COVER_FIN = COVER_FIN;
-            const COVER_Y0 = 0.039;
-            ctx.COVER_Y0 = COVER_Y0;
-            const COVER_Y1 = 0.006;
-            ctx.COVER_Y1 = COVER_Y1;
-            const FLIP_CLOSED_Y = [];
-            ctx.FLIP_CLOSED_Y = FLIP_CLOSED_Y;
-            const FLIP_OPEN_Y = [];
-            ctx.FLIP_OPEN_Y = FLIP_OPEN_Y;
-            for (let i = 0; i < 6; i++) {
-                FLIP_CLOSED_Y.push(0.0222 + i * 0.0019);
-                FLIP_OPEN_Y.push(0.0128 + i * 0.0019);
-            }
-            {
-                const covMat = ctx.LITMAT(0x7a4638, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const covEdge = new THREE.LineBasicMaterial({ color: 0x4a2820 });
-                const pgMat = ctx.LITMAT(0xf3ecd8, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                const pgEdge = new THREE.LineBasicMaterial({ color: 0xb8ad8e });
-
-                function plate(w, t, d, mat, emat) {
-                    const g = new THREE.BoxGeometry(w, t, d);
-                    const grp = new THREE.Group();
-                    const m = new THREE.Mesh(g, mat);
-                    m.position.x = w / 2;
-                    grp.add(m);
-                    const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), emat);
-                    e.position.x = w / 2;
-                    grp.add(e);
-                    return grp;
-                }
-
-                function pageStack(count) {
-                    const grp = new THREE.Group();
-                    const t = 0.0012, gap = 0.00025;
-                    for (let i = 0; i < count; i++) {
-                        const pg = plate(0.19, t, 0.245, pgMat, pgEdge);
-                        pg.position.y = i * (t + gap);
-                        grp.add(pg);
-                    }
-                    return grp;
-                }
-                const back = plate(0.20, 0.012, 0.26, covMat, covEdge);
-                back.position.set(0, 0.006, 0);
-                bookG.add(back);
-                const rightStack = pageStack(6);
-                rightStack.position.set(0, 0.0125, 0);
-                bookG.add(rightStack);
-                for (let i = 0; i < 6; i++) {
-                    const pg = plate(0.19, 0.0016, 0.245, pgMat, pgEdge);
-                    pg.position.set(0, FLIP_CLOSED_Y[i], 0);
-                    bookG.add(pg);
-                    flipperPivots.push(pg);
-                }
-                for (let i = 0; i < 7; i++) {
-                    const pg = plate(0.19, 0.0016, 0.245, pgMat, pgEdge);
-                    pg.position.set(0, 0.0222 + i * 0.0009, 0);
-                    pg.visible = false;
-                    bookG.add(pg);
-                    fanPivots.push(pg);
-                }
-                ctx.coverPivot = plate(0.20, 0.012, 0.26, covMat, covEdge);
-                ctx.coverPivot.position.set(0, COVER_Y0, 0);
-                bookG.add(ctx.coverPivot);
-                const SPINE_R = 0.0225;
-                const spineGeo = new THREE.CylinderGeometry(SPINE_R, SPINE_R, 0.27, 12, 1, false, 0, Math.PI);
-                spineGeo.rotateX(Math.PI / 2);
-                const spineMat = ctx.LITMAT(0x7a4638, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-                ctx.spineG = new THREE.Group();
-                ctx.spineG.position.set(0, SPINE_R, 0);
-                ctx.spineG.rotation.z = Math.PI;
-                ctx.spineG.add(new THREE.Mesh(spineGeo, spineMat));
-                ctx.spineG.add(new THREE.LineSegments(new THREE.EdgesGeometry(spineGeo, 10), covEdge));
-                bookG.add(ctx.spineG);
-            }
-            const bookState = { phase: 'closed', t0: 0 };
-            ctx.bookState = bookState;
-            ctx.regMagic(bookG, () => {
-                const s = bookState;
-                if (s.phase === 'closed') {
-                    s.phase = 'opening';
-                    s.t0 = clock.now;
-                } else if (s.phase === 'open') {
-                    s.phase = 'closing';
-                    s.t0 = clock.now;
-                }
-            });
-            const GLYPH_SYMS = ['✦', '☾', '✧', '∴', '⟡', '✱', '☽', '✸', '❖', '✺', '✜', '✻'];
-            ctx.GLYPH_SYMS = GLYPH_SYMS;
-            const GLYPH_COLS = ['#ff6a4a', '#ffd94a', '#6affd9', '#6aa8ff', '#c86aff', '#ff6ad5', '#fff2b0'];
-            ctx.GLYPH_COLS = GLYPH_COLS;
-            const glyphTexCache = {};
-            ctx.glyphTexCache = glyphTexCache;
-
-            function getGlyphTex(sym, col) {
-                const key = sym + col;
-                if (glyphTexCache[key]) return glyphTexCache[key];
-                const cv = document.createElement('canvas');
-                cv.width = 128;
-                cv.height = 128;
-                const cx = cv.getContext('2d');
-                cx.font = '84px serif';
-                cx.textAlign = 'center';
-                cx.textBaseline = 'middle';
-                cx.shadowColor = col;
-                cx.shadowBlur = 22;
-                cx.fillStyle = col;
-                cx.fillText(sym, 64, 68);
-                cx.shadowBlur = 0;
-                cx.fillStyle = '#ffffff';
-                cx.fillText(sym, 64, 68);
-                const tex = new THREE.CanvasTexture(cv);
-                glyphTexCache[key] = tex;
-                return tex;
-            }
-            const glyphObjs = [];
-            ctx.glyphObjs = glyphObjs;
-            const glyphGeoShared = new THREE.PlaneGeometry(0.05, 0.05);
-            ctx.glyphGeoShared = glyphGeoShared;
-
-            function spawnGlyphs(n) {
-                for (let i = 0; i < n; i++) {
-                    const sym = GLYPH_SYMS[Math.floor(runtimeRng() * GLYPH_SYMS.length)];
-                    const col = GLYPH_COLS[Math.floor(runtimeRng() * GLYPH_COLS.length)];
-                    const m = new THREE.Mesh(
-                        glyphGeoShared,
-                        new THREE.MeshBasicMaterial({ map: getGlyphTex(sym, col), transparent: true, opacity: 0, depthWrite: false })
-                    );
-                    m.renderOrder = 11;
-                    m.position.set(
-                        bookG.position.x + (runtimeRng() - 0.5) * 0.12,
-                        bookG.position.y + 0.10 + runtimeRng() * 0.03,
-                        bookG.position.z + (runtimeRng() - 0.5) * 0.10
-                    );
-                    ctx.scene.add(m);
-                    glyphObjs.push({
-                        m: m,
-                        v: ctx.V((runtimeRng() - 0.5) * 0.06, 0.10 + runtimeRng() * 0.07, (runtimeRng() - 0.5) * 0.06),
-                        life: 1.8 + runtimeRng() * 1.0,
-                        t: 0,
-                        ph: runtimeRng() * 6.28,
-                        rs: (runtimeRng() - 0.5) * 3
-                    });
-                }
-            }
-
-            function updateGlyphs(time, dt) {
-                for (let i = glyphObjs.length - 1; i >= 0; i--) {
-                    const g = glyphObjs[i];
-                    g.t += dt;
-                    if (g.t >= g.life) {
-                        ctx.scene.remove(g.m);
-                        g.m.material.dispose();
-                        glyphObjs.splice(i, 1);
-                        continue;
-                    }
-                    g.m.position.addScaledVector(g.v, dt);
-                    g.m.position.x += Math.sin(time * 3 + g.ph) * 0.0004;
-                    g.v.multiplyScalar(Math.max(0, 1 - 0.25 * dt));
-                    const fade = g.t / (g.life - 0.7);
-                    g.m.material.opacity = Math.min(1, g.t / 0.25) * (1 - smooth(Math.max(0, Math.min(1, fade))));
-                    const sc = 0.8 + 0.3 * Math.abs(Math.sin(time * 4 + g.ph));
-                    g.m.scale.set(sc, sc, sc);
-                    g.m.quaternion.copy(ctx.camera.quaternion);
-                    g.m.rotation.z += g.rs * dt;
-                }
-            }
-            ctx.bookGlyphT = 0;
-
-            function updateBook(time, dt) {
-                const s = bookState;
-                const e = time - s.t0;
-                const ck = Math.max(0, Math.min(1, ctx.coverPivot.rotation.z / Math.PI));
-                ctx.spineG.rotation.z = Math.PI + (Math.PI / 2) * ck;
-                ctx.spineG.position.y = 0.0225 + (0.008 - 0.0225) * ck;
-                const ss = 1 - 0.3 * ck;
-                ctx.spineG.scale.set(ss, ss, 1);
-                if (s.phase === 'opening') {
-                    const CO = 0.55, W = 0.18;
-                    const k = smooth(Math.min(e / CO, 1));
-                    ctx.coverPivot.rotation.z = COVER_FIN * k;
-                    ctx.coverPivot.position.y = COVER_Y0 + (COVER_Y1 - COVER_Y0) * k;
-                    if (e >= CO + W) {
-                        ctx.coverPivot.rotation.z = COVER_FIN;
-                        ctx.coverPivot.position.y = COVER_Y1;
-                        s.phase = 'flipping';
-                        s.t0 = time;
-                    }
-                } else if (s.phase === 'flipping') {
-                    const D = 0.10, DUR = 0.13, W = 0.25;
-                    for (let i = 0; i < 6; i++) {
-                        const kk = smooth(Math.max(0, Math.min(1, (e - i * D) / DUR)));
-                        flipperPivots[i].rotation.z = 3.05 * kk;
-                        flipperPivots[i].position.y = FLIP_OPEN_Y[i] + (FLIP_CLOSED_Y[i] - FLIP_OPEN_Y[i]) * (1 - kk);
-                    }
-                    if (e >= 5 * D + DUR + W) {
-                        for (const fp of fanPivots) fp.visible = true;
-                        s.phase = 'fanning';
-                        s.t0 = time;
-                    }
-                } else if (s.phase === 'fanning') {
-                    const F = 0.40;
-                    const k = smooth(Math.min(e / F, 1));
-                    for (let i = 0; i < 7; i++) {
-                        fanPivots[i].rotation.z = FAN_FIN[i] * k;
-                    }
-                    if (e >= F) {
-                        s.phase = 'open';
-                        spawnGlyphs(8);
-                        ctx.bookGlyphT = 0.45;
-                    }
-                } else if (s.phase === 'open') {
-                    ctx.bookGlyphT -= dt;
-                    if (ctx.bookGlyphT <= 0 && glyphObjs.length < 16) {
-                        spawnGlyphs(1);
-                        ctx.bookGlyphT = 0.45;
-                    }
-                } else if (s.phase === 'closing') {
-                    const FAN = 0.35, W1 = 0.15;
-                    const D = 0.08, DUR = 0.12, W2 = 0.22, CO = 0.50;
-                    const tFanEnd = FAN;
-                    const tFlipStart = FAN + W1;
-                    const tFlipEnd = tFlipStart + 5 * D + DUR;
-                    const tCoverStart = tFlipEnd + W2;
-                    const tEnd = tCoverStart + CO;
-                    if (e < tFanEnd) {
-                        const k = smooth(e / FAN);
-                        for (let i = 0; i < 7; i++) {
-                            fanPivots[i].rotation.z = FAN_FIN[i] * (1 - k);
-                        }
-                    } else {
-                        for (const fp of fanPivots) {
-                            fp.visible = false;
-                            fp.rotation.z = 0;
-                        }
-                    }
-                    for (let i = 0; i < 6; i++) {
-                        const j = 5 - i;
-                        const kk = smooth(Math.max(0, Math.min(1, (e - tFlipStart - i * D) / DUR)));
-                        flipperPivots[j].rotation.z = 3.05 * (1 - kk);
-                        flipperPivots[j].position.y = FLIP_OPEN_Y[j] + (FLIP_CLOSED_Y[j] - FLIP_OPEN_Y[j]) * kk;
-                    }
-                    if (e >= tCoverStart) {
-                        const k2 = smooth(Math.min((e - tCoverStart) / CO, 1));
-                        ctx.coverPivot.rotation.z = COVER_FIN * (1 - k2);
-                        ctx.coverPivot.position.y = COVER_Y1 + (COVER_Y0 - COVER_Y1) * k2;
-                    }
-                    if (e >= tEnd) {
-                        ctx.coverPivot.rotation.z = 0;
-                        ctx.coverPivot.position.y = COVER_Y0;
-                        for (let i = 0; i < 6; i++) {
-                            flipperPivots[i].rotation.z = 0;
-                            flipperPivots[i].position.y = FLIP_CLOSED_Y[i];
-                        }
-                        s.phase = 'closed';
-                    }
-                }
-            }
+            // J4.36：几何（封面 / 书脊 / 6 张翻页 / 7 张扇页）+ `bookState` 状态机 + 符文系统
+            // （`GLYPH_SYMS` / `getGlyphTex` / `glyphObjs` / `spawnGlyphs` / `updateGlyphs`）
+            // 已全部搬入 src/cabin/world/floor2/magicBook.js，此处只留装配调用。
+            // ⚠️ 本件有**两处不相邻的 tick**（原 `updateBook(time, dt)` 与 `updateGlyphs(time, dt)`，
+            //    中间夹着 `updateCal(dt)`）—— 合并进同一个 `update()`，登记在**靠前**的那一处，
+            //    内部两段顺序与原实现一致（见模块头「两处不相邻的 tick 怎么合并」）。
+            const magicBookApi = ctx.installProp(magicBook);
+            ctx.magicBookApi = magicBookApi;
 
             /* ========================================================== */
             /* 18.5 星象仪 */
