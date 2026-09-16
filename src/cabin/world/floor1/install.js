@@ -17,6 +17,7 @@ import cauldron from './cauldron.js'
 import chest from './chest.js'
 import crystalBall from './crystalBall.js'
 import diningBook from './diningBook.js'
+import diningChairs from './diningChairs.js'
 import diningTable from './diningTable.js'
 import doorHangBar from './doorHangBar.js'
 import hangingLantern from './hangingLantern.js'
@@ -50,8 +51,9 @@ export function installFloor1(ctx, app) {
             //    ⚠️ J4.28：`ctx.makeCushion = makeCushion;` **也已删除** —— `makeCushion` 定义在**暖桌段**里，
             //    随 12.13 一起搬进了 `world/floor1/kotatsu.js`（同 `J4.20` 的 `startQuill`、`J4.26` 的 `makeCup`：
             //    那类"靠函数提升引用的段导出"一旦被引用的函数搬走，本段会在装配期抛 ReferenceError）。
-            //    `makeChair` 仍由本段（12.9f 余段的椅子，L373）定义、且同样无读者 ⇒ 原样保留。
-            ctx.makeChair = makeChair;
+            //    ⚠️ J4.33：`ctx.makeChair = makeChair;` 这一行**也已删除** —— 它是最后一项，
+            //    `makeChair` 随 12.9f 余段的 5 把椅子搬进了 `world/floor1/diningChairs.js`。
+            //    ⇒ 本段导出清单里**已经一个 `makeXxx` 都不剩**（前四次的处置见上面几行注释）。
             ctx.installProp(diningTable);
             // ---- 12.2 星象仪 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
@@ -372,28 +374,13 @@ export function installFloor1(ctx, app) {
             // J3（B4）：几何已搬入 src/cabin/world/floor1/tableware.js，此处只留装配调用。
             const tablewareApi = ctx.installProp(tableware);
             ctx.tablewareApi = tablewareApi;
-            const chairs = [];
-            ctx.chairs = chairs;
-            function makeChair(x, z, ry, ax, az) {
-                const g = new THREE.Group();
-                ctx.put(ctx.box(0.42, 0.05, 0.42), 0, 0.45, 0, 0, 0, 0, g);
-                ctx.put(ctx.box(0.42, 0.52, 0.05), 0, 0.73, -0.185, 0, 0, 0, g);
-                ctx.put(ctx.box(0.36, 0.04, 0.03), 0, 0.90, -0.185, 0, 0, 0, g);
-                ctx.put(ctx.box(0.36, 0.04, 0.03), 0, 0.62, -0.185, 0, 0, 0, g);
-                for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    ctx.put(ctx.edge(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 6)), sx * 0.17, 0.22, sz * 0.17, 0, 0, 0, g);
-                g.position.set(x, 0, z);
-                g.rotation.y = ry;
-                g.userData = { bx: x, bz: z, ax, az, cur: 0, vel: 0, open: false };
-                ctx.scene.add(g);
-                chairs.push(g);
-                ctx.regMagic(g, () => { g.userData.open = !g.userData.open; });
-            }
-            makeChair(ctx.DT_X - 0.85, ctx.DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(ctx.DT_X, ctx.DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(ctx.DT_X + 0.85, ctx.DT_Z + 0.85, Math.PI, 0, 1);
-            makeChair(ctx.DT_X - 1.42, ctx.DT_Z, Math.PI / 2, -1, 0);
-            makeChair(ctx.DT_X + 1.42, ctx.DT_Z, -Math.PI / 2, 1, 0);
+            // J4.33：12.9f 余段的 5 把椅子已搬入 src/cabin/world/floor1/diningChairs.js
+            // （几何 + 5 条交互 + 每帧分支）。它是 `floor1/teapot.SKIP.md` §4 建议的独立件
+            // —— 与茶壶没有共享状态，唯一交集是"都在长餐桌一带"。
+            // ⚠️ 它的 `chairs` 被**碰撞表** `movingPlatforms` 读（见 systems/player/collision.js），
+            //    那里已改为 `diningChairsApi.parts.chairs`（同 stools / cartG / chairG 的处置）。
+            const diningChairsApi = ctx.installProp(diningChairs);
+            ctx.diningChairsApi = diningChairsApi;
 
             /* ---- 12.10 魔法扫帚 ---- */
             // J3（B3）：几何 + 状态 + 交互 + 每帧分支全部搬入 cabin/world/floor1/broom.js。

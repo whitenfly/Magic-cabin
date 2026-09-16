@@ -235,7 +235,12 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     //   （桌体 `kotBody` / 收音机 `radioG` / 橘子 `orangeG` / 坐垫那只在 `makeCushion` 里的）
     //   ⇒ **−4**；新模块 `world/floor1/kotatsu.js` 用 `interactables` 声明 **5 条**交互
     //   （坐垫 2 只各一条），**不含任何 regMagic 调用** ⇒ 不再回补计数。
-    'regMagic(': -30,
+    //
+    // ★ J4.33 `floor1/dining-chairs` ⇒ −30 更新为 **−31**：
+    //   `install.js` 里删掉 **1** 处 regMagic 调用（`makeChair` 里那条，5 把椅子共用同一处文本）
+    //   ⇒ **−1**；`diningChairs.js` 用 `interactables` 声明 **5 条**（每把一条），
+    //   **不含 regMagic 调用** ⇒ 不回补。实测 `64 → 33`。
+    'regMagic(': -31,
   }
   // ★ J3：计数前先**剥掉块注释**。
   //
