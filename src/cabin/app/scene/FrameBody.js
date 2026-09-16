@@ -487,9 +487,13 @@ ctx.deskHourglassApi.tick(dt, time);
 ctx.cardDeckApi.tick(dt, time);
   })
 
-  // L785–L785（1 行）
-  F('frame/63', (dt, time) => {
-ctx.updateBook(time, dt);
+  // L785–L785（1 行）—— 原 `updateBook(time, dt);`
+  // ★ J4.36：18.4 魔法书本升格 `defineProp` ⇒ 改走本物件自己的 `update`。
+  //   这一个 `update` 同时接管了原 **L789 的 `updateGlyphs(time, dt);`**（两处不相邻的 tick
+  //   合并进一个 `update`，内部两段顺序与原实现一致 —— 见 `world/floor2/magicBook.js` 文件头）。
+  //   登记在**靠前**的这处（即原 `updateBook` 的位置）：中间原夹着的 `updateCal(dt)` 与本件无交互。
+  F('prop/magicBook', (dt, time) => {
+ctx.magicBookApi.tick(dt, time);
   })
 
   // L788–L788（1 行）
@@ -497,10 +501,7 @@ ctx.updateBook(time, dt);
 ctx.calendarApi.tick(dt, time);
   })
 
-  // L789–L789（1 行）
-  F('frame/65', (dt, time) => {
-ctx.updateGlyphs(time, dt);
-  })
+  // L789–L789：原 `updateGlyphs(time, dt);` —— J4.36 已并入上面的 `prop/magicBook`，此处不再单列
 
   // L792–L792（1 行）
   F('prop/coinTowers', (dt, time) => {
