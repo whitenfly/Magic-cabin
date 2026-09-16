@@ -153,6 +153,8 @@ export function createLayout() {
   const SNOW_X = 3.50
   /** 二楼书桌桌面玻璃雪景球（18.4）中心 z（floor2/snow-globe） */
   const SNOW_Z = -2.80
+  /** 二楼烟囱墙魔法时钟（18.12）中心 x（floor2/magic-clock；原段内硬编码 `-2.95`；y/z 用 `FY + 1.42` 与 `CHZ`） */
+  const CLOCK_X = -2.95
   /** 左窗下魔法书堆（12.9a）的组原点（`bookPileG.position`）（floor1/book-pile） */
   const BOOK_PILE_POS = { x: -3.62, y: 0, z: -1.4 }
   /**
@@ -255,5 +257,7 @@ export function createLayout() {
     CHAIR_X, CHAIR_IN, CHAIR_OUT,
     // J3 搬迁新增
     CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
+    // J4.30 搬迁新增（二楼魔法时钟）
+    CLOCK_X,
   }
 }
