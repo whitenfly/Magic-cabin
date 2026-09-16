@@ -35,6 +35,7 @@ function fakeFill(slots = POINT_LIGHT_SLOTS) {
 const lamp = (id, opts = {}) =>
   createPointLightSource({
     id,
+    slot: opts.slot,
     position: opts.position || [0, 1, 0],
     color: opts.color ?? 0xffffff,
     radius: opts.radius ?? 4,
@@ -130,11 +131,114 @@ test('createLightField 校验：材质必须带 uPtPos/uPtCol/uPtCfg', () => {
   assert.throws(() => createLightField({ fillMaterial: {} }), /FILL 材质/)
 })
 
-test('unregister 按 id 移除', () => {
+test('unregister 按 id 移除（★ 且不移位 —— 索引就是槽位号）', () => {
   const lf = createLightField({ fillMaterial: fakeFill() })
   lf.register(lamp('a'))
   lf.register(lamp('b'))
   assert.equal(lf.unregister('a'), true)
   assert.equal(lf.unregister('不存在'), false)
   assert.deepEqual(lf.stats().ids, ['b'])
+  // ★ J4.18：移除是**留洞**而不是 `splice` —— 移位会让后面所有灯集体换槽，
+  //   而 shader 的闪烁相位含 `float(i)` ⇒ 画面立刻变。'b' 必须还在 1 号槽。
+  assert.equal(lf.sources[1].id, 'b', 'b 没有被挤到 0 号槽')
+  assert.equal(lf.sources[0], undefined, '0 号槽是洞（由 update() 写成强度 0）')
+})
+
+/* ==========================================================================
+ * ★ J4.18：`slot` —— 槽位脱离注册时机
+ *
+ * 病根：8 盏灯原本全在 `world/lights.js` **一次注册完**（段 03 之后），槽位 = 注册位次；
+ * 而物件在段 08–10 装配 ⇒ 把一盏灯的注册跟着物件搬走，槽位就变，画面就变。
+ * 这就是 `J3` 判定「6 件含光源物件搬不动」的唯一原因。
+ *
+ * 下面两条是这一契约的判据：
+ *   ① **等价性** —— 显式 `slot: 0…7` 与原来的"按顺序 push"必须产出**逐位相同**的 uniform；
+ *   ② **定序** —— 声明 `slot` 的灯，落在哪个槽只由它自己决定，与注册先后无关。
+ * ======================================================================== */
+
+/** 把整张 uniform 读成可比较的普通值（逐槽：位置 / 颜色 / 强度 / yMin / yMax） */
+function readUniform(fill) {
+  return fill.uniforms.uPtPos.value.map((p, i) => ({
+    pos: [p.x, p.y, p.z],
+    col: fill.uniforms.uPtCol.value[i].getHex(),
+    cfg: [
+      fill.uniforms.uPtCfg.value[i].x,
+      fill.uniforms.uPtCfg.value[i].y,
+      fill.uniforms.uPtCfg.value[i].z,
+      fill.uniforms.uPtCfg.value[i].w,
+    ],
+  }))
+}
+
+test('★ J4.18 等价性：显式 slot 0…7 与原「按注册顺序填充」逐位相同', () => {
+  const specs = Array.from({ length: POINT_LIGHT_SLOTS }, (_, i) => ({
+    id: `lamp-${i}`,
+    position: [i * 1.5, 0.5 + i * 0.1, -i],
+    color: [0xffb066, 0x6fa8ff, 0x9b6fe8, 0xffa858, 0xb5a0f2, 0xffc06a, 0xffe08a, 0x9bc0e8][i],
+    radius: 3 + i * 0.2,
+    strength: i === 5 ? 0.92 : () => 0.5 + i,
+    yMin: i >= 5 ? 3.02 : 0.0,
+    yMax: i >= 5 ? 6.9 : 3.04,
+  }))
+
+  // 路径 A：原来那一种 —— 不声明 slot，按注册顺序填充（0,1,2…7）
+  const fillA = fakeFill()
+  const lfA = createLightField({ fillMaterial: fillA })
+  for (const sp of specs) lfA.register(lamp(sp.id, sp))
+  lfA.update(1.25, 0.016)
+
+  // 路径 B：J4.18 这一种 —— 每盏显式写自己的槽位，且**故意乱序注册**
+  const fillB = fakeFill()
+  const lfB = createLightField({ fillMaterial: fillB })
+  for (const sp of [...specs].reverse()) lfB.register(lamp(sp.id, { ...sp, slot: specs.indexOf(sp) }))
+  lfB.update(1.25, 0.016)
+
+  assert.deepEqual(readUniform(fillB), readUniform(fillA), '两条路径必须产出逐位相同的 uniform')
+  assert.equal(fillB.uniforms.uPtCount.value, fillA.uniforms.uPtCount.value)
+})
+
+test('★ J4.18 定序：声明 slot 的灯落在它自己的槽位，与注册先后无关', () => {
+  const fill = fakeFill()
+  const lf = createLightField({ fillMaterial: fill })
+  // 先注册"最后一个槽"的灯 —— 若仍按注册顺序，它会落到 0 号槽
+  lf.register(lamp('moon-plant', { slot: 7, position: [7, 0, 0] }))
+  lf.register(lamp('lantern', { slot: 0, position: [0, 0, 0] }))
+  lf.update(0, 0)
+  assert.equal(fill.uniforms.uPtPos.value[0].x, 0, 'lantern 必须在 0 号槽')
+  assert.equal(fill.uniforms.uPtPos.value[7].x, 7, 'moon-plant 必须在 7 号槽')
+  // 中间的洞被写成强度 0（shader 的 `if (ptS < 0.003) continue` 会跳过）
+  for (let i = 1; i < 7; i++) assert.equal(fill.uniforms.uPtCfg.value[i].y, 0, `槽位 ${i} 应为空`)
+})
+
+test('★ J4.18 槽位冲突：后来者被拒（不静默换掉先到者），并给出警告', () => {
+  const fill = fakeFill()
+  const warn = []
+  const lf = createLightField({ fillMaterial: fill, warn: (m) => warn.push(m) })
+  const first = lamp('lantern', { slot: 0, position: [1, 0, 0] })
+  const second = lamp('impostor', { slot: 0, position: [2, 0, 0] })
+  lf.register(first)
+  assert.equal(lf.register(second), first, '被拒时返回占位者')
+  lf.update(0, 0)
+  assert.equal(fill.uniforms.uPtPos.value[0].x, 1, '先到者仍在槽位上')
+  assert.equal(lf.stats().registered, 1, '被拒的灯没有被算作已注册')
+  assert.equal(warn.length, 1)
+  assert.match(warn[0], /占用/)
+})
+
+test('★ J4.18 槽位越界：拒绝注册并警告（不静默落进别的槽）', () => {
+  const warn = []
+  const lf2 = createLightField({ fillMaterial: fakeFill(), warn: (m) => warn.push(m) })
+  assert.equal(lf2.register(lamp('over', { slot: POINT_LIGHT_SLOTS })), null)
+  assert.equal(lf2.register(lamp('negative', { slot: -1 })), null)
+  assert.equal(lf2.stats().registered, 0)
+  assert.equal(warn.length, 2)
+  assert.match(warn[0], /越界/)
+})
+
+test('★ J4.18 校验：slot 必须是整数（或省略）', () => {
+  assert.throws(() => createPointLightSource({ id: 'x', position: [0, 0, 0], slot: 1.5 }), /slot 必须是整数/)
+  assert.throws(() => createPointLightSource({ id: 'x', position: [0, 0, 0], slot: '0' }), /slot 必须是整数/)
+  // 省略 / null 都合法（= 走注册顺序）
+  assert.equal(createPointLightSource({ id: 'x', position: [0, 0, 0] }).slot, null)
+  assert.equal(createPointLightSource({ id: 'x', position: [0, 0, 0], slot: null }).slot, null)
 })

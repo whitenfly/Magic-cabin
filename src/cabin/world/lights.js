@@ -15,7 +15,27 @@
  *
  * `strength: () => ctx.ptLantern` 这类闭包由 `lightField.update()` 每帧调用，
  * 而那几个状态量（`ptLantern` / `ptKot` / `ptMc` / `ptCb` / `candleP` / `magicP` / `ptPlant`）
- * **仍住在 `WeatherSystem.js`** —— 它们是"环境"算出来的，本文件只负责"注册"。
+ * **仍住在 `WeatherSystem.js`（初值）与 `app/scene/FrameBody.js`（每帧平滑）** ——
+ * 它们是"环境"算出来的，本文件只负责"注册"。
+ *
+ * ## ★ `slot`：槽序不再依赖"谁来注册"（`J4.18`）
+ *
+ * 原来这 8 盏灯全在这里**一次注册完**，槽位 = 注册位次。而物件住在段 08–10（远晚于本段），
+ * ⇒ 任何一盏灯的注册只要跟着它的物件搬走，槽位就会改变；shader 的闪烁相位含 `float(i)`，
+ * 槽位一变画面就变。这就是 `J3` 判定「6 件含光源物件搬不动」的病根
+ * （见 `scripts/oneoff/_j3-specs/floor1-hanging-lantern.SKIP.md`）。
+ *
+ * 现在每一行都**显式写出自己的槽位号**（`slot: 0…7`）：槽序由**声明**决定，
+ * 与"第几个注册、在哪一段注册"完全无关 ⇒ 灯可以整体搬进物件文件（连同它的
+ * `strength` 闭包与 `state`），而槽序一个字节不动。
+ *
+ * 通路已通：`app/installProp.js` 的 ⑥ 会把物件 `lights()` 声明的光源注册进**同一个**
+ * `lightField`；`app/scene/PropInstaller.js` 已把 `lightField` 交给装配环境。
+ *
+ * ⚠️ **本文件目前的 8 行尚未搬走** —— `J4.18` 只做通道（契约 + 注册通路 + 槽位定序），
+ * 搬迁留给后续批次（`hanging-lantern` / `crystal-ball` / `kotatsu` / `magic-circle` /
+ * `moon-plant`，以及已在一楼的 `cauldron-fire`）。届时本文件的行**逐条减少**，
+ * 而槽位号**原样带走**。
  *
  * ## ⚠️ 还有一笔同类债务（未处理）
  *
@@ -23,6 +43,11 @@
  * （`ctx.flowerMats` / `ctx.signSideMat` / `ctx.ffOpacity` …）。那些是**每帧**动作、
  * 且依赖 `_amb` 先算出来 ⇒ 搬它们会改变**帧顺序**（= 改变画面）。
  * 本任务刻意不动，见 `docs/实施结果/J4.10-实施结果.md` 的遗留。
+ *
+ * 另有一笔**同源**的债务由 `J4.18` 记下、留给搬迁批处理：`ptXxx` 的每帧平滑住在
+ * `app/scene/FrameBody.js` 的 `frame/92`–`frame/96`（各占一个任务），而 `lightField.update`
+ * 是 `frame/97` —— 搬灯时**这五个任务的执行位置就是 `update` 的执行位置**
+ * （必须在 `frame/97` 之前，且与原来同帧内相对次序一致）。
  */
 import { createLightField } from '../core/lighting/LightField.js'
 import { createPointLightSource } from '../core/lighting/PointLightSource.js'
@@ -34,16 +59,19 @@ export function installWorldLights(ctx, app) {
 //   所以这 8 个的次序必须与原 PP[0]…PP[7] **完全一致**，位置/颜色/半径/yMin/yMax 也逐字照搬。
 //   位置来自 cabin/world/layout.js（不变量 N9），强度用闭包读状态量，于是 core/ 里
 //   不出现任何具体物件的名字（不变量 N1）。
+// ★ J4.18：每行**显式声明 `slot`**（0…7，与原 PP 下标一一对应）—— 槽位从此由声明决定，
+//   而不是由"第几个被注册"决定。位置/颜色/半径/强度/yMin/yMax **一字未改**。
 const lightField = createLightField({ fillMaterial: ctx.FILL, warn: (m) => console.warn(m) });
 ctx.lightField = lightField;
-lightField.register(createPointLightSource({ id: 'floor1/lantern', position: [ctx.MTX, 2.52, ctx.MTZ], color: 0xffb066, radius: 4.6, strength: () => ctx.ptLantern, yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor1/magic-circle', position: [ctx.MC_X, 0.36, ctx.MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ctx.ptMc, yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor1/kotatsu', position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
-lightField.register(createPointLightSource({ id: 'floor2/candle', position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
-lightField.register(createPointLightSource({ id: 'floor2/magic-veil', position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.magicP, yMin: 3.02, yMax: 6.9 }));
-lightField.register(createPointLightSource({ id: 'floor1/moon-plant', position: [ctx.PLX, 0.48, ctx.PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ctx.ptPlant, yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor1/lantern', slot: 0, position: [ctx.MTX, 2.52, ctx.MTZ], color: 0xffb066, radius: 4.6, strength: () => ctx.ptLantern, yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor1/cauldron-fire', slot: 1, position: [ctx.CCX, 1.14, ctx.CCZ], color: 0x6fa8ff, radius: 5.6, strength: 0.92, yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor1/magic-circle', slot: 2, position: [ctx.MC_X, 0.36, ctx.MC_Z], color: 0x9b6fe8, radius: 5.2, strength: () => ctx.ptMc, yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor1/kotatsu', slot: 3, position: [ctx.KOT_X, 0.48, ctx.KOT_Z], color: 0xffa858, radius: 4.2, strength: (time) => ctx.ptKot * (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(time * 4.2))), yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor1/crystal-ball', slot: 4, position: [ctx.CBX, 0.88, ctx.CBZ], color: 0xb5a0f2, radius: 3.6, strength: () => ctx.ptCb, yMin: 0.0, yMax: 3.04 }));
+lightField.register(createPointLightSource({ id: 'floor2/candle', slot: 5, position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
+lightField.register(createPointLightSource({ id: 'floor2/magic-veil', slot: 6, position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.magicP, yMin: 3.02, yMax: 6.9 }));
+lightField.register(createPointLightSource({ id: 'floor1/moon-plant', slot: 7, position: [ctx.PLX, 0.48, ctx.PLZ], color: 0x9bc0e8, radius: 3.8, strength: () => ctx.ptPlant, yMin: 0.0, yMax: 3.04 }));
 // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
-for (const src of lightField.sources) registry.registerLight(src);
+// `if (src)`：注销会**留洞**（`unregister` 用 delete 而非 splice，见 LightField.js），洞要跳过
+for (const src of lightField.sources) if (src) registry.registerLight(src);
 }

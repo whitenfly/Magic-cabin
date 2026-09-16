@@ -35,6 +35,21 @@
  *
  * 未使用的槽位会被写成 `y = 0`（强度 0）—— shader 里 `if (ptS < 0.003) continue`，
  * 于是它不参与任何计算。若不清理，上一帧的残留值会留在 uniform 里。
+ *
+ * ## ★ `sources` 是**按槽位索引**的数组（`J4.18`）
+ *
+ * `register()` 有两条路径，都写进同一个数组、索引就是槽位号：
+ *
+ * | 声明 | 落点 | 语义 |
+ * |---|---|---|
+ * | `slot: i`（显式） | `sources[i]` | **槽位由声明决定**，与"第几个注册"无关 |
+ * | 省略 `slot` | `sources[sources.length]` | 原语义：注册顺序 = 槽位顺序 |
+ *
+ * 两条路径**结果同构**：8 个都不声明 `slot` 时，落点仍是 `0…7`（原有的行为一个字节没变）；
+ * 全声明 `slot: 0…7` 时落点是**同一批索引、同一批对象**。
+ * 这条性质是 `J4.18` 的回归判据（画面三机位逐字节相同）。
+ *
+ * 稀疏数组是**合法状态**（槽位可以留洞）：`update()` 的 `if (!s)` 分支把空洞写成强度 0。
  */
 import { POINT_LIGHT_SLOTS } from '../materials/FillMaterial.js'
 
@@ -48,20 +63,37 @@ export function createLightField({ fillMaterial, slots = POINT_LIGHT_SLOTS, warn
   if (!fillMaterial || !fillMaterial.uniforms || !fillMaterial.uniforms.uPtPos) {
     throw new TypeError('createLightField 需要一份带 uPtPos/uPtCol/uPtCfg 的 FILL 材质')
   }
-  /** 已注册的光源（**按注册顺序**，这个顺序就是槽位顺序） */
+  /** 已注册的光源（**索引 = 槽位号**；这个顺序就是着色器里的槽位顺序） */
   const sources = []
   /** 需要重新计算槽位分配的标记（注册/注销后置位；`J2` 期间只有注册，但留着接口） */
   let overCapacityWarned = false
 
   /**
    * 注册一盏灯。
-   * @returns 传入的光源（便于链式书写）
+   *
+   * @returns 传入的光源（便于链式书写）；**被拒绝时**返回 `null`（越界）或占位者（槽位冲突）
    */
   function register(source) {
     if (!source || typeof source.strengthOf !== 'function') {
       throw new TypeError('register 需要 createPointLightSource() 的产物')
     }
-    sources.push(source)
+    // ★ `J4.18`：两条落点路径 —— 见文件头「`sources` 是按槽位索引的数组」。
+    let i
+    if (Number.isInteger(source.slot)) {
+      i = source.slot
+      if (i < 0 || i >= slots) {
+        warn(`[LightField] ${source.id} 声明的槽位 ${i} 越界（合法范围 0…${slots - 1}）—— 未注册`)
+        return null
+      }
+      if (sources[i]) {
+        // 一个槽位只能有一盏灯：后来者**不覆盖**先到者（静默换掉会让"谁在亮"取决于装配顺序）
+        warn(`[LightField] 槽位 ${i} 已被 ${sources[i].id} 占用，${source.id} 未注册`)
+        return sources[i]
+      }
+    } else {
+      i = sources.length // 原语义：追加到末尾 ⇒ 注册顺序 = 槽位顺序
+    }
+    sources[i] = source
     if (sources.length > slots && !overCapacityWarned) {
       overCapacityWarned = true
       warn(
@@ -72,10 +104,18 @@ export function createLightField({ fillMaterial, slots = POINT_LIGHT_SLOTS, warn
     return source
   }
 
-  /** 注销（按 id） */
+  /**
+   * 注销（按 id）。
+   *
+   * ★ `J4.18`：用 `delete` **留洞**，不用 `splice` 移位 —— 索引就是槽位号，
+   * 移位会让后面所有灯**集体换槽**（shader 相位含 `float(i)` ⇒ 画面立刻变）。
+   * 空洞由 `update()` 的 `if (!s)` 分支写成强度 0，是合法状态。
+   *
+   * @returns 是否真的注销了一盏
+   */
   function unregister(id) {
-    const i = sources.findIndex((s) => s.id === id)
-    if (i >= 0) sources.splice(i, 1)
+    const i = sources.findIndex((s) => s && s.id === id)
+    if (i >= 0) delete sources[i]
     return i >= 0
   }
 
@@ -121,7 +161,16 @@ export function createLightField({ fillMaterial, slots = POINT_LIGHT_SLOTS, warn
     unregister,
     update,
     sources,
-    /** 诊断：已注册数 / 槽位上限 / 本帧生效数 */
-    stats: () => ({ registered: sources.length, slots, ids: sources.map((s) => s.id) }),
+    /**
+     * 诊断：已注册数 / 槽位上限 / 本帧生效数。
+     *
+     * ★ `J4.18`：`registered` 与 `ids` 都**跳过空洞** —— `sources` 的索引是槽位号，
+     * 注销会留洞（见上），空洞不是"一盏灯"。问法没变（"注册了哪些灯"），
+     * 只是实现从 `sources.map` 换成"先滤洞再映射"。
+     */
+    stats: () => {
+      const live = sources.filter(Boolean)
+      return { registered: live.length, slots, ids: live.map((s) => s.id) }
+    },
   }
 }

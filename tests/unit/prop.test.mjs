@@ -490,3 +490,102 @@ test('installProp：state 是每次装配的独立闭包（同一份声明装配
   assert.equal(env.installer.get('floor1/y').state.n, 2)
   assert.notEqual(env.installer.get('floor1/x').state, env.installer.get('floor1/y').state)
 })
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ★ J4.18：`lights()` 的通路 —— 物件声明的灯要**真的亮**，且槽序不随装配时机变
+ *
+ * 这一组守的是 `J3` 判定「6 件含光源物件搬不动」的那个病根。搬迁前的真相是：
+ *
+ *   · `installProp` 拿到物件的 `lights()` 声明后**只调 `registry.registerLight()`** ——
+ *     那只是往一张诊断表里塞一条，光照场 `lightField` **根本收不到**；
+ *   · 于是搬走一盏灯 = `world/lights.js` 里那行 `lightField.register` 没了替补 = 灯不亮；
+ *   · 而槽位 = 注册位次，物件在段 08–10 装配（远晚于 `world/lights.js`），
+ *     跟着物件搬走的注册必然换槽 ⇒ shader 相位 `float(i)` 一变，像素回归必红。
+ *
+ * 所以判据有两条，缺一不可：**①真的进光照场**、**②槽位由声明决定而不是由注册时机决定**。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** 极简假 FILL：`set()` 只把参数记下来（这里测的是"填了什么"，不是 three 的数学） */
+function fakeFillUniform(slots = 8) {
+  const mk = () => ({ set(...a) { this.last = a } })
+  return {
+    uniforms: {
+      uPtPos: { value: Array.from({ length: slots }, mk) },
+      uPtCol: { value: Array.from({ length: slots }, mk) },
+      uPtCfg: { value: Array.from({ length: slots }, mk) },
+      uPtCount: { value: 0 },
+    },
+  }
+}
+
+test('★ J4.18：物件 lights() 声明的光源真的进入光照场（此前只登记 registry ⇒ 灯不会亮）', async () => {
+  const { createLightField } = await import('../../src/cabin/core/lighting/LightField.js')
+  const { createPointLightSource } = await import('../../src/cabin/core/lighting/PointLightSource.js')
+
+  const fill = fakeFillUniform()
+  const lightField = createLightField({ fillMaterial: fill, warn: () => {} })
+  const env = makeEnv({ lightField })
+
+  env.installer.install(defineProp({
+    id: 'floor1/hanging-lantern-probe',
+    build,
+    state: () => ({ ptLantern: 1 }), // 物件私有状态（搬迁前的顶层 `let ptLantern`）
+    lights: (s) => [createPointLightSource({
+      id: 'floor1/lantern', slot: 0,
+      position: [1, 2.52, 3], color: 0xffb066, radius: 4.6,
+      strength: () => s.ptLantern, // ★ 闭包引用**自己的 state**
+      yMin: 0.0, yMax: 3.04,
+    })],
+  }))
+
+  // ① 真的进了光照场（不是只进了 registry）
+  assert.equal(lightField.sources[0].id, 'floor1/lantern', '光源必须落在光照场的 0 号槽')
+  assert.equal(lightField.stats().registered, 1)
+  assert.equal(env.registry.stats().lights, 1, 'registry 的既有计数也不能丢')
+
+  // ② 强度是**每帧惰性读物件 state**，不是装配期的快照
+  lightField.update(0, 0.016)
+  assert.equal(fill.uniforms.uPtCfg.value[0].last[1], 1, '装配时的 state.ptLantern = 1')
+  env.installer.get('floor1/hanging-lantern-probe').state.ptLantern = 0.25
+  lightField.update(0, 0.016)
+  assert.equal(fill.uniforms.uPtCfg.value[0].last[1], 0.25, '★ state 一变，槽位强度立刻跟着变')
+  assert.equal(fill.uniforms.uPtCount.value, 1)
+})
+
+test('★ J4.18：槽位由声明决定 —— 晚装配的物件照样占住自己的槽位（6 件能搬家的前提）', async () => {
+  const { createLightField } = await import('../../src/cabin/core/lighting/LightField.js')
+  const { createPointLightSource } = await import('../../src/cabin/core/lighting/PointLightSource.js')
+
+  const fill = fakeFillUniform()
+  const lightField = createLightField({ fillMaterial: fill, warn: () => {} })
+  const env = makeEnv({ lightField })
+
+  // 模拟真实世界：`world/lights.js` 先铺满 8 个槽位（段 03 之后）
+  for (let i = 0; i < 8; i++) {
+    lightField.register(createPointLightSource({
+      id: `slot-${i}`, slot: i, position: [i, 0, 0], color: 0xffffff, radius: 1, strength: 1,
+    }))
+  }
+
+  // 物件在很晚才装配（段 08）—— 但它的灯照样落在**声明的**槽位上
+  env.installer.install(defineProp({
+    id: 'floor1/late-arrival',
+    build,
+    lights: () => [createPointLightSource({
+      id: 'floor1/lantern', slot: 0, position: [42, 2.52, 42], color: 0xffb066, radius: 4.6, strength: 1,
+    })],
+  }))
+
+  // 槽位 0 已被 `world/lights.js` 占着 ⇒ 后来者被**拒绝**（不静默换掉先到者）
+  assert.equal(lightField.sources[0].id, 'slot-0', '先注册的灯没有被顶掉')
+  assert.equal(lightField.stats().registered, 8, '总数仍是 8 盏 —— 这正是搬迁时的正确形态')
+
+  // 真正的搬迁形态：把 `world/lights.js` 里槽位 0 的那行**删掉**，由物件顶上
+  assert.equal(lightField.unregister('slot-0'), true)
+  const replaced = createPointLightSource({
+    id: 'floor1/lantern', slot: 0, position: [42, 2.52, 42], color: 0xffb066, radius: 4.6, strength: 1,
+  })
+  assert.equal(lightField.register(replaced), replaced, '槽位空出来之后，物件声明的灯顶上')
+  assert.equal(lightField.sources[0].id, 'floor1/lantern', '★ 它落在**它声明的** 0 号槽，而不是追加到末尾')
+  assert.equal(lightField.sources[7].id, 'slot-7', '其余 7 盏一个都没动 —— 槽序不变')
+})
