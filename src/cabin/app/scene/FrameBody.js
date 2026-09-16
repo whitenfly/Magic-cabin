@@ -374,43 +374,11 @@ for (const rg of ctx.reagents) {
   })
 
   // L572–L572（1 行）
+  // ★ J4.24：紫色魔法阵已升格为 `world/floor1/magicCircle.js` —— 本段与 `frame/94`
+  //   的强度平滑并进同一个 `update`（一件物件只有一个 `update`），登记位置取本段（早）。
+  //   等价性论证见该模块文件头「★ 帧顺序」。`frame/94` 的任务已删除。
   F('frame/38', (dt, time) => {
-{
-                    if (ctx.mcRun > 0) ctx.mcRun -= dt;
-                    const prog = ctx.mcRun > 0 ? 1 - ctx.mcRun / 8.0 : 1;
-                    let inten = 0;
-                    if (ctx.mcRun > 0) {
-                        if (prog < 0.12) inten = prog / 0.12;
-                        else if (prog < 0.82) inten = 1;
-                        else inten = 1 - (prog - 0.82) / 0.18;
-                    }
-                    ctx.mcMat.opacity = 0.5 + 0.5 * inten;
-                    ctx.mcBase.rotation.y += dt * (0.15 + 2.8 * inten);
-                    for (const f of ctx.mcFloats) {
-                        const ap = Math.min(Math.max((prog - (0.10 + f.ph * 0.07)) / 0.20, 0), 1);
-                        const show = ctx.mcRun > 0 && ap > 0 && inten > 0.02;
-                        f.g.visible = show;
-                        if (show) {
-                            const e = ap * ap * (3 - 2 * ap);
-                            f.g.position.y = 0.05 + f.ty * e + Math.sin(time * 1.5 + f.ph) * 0.03;
-                            f.g.rotation.y += dt * f.spd;
-                            f.g.scale.setScalar(0.5 + 0.5 * e);
-                            f.m.opacity = 0.85 * inten * e;
-                        }
-                    }
-                    for (const q of ctx.mcParts) {
-                        const show = inten > 0.04;
-                        q.p.visible = show;
-                        if (show) {
-                            const pr = (q.ph + time * 0.35) % 1;
-                            const a = q.a + time * q.spd;
-                            q.p.position.set(ctx.MC_X + Math.cos(a) * q.r, 0.05 + pr * 2.5, ctx.MC_Z + Math.sin(a) * q.r);
-                            const sc = Math.sin(pr * Math.PI) * inten;
-                            q.p.scale.setScalar(Math.max(sc, 0.001));
-                            q.p.rotation.y = time * 2;
-                        }
-                    }
-                }
+ctx.magicCircleApi.tick(dt, time);
   })
 
   // L609–L609（1 行）
@@ -878,10 +846,10 @@ ctx.pendant.rotation.y -= 0.008;
 ctx.ptKot += ((ctx.kotatsuOn ? 1 : 0) - ctx.ptKot) * 0.07;
   })
 
-  // L889–L889（1 行）
-  F('frame/94', (dt, time) => {
-ctx.ptMc += ((ctx.mcRun > 0 ? 1 : 0) - ctx.ptMc) * 0.055;
-  })
+  // ★ J4.24：原 `frame/94`（`ctx.ptMc += …`）已并入紫色魔法阵物件的 `update()`
+  //   —— 与 `frame/38` 的几何分支合并在那里执行（提前，等价性论证见
+  //   `world/floor1/magicCircle.js` 文件头「★ 帧顺序」）。槽位 2 的强度改由
+  //   `lights()` 的 `strength: () => s.pt` 惰性读取。
 
   // L890–L890（1 行）
   F('frame/95', (dt, time) => {

@@ -616,10 +616,10 @@ export function installWeatherSystem(ctx, app) {
             // J0.4：截图回归的测试机位覆盖（六元数组 [px,py,pz,lx,ly,lz]）。
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
             ctx.testCam = null;
-            // ★ J4.22/J4.23：`ctx.ptLantern` 与 `ctx.ptPlant` 已随各自的物件搬走
-            //   （改为 `world/floor1/hangingLantern.js` / `world/floor1/moonPlant.js` 的 `state.pt`，
-            //    初值仍是 1 / 0，平滑也由各自物件的 `update` 做）。
-            ctx.ptKot = 1, ctx.ptMc = 0, ctx.ptCb = 0;
+            // ★ J4.22/J4.23/J4.24：`ctx.ptLantern` / `ctx.ptPlant` / `ctx.ptMc` 已随各自的物件搬走
+            //   （改为 `world/floor1/hangingLantern.js` / `moonPlant.js` / `magicCircle.js` 的 `state.pt`，
+            //    初值仍是 1 / 0 / 0，平滑也由各自物件的 `update` 做）。
+            ctx.ptKot = 1, ctx.ptCb = 0;
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
 }
