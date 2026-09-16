@@ -436,21 +436,11 @@ ctx.magicCircleApi.tick(dt, time);
   })
 
   // L655–L655（1 行）
+  // ★ J4.26：茶杯（餐桌/暖桌通用）的每帧分支已抽到 `src/cabin/props/cup.js` ——
+  //   这里**在原位置**调用（帧顺序一个字节没变）。`cups` 是跨物件的共享集合
+  //   （长餐桌 3 只 + 暖桌 2 只），由装配点创建的 `cupFactory` 持有。
   F('frame/45', (dt, time) => {
-for (const c of ctx.cups) {
-                    const u = c.userData;
-                    if (u.run > 0) u.run -= dt;
-                    const prog = u.run > 0 ? Math.min(Math.max(1 - u.run / 2.6, 0), 1) : 1;
-                    const env = u.run > 0 ? Math.sin(Math.PI * prog) : 0;
-                    u.lift = env * 0.13;
-                    c.position.y = u.baseY + u.lift;
-                    u.steam.visible = u.run > 0;
-                    if (u.steam.visible) {
-                        u.steam.position.y = 0.10 + (time * 0.25) % 0.07;
-                        const ss = 0.85 + 0.15 * Math.sin(time * 5);
-                        u.steam.scale.set(ss, 1, ss);
-                    }
-                }
+ctx.cupFactory.update(dt, time);
   })
 
   // L669–L669（1 行）

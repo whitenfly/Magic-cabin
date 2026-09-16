@@ -33,6 +33,7 @@ import stovePlatform from './stovePlatform.js'
 import tableware from './tableware.js'
 import tarot from './tarot.js'
 import { scene } from '../../app/rng.js'
+import { createCupFactory } from '../../props/cup.js'
 
 export function installFloor1(ctx, app) {
   const floor1Rng = scene.floor1
@@ -41,7 +42,12 @@ export function installFloor1(ctx, app) {
             //    局部函数，随滑轮置物台一起搬进了 `world/floor1/cartShelf.js`（成为模块级函数）。
             //    它在这里**没有任何读者**（全局仅此一处提及），留着会让本段在装配期抛 ReferenceError
             //    —— 这类"未定义的自由变量" `tsc` 与 `build` 都查不出，只有页面起不来才会暴露（§8.2）。
-            ctx.makeCup = makeCup; ctx.makeChair = makeChair; ctx.makeCushion = makeCushion;
+            // ⚠️ J4.26：原来的 `ctx.makeCup = makeCup;` 已删除 —— `makeCup` 是「茶杯」那一段的局部函数，
+            //    已抽成共享件 `src/cabin/props/cup.js`。全局搜索确认 `ctx.makeCup` **没有任何读者**，
+            //    留着会让本段在装配期抛 ReferenceError（`J4.20` 的 `startQuill` 同款；那类"未定义的
+            //    自由变量" `tsc` 与 `build` 都查不出，只有页面起不来才会暴露）。
+            //    另两个（`makeChair` / `makeCushion`）仍由本段的暖桌部分定义、且同样无读者，故原样保留。
+            ctx.makeChair = makeChair; ctx.makeCushion = makeCushion;
             ctx.installProp(diningTable);
             // ---- 12.2 星象仪 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
@@ -279,29 +285,20 @@ export function installFloor1(ctx, app) {
             const longTableApi = ctx.installProp(longTable);
             ctx.longTableApi = longTableApi;
             /* 茶杯（餐桌/暖桌通用） */
-            const cups = [];
+            // J4.26：工厂与每帧更新已抽到 src/cabin/props/cup.js —— **共享件**，
+            //   正是 J3 记的两条前置之一（提梁茶壶读 `cups[2]`、12.13 暖桌也调 `makeCup`，
+            //   暖桌因此被判"搬不动"：SKIP §「阻塞二」）。
+            // `cups` 仍是**同一个数组实例**，语义不变（长餐桌 3 只 + 暖桌 2 只 = 5 只）。
+            const cupFactory = createCupFactory({
+                put: ctx.put, edge: ctx.edge, line: ctx.line, scene: ctx.scene,
+                defaultBaseY: ctx.DTOP, regMagic: ctx.regMagic,
+            });
+            ctx.cupFactory = cupFactory;
+            const cups = cupFactory.cups;
             ctx.cups = cups;
-            function makeCup(x, z, baseY, parent) {
-                const by = (baseY === undefined) ? ctx.DTOP : baseY;
-                const g = new THREE.Group();
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.045, 0.038, 0.09, 12)), 0, 0.045, 0, 0, 0, 0, g);
-                ctx.put(ctx.edge(new THREE.TorusGeometry(0.03, 0.008, 6, 12)), 0.052, 0.045, 0, 0, 0, 0, g);
-                const steam = new THREE.Group();
-                for (const off of [-0.015, 0, 0.015])
-                    ctx.put(ctx.line([[off, 0, 0], [off + 0.012, 0.035, 0.003], [off - 0.01, 0.07, -0.003], [off + 0.008, 0.105, 0.002]]),
-                        0, 0, 0, 0, 0, 0, steam);
-                steam.position.y = 0.10;
-                steam.visible = false;
-                g.add(steam);
-                g.position.set(x, by, z);
-                (parent || ctx.scene).add(g);
-                g.userData = { run: 0, lift: 0, steam, baseY: by };
-                cups.push(g);
-                ctx.regMagic(g, () => { g.userData.run = 2.6; });
-            }
-            makeCup(ctx.DT_X - 0.85, ctx.DT_Z + 0.20);
-            makeCup(ctx.DT_X + 0.85, ctx.DT_Z + 0.20);
-            makeCup(ctx.DT_X, ctx.DT_Z + 0.20);
+            cupFactory.makeCup(ctx.DT_X - 0.85, ctx.DT_Z + 0.20);
+            cupFactory.makeCup(ctx.DT_X + 0.85, ctx.DT_Z + 0.20);
+            cupFactory.makeCup(ctx.DT_X, ctx.DT_Z + 0.20);
 
             /* ---- 提梁茶壶 ---- */
             const POT_BX = ctx.DT_X + 0.42, POT_BZ = ctx.DT_Z + 0.02;
@@ -618,8 +615,9 @@ export function installFloor1(ctx, app) {
             }
 
             /* —— 茶杯 ×2 —— */
-            makeCup(-0.34, -0.34, ctx.KTOP, kotatsuG);
-            makeCup(-0.14, -0.44, ctx.KTOP, kotatsuG);
+            // J4.26：暖桌摆的两只茶杯改用共享工厂（`cups` 是同一个数组 ⇒ 每帧动画一并覆盖）
+            cupFactory.makeCup(-0.34, -0.34, ctx.KTOP, kotatsuG);
+            cupFactory.makeCup(-0.14, -0.44, ctx.KTOP, kotatsuG);
 
             /* —— 方坐垫 ×2 —— */
             const cushions = [];
