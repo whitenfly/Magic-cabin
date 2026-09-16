@@ -34,7 +34,8 @@ import { installSceneCore } from './SceneCore.js'
 import { installPropTools } from '../../core/geometry/propTools.js'
 import { installPropInstaller } from './PropInstaller.js'
 import { installHouseShell } from '../../world/house/shell.js'
-import { installOutdoorYard } from '../../world/outdoor/yard.js'
+import { installOutdoorYardStatic } from '../../world/outdoor/yardStatic.js'
+import { installOutdoorFireflies } from '../../world/outdoor/fireflies.js'
 import { installFloor1 } from '../../world/floor1/install.js'
 import { installJunkBoxes } from '../../world/floor1/junkBoxes.js'
 import { installFloor2 } from '../../world/floor2/install.js'
@@ -61,9 +62,10 @@ export function installCabin(app) {
   installEnv(ctx, app)
   installAudio(ctx, app)
   installSceneCore(ctx, app)
-  // ── 段 04–07：房屋外壳 / 室外 / 陈设工具 / 物件装配器 ────────────────────
+  // ── 段 04–07：房屋外壳 / 室外（静态陈设 + 萤火虫两件） / 陈设工具 / 物件装配器 ──
   installHouseShell(ctx, app)
-  installOutdoorYard(ctx, app)
+  installOutdoorYardStatic(ctx, app)
+  installOutdoorFireflies(ctx, app)
   installPropTools(ctx, app)
   installPropInstaller(ctx, app)
   // ── 段 08–10：一楼 / 楼梯下储物箱 / 二楼 ────────────────────────────────

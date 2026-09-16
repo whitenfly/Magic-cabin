@@ -78,8 +78,15 @@ export const SEGMENTS = [
     note: '墙 / 屋顶 / 门窗 / 楼梯 / 路牌', bind: rng('runtimeRng'),
   },
   {
-    id: 'outdoor', hint: 437, module: 'world/outdoor/yard.js', fn: 'installOutdoorYard',
-    note: '森林 / 草地 / 石头 / 花 / 萤火虫', bind: rng('outdoorRng'),
+    id: 'outdoor', hint: 437, module: 'world/outdoor/yardStatic.js', fn: 'installOutdoorYardStatic',
+    note: '森林 / 草地 / 石头 / 树桩 / 花（含 addStatic 收集器与 mergeStatic）', bind: rng('outdoorRng'),
+  },
+  {
+    // ★ J4.9（缺口 C7）：室外片从"一条不可切分的链"切成两件 + 一个共享模块（`outdoor/yardSpot.js`）。
+    //   仍然**只是段形态**，不是 `defineProp` —— 升格为 prop 是另一件事（见 `J4.9-实施结果.md` 遗留）。
+    id: 'fireflies', hint: 592, module: 'world/outdoor/fireflies.js', fn: 'installOutdoorFireflies',
+    note: '萤火虫（几何 + 状态；每帧分支仍在 FrameBody/WeatherSystem，经 ctx.ff* 取值）',
+    bind: rng('outdoorRng'),
   },
   { id: 'propsTools', hint: 643, module: 'core/geometry/propTools.js', fn: 'installPropTools', note: '圆角几何 / 陈设工具' },
   {

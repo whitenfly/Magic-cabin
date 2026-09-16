@@ -41,6 +41,24 @@ import ts from 'typescript'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
 const MONOLITH = path.join(ROOT, 'src/cabin/legacy/monolith.js')
+
+// ★ J4.7：`legacy/monolith.js` 已删除 —— 本脚本（_j4-frame.mjs）**整体退役**。
+//   它们是**搬迁期工具**：对象是那个 6105 行的 IIFE 体（`--ctxify` 切段 / `--move` 剪段 /
+//   分析跨语句依赖 / 生成帧任务）。段切片做完之后 monolith 不复存在，工具也就没有对象了。
+//   仍然有效的那部分判据已经换了形态、住在别处：
+//     · 「段序 = 执行序」        → tests/unit/segments.test.mjs 第 2 项
+//     · 「每个段导出 (ctx, app)」→ tests/unit/segments.test.mjs 第 3 项
+//     · 「legacy 已清零」        → tests/unit/segments.test.mjs 第 1 项
+//     · 「animate ≤ 60 行」      → tests/unit/segments.test.mjs 第 4 项
+//   段表（`_j4-segments.mjs`）**继续保留**：它现在是"装配顺序"的事实来源。
+if (!fs.existsSync(MONOLITH)) {
+  console.log('')
+  console.log('  _j4-frame.mjs：legacy/monolith.js 已删除（J4.7）—— 本脚本整体退役')
+  console.log('    替代判据：node --test tests/unit/segments.test.mjs')
+  console.log('')
+  process.exit(0)
+}
+
 const OUT = path.join(ROOT, 'src/cabin/app/scene/FrameBody.js')
 const DRY = process.argv.includes('--dry-run')
 const IND = '            '
