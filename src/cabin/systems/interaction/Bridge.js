@@ -52,7 +52,10 @@ export function installInteractionBridge(ctx, app) {
             // ★ 注册次序必须与搬迁前的短路次序**完全一致**，否则同一次点击会命中不同的物件。
             //   每个源自己负责"命中的 Mesh → 可执行目标"这一步（label 取自各物件的 aimLabel）。
             interaction.registerAimSource({ id: 'hinges', meshes: ctx.hingeMeshes, resolve: (hit) => { const g = hit.object.userData.hingeGroup; return makeTarget({ id: 'hinge:' + (g.userData.aimLabel || 'unnamed'), label: g.userData.aimLabel || '交互', activate: () => toggleSpring(g) }); } });
-            interaction.registerAimSource({ id: 'magic', meshes: ctx.magicMeshes, resolve: (hit) => { const o = hit.object.userData.magicRoot; return makeTarget({ id: 'magic:' + (o.userData.aimLabel || 'unnamed'), label: o.userData.aimLabel || '交互', activate: () => fireMagic(o) }); } });
+            // ★ J4.11（缺口 C3）：`magic` 命中源改为**直接问注册中心**"这条 Mesh 属于哪条交互" ——
+            //   不再经 `hit.object.userData.magicRoot` 那层间接。
+            //   `magicMeshes` 数组实例与顺序都没变（一次性求交、取最近命中，语义与 J2.6 一致）。
+            interaction.registerAimSource({ id: 'magic', meshes: registry.magicMeshes, resolve: (hit) => { const t = registry.aimTargetOf(hit.object); if (!t) return null; return makeTarget({ id: t.id, label: t.label, activate: () => { ctx.SND.play(t.sfx); t.onActivate(); } }); } });
             interaction.registerAimSource({ id: 'fire', meshes: ctx.fireMeshes, resolve: () => makeTarget({ id: 'fire/hearth', label: '点燃 / 熄灭壁炉', activate: toggleFire }) });
             function aimRay() { raycaster.setFromCamera(CENTER, ctx.camera); return interaction.aimTarget(raycaster); }
             const isLocked = () => document.pointerLockElement === ctx.renderer.domElement;

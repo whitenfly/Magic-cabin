@@ -37,6 +37,8 @@ export function createRegistry() {
   const props = []
   /** 可点物件（`regMagic`）的 Mesh 扁平表 —— 准星射线与点击射线的命中集合 */
   const magicMeshes = []
+  /** `J4.11`（C3）：Mesh → aim 目标。与 `magicMeshes` 同步增长，顺序由调用方决定 */
+  const aimOf = new Map()
   /** 已注册的光源（`J2.3` 的 `LightField` 消费） */
   const lights = []
   /** 统一交互条目（`J2.6` 的契约产物） */
@@ -68,13 +70,47 @@ export function createRegistry() {
    * ⚠️ Mesh 的收集**仍由调用方完成**（它知道哪些子 Mesh 该被排除：`userData.noHit`）——
    * 注册中心只负责"这些 Mesh 属于哪个 root"这一步，命中集合的数组实例由它统一持有。
    */
-  function registerMagic(root, meshes) {
+  /**
+   * ★ `J4.11`（缺口 C3）：aim 通路的**统一入口**。
+   *
+   * `target` = `{ id, label, sfx, propId, onActivate }`。命中时由 `Bridge.js` 的 `magic` 源
+   * 经 `aimTargetOf(hit.object)` 取回它 —— 于是"哪条 Mesh 属于哪条交互"只记在一个地方，
+   * 不再绕道 `userData`。
+   *
+   * ⚠️ `magicMeshes` 仍是**同一个扁平数组实例**：命中是"一次性对全部求交、取最近"，
+   * 顺序 = 装配顺序 —— 这是 `J2.6` 声明的语义，不能改成"按 target 分组求交"。
+   */
+  function registerAim(target, meshes) {
     for (const m of meshes) {
-      m.userData.magicRoot = root
+      aimOf.set(m, target)
       magicMeshes.push(m)
     }
-    return root
+    return target
   }
+
+  /**
+   * 登记一个"点一下就有反应"的物件（原 `regMagic` 的收集逻辑）。
+   *
+   * `J4.11` 起它不再往 `userData` 上写 `magicRoot` —— 改从 `userData` 构造一个 aim target
+   * 交给 `registerAim`，于是**两种来源（Interactable 驱动的、与"build 里自己注册"的）
+   * 在同一个 Map 里合一**。`regWobble()` 这类调用方一行不用改。
+   */
+  function registerMagic(root, meshes) {
+    const ud = root.userData || {}
+    return registerAim(
+      {
+        id: 'magic:' + (ud.aimLabel || 'unnamed'),
+        label: ud.aimLabel || '交互',
+        sfx: ud.sfx || 'toggle',
+        propId: ud.cabinProp || null,
+        onActivate: () => { if (typeof ud.onClick === 'function') ud.onClick() },
+      },
+      meshes,
+    )
+  }
+
+  /** 某条 Mesh 对应的 aim 目标（`J4.11` 的唯一查询入口） */
+  const aimTargetOf = (mesh) => aimOf.get(mesh) || null
 
   /** 登记一个光源（`J2.3`）：`J2.5` 只收表，填充 uniform 仍由原逻辑做 */
   function registerLight(source) {
@@ -109,7 +145,9 @@ export function createRegistry() {
       // `J3`：有准星/点击入口（`userData.onClick`）的物件 id —— 由 `installProp` 打标。
       // 「搬走一件 `regMagic` 物件」最容易出的错就是它**悄悄失去准星入口**：
       // 画面逐字节相同、冒烟也不覆盖，只有这个清单能把它照出来。
-      magicPropIds: [...new Set(magicMeshes.map((m) => m.userData.magicRoot?.userData?.cabinProp).filter(Boolean))],
+      // `J4.11`：从 `aimOf` 派生（原来读 `m.userData.magicRoot.userData.cabinProp`）——
+      // 语义不变："哪些物件真的有准星入口"，只是来源从 userData 换成 aim 记录。
+      magicPropIds: [...new Set([...aimOf.values()].map((t) => t.propId).filter(Boolean))],
       // ★ `J3.1`：aim 通路的**逐条**诊断。`magicPropIds` 的粒度是"每件物件"——
       // 只要一件物件有**一个**入口就算通过，于是"餐桌三只餐盘只有第一只点得动"
       // 这类缺口全部漏网（实测确认过）。下面两条把粒度下沉到**每条 `Interactable`**：
@@ -127,6 +165,8 @@ export function createRegistry() {
   return {
     registerProp,
     registerMagic,
+    registerAim,
+    aimTargetOf,
     registerLight,
     registerInteractable,
     registerFeature,

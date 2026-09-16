@@ -64,11 +64,18 @@ test('Registry：magicMeshes 是调用方拿到的**同一个数组实例**', ()
   const reg = createRegistry()
   const m1 = { isMesh: true, userData: {} }
   const m2 = { isMesh: true, userData: {} }
-  const root = {}
+  const root = { userData: { aimLabel: '开 / 关抽屉', cabinProp: 'floor2/wardrobe' } }
   reg.registerMagic(root, [m1, m2])
   assert.equal(reg.magicMeshes.length, 2)
   assert.equal(reg.magicMeshes[0], m1)
-  assert.equal(m1.userData.magicRoot, root, 'registerMagic 负责回填 magicRoot')
+  // ★ `J4.11`（缺口 C3）：\`registerMagic\` 不再往 \`userData\` 回填 \`magicRoot\` ——
+  //   它改成把"这条 Mesh 属于哪个 aim 目标"记进注册中心的 **aim 记录**（`aimTargetOf`）。
+  //   判据的语义没变（"注册中心负责把 Mesh 与它的回调关联起来"），只是问法换了。
+  const t = reg.aimTargetOf(m1)
+  assert.ok(t, 'aimTargetOf 必须能回答"这条 Mesh 属于哪条交互"')
+  assert.equal(reg.aimTargetOf(m2), t, '同一批注册共用一条记录')
+  assert.equal(t.label, '开 / 关抽屉', 'label 从 root.userData 取（与 regMagic 行为一致）')
+  assert.equal(t.propId, 'floor2/wardrobe', 'propId 供 stats().magicPropIds 用')
 })
 
 test('Registry：registerInteractable 需要 id；stats 汇总五类', () => {
