@@ -10,6 +10,7 @@
 | `cdp.mjs` | **零依赖 CDP 客户端**（Node 22+ 自带 `WebSocket`，**不需要 puppeteer / playwright**）：精确视口、轮询等待、求值、截图、报错收集 | 基础设施 | ✅ `J0.4` |
 | `smoke.mjs` | **交互冒烟**：进小屋 / 开门 / 点壁炉 / 切 3 视角 / 点书籍物件 / 切天气 / 退出 | `J0.5` | ✅ |
 | `perf.mjs` | **性能基线**：首屏时间 / 稳态 FPS / `renderer.info`（calls·triangles·geometries·textures）；`--update` 写基线、`--compare` 判回归、`--gpu` 走真实 GPU（增量） | `J0.6` | ✅ |
+| `perf-report.mjs` | **基线报告的渲染**（纯函数 `linkPrefix()` / `backendVerdict()` / `renderMarkdown()`）—— 从 `perf.mjs` 抽出，因为后者顶层有副作用、**不能被单测 import**；文内相对链接一律按**生成物自己的位置**算 | `J4.12` | ✅ |
 | `baseline/perf.json` | 性能基线数据（**必须提交** —— 它是判据本身，人类可读版在 `docs/baseline.md`） | `J0.6` | ✅ |
 | `baseline/perf.gpu.json` | GPU 增量基线（**必须提交**；报告在 `docs/baseline.gpu.md`） | `J0.6` | ✅ |
 | `layer-map.mjs` | hit-test 网格地图：屏幕上每块区域最上层是谁 | `CH1` | ⬜ |
