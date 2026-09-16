@@ -219,8 +219,24 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
     }
 
     // ⑥ 光源（取代末尾硬编码的 `PP[i]`；声明顺序 = 槽位顺序）
+    //
+    // ★ `J4.18`：这一段现在**真的接进光照场**了。
+    //
+    // 此前它只调 `registry.registerLight()` —— 那只是"往一张表里塞一条"（`J2.3` 的过渡形态），
+    // 光照场 `lightField` 根本收不到 ⇒ **物件声明的灯不会亮**。这正是 `J3` 判定
+    // 「6 件含光源物件搬不动」的根因：搬走一盏灯，`world/lights.js` 里那行 `lightField.register`
+    // 就没有替补了（详见 `_j3-specs/floor1-hanging-lantern.SKIP.md`）。
+    //
+    // 现在两条通路都走：`lightField.register()` 让它**真的亮**，`registry.registerLight()`
+    // 保留既有的诊断计数（`stats().lights` 的判据是「≥ 8」）。
+    //
+    // ⚠️ 声明里请给 `slot`（`core/lighting/PointLightSource.js` 的 `slot` 字段）：
+    //    物件的装配时机**晚于** `world/lights.js` 的一次性注册，不给槽位就只能追加到末尾
+    //    ⇒ 槽序改变 ⇒ 像素回归必红（shader 的闪烁相位含 `float(i)`）。
     if (typeof prop.lights === 'function') {
+      const lf = c2.lightField
       for (const src of prop.lights(state, c2) || []) {
+        if (lf && typeof lf.register === 'function') lf.register(src)
         registry.registerLight({ ...src, prop: prop.id })
       }
     }

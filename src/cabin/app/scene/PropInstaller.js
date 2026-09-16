@@ -60,6 +60,11 @@ export function installPropInstaller(ctx, app) {
             propTool('camera', () => ctx.camera); propTool('renderer', () => ctx.renderer);
             // 音效（交互的 `sfx` 由物件声明）
             propTool('SND', () => ctx.SND);
+            // ★ J4.18：光照场也交给物件 —— `lights()` 声明的光源由 `installProp` 注册进它
+            //   （此前只登记进 registry ⇒ 物件声明的灯不会亮，见 app/installProp.js ⑥）。
+            //   槽序由声明里的 `slot` 决定，与装配时机无关 ⇒ 6 件含光源物件可以整体搬家。
+            //   `lightField` 在 `installWorldLights`（段 03 之后）就已建好，早于本段，惰性 getter 安全。
+            propTool('lightField', () => ctx.lightField);
 
             // J4.7：`installed` 也交出去 —— 帧任务登记（`app/scene/FrameBody.js`）要先把
             // `installProp()` 自动登记的那些任务**撤销**再按原 tickOnce() 的顺序重登，
