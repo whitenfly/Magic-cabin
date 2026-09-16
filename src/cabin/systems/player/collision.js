@@ -38,7 +38,9 @@ export function installCollision(ctx, app) {
                 // J3（B2）：三脚圆凳已搬入 world/floor1/stools.js —— 碰撞平台改用装配记录里的部件
                 { g: ctx.stoolsApi.parts.stoolA, hx: 0.23, hz: 0.23, top: 0.475 },
                 { g: ctx.stoolsApi.parts.stoolB, hx: 0.23, hz: 0.23, top: 0.475 },
-                { g: ctx.cartG, hx: 0.21, hz: 0.16, top: 0.482 },
+                // J4.20：滑轮置物台已升格为 world/floor1/cartShelf.js —— 移动平台改读**装配记录里的部件**
+                // （与上面两只圆凳同一处置：`ctx.stoolsApi.parts.stoolA/B`）。
+                { g: ctx.cartShelfApi.parts.cartG, hx: 0.21, hz: 0.16, top: 0.482 },
                 { g: ctx.chairG, hx: 0.24, hz: 0.24, top: ctx.FY + 0.49, bot: ctx.FY },
                 { g: ctx.stoolG, hx: 0.17, hz: 0.15, top: ctx.FY + 0.33, bot: ctx.FY },
                 ...ctx.chairs.map(c => ({ g: c, hx: 0.23, hz: 0.23, top: 0.475 }))

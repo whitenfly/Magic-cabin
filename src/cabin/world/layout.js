@@ -162,6 +162,12 @@ export function createLayout() {
   const SHELF_X = -3.72
   /** 左墙书架（12.9）中心 z（floor1/bookshelf；原分区局部常量 `SFZ`） */
   const SHELF_Z = -2.85
+  /** 滑轮置物台（12.11b，含墨水瓶羽毛笔 + 纸堆）的初始位（floor1/cart-shelf；原分区常量 `CART_P0`） */
+  const CART_POS = { x: 2.85, z: 2.2 }
+  /** 滑轮置物台（12.11b）的滑出方向：朝被炉方向（-z，向屋内）滑出，不再撞花盆（floor1/cart-shelf；原 `CART_DIR`） */
+  const CART_DIR = { x: 0, z: -1 }
+  /** 滑轮置物台（12.11b）的滑出距离（floor1/cart-shelf；原 `CART_DIST`） */
+  const CART_DIST = 0.55
   /** 旋转星铃（12.9d）的组原点（x 与 12.9 左墙书架的 SFX 同值，y 是吊挂高度）（floor1/star-bell） */
   const STARBELL_POS = { x: -3.72, y: 1.975, z: -3.05 }
   /** 塔罗牌牌堆（12.12）的组原点（`tarotG.position`）（floor1/tarot） */
@@ -237,6 +243,8 @@ export function createLayout() {
     BOOK_PILE_POS, STARBELL_POS, TAROT_POS, BAG_HOOK_X, BAG_HOOK_Y, BAG_HOOK_Z, BIN_X, BIN_Z, BIN_H, CRATE_X, CRATE_Z, CR_W, CR_D, CR_H, CRATE_TOP, MIRROR_X, MIRROR_Z, TISSUE_X, TISSUE_Z, WD_X, WD_Z,
     // J4.19 搬迁新增（左墙书架 —— 碰撞表也读它）
     SHELF_X, SHELF_Z,
+    // J4.20 搬迁新增（滑轮置物台 —— 碰撞表也读它的 `cartG` 位置）
+    CART_POS, CART_DIR, CART_DIST,
     // J3 搬迁新增
     CAL_X, CAL_Z, DECK_HOME, COIN_BASE, DESK_HG_X, DESK_HG_Z, PIC_POS, RUBIK_HOME, SNOW_X, SNOW_Z,
   }
