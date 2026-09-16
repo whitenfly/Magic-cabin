@@ -21,6 +21,7 @@ import diningTable from './diningTable.js'
 import doorHangBar from './doorHangBar.js'
 import hangingLantern from './hangingLantern.js'
 import hourglass from './hourglass.js'
+import kotatsu from './kotatsu.js'
 import longTable from './longTable.js'
 import magicCircle from './magicCircle.js'
 import moonPlant from './moonPlant.js'
@@ -46,8 +47,11 @@ export function installFloor1(ctx, app) {
             //    已抽成共享件 `src/cabin/props/cup.js`。全局搜索确认 `ctx.makeCup` **没有任何读者**，
             //    留着会让本段在装配期抛 ReferenceError（`J4.20` 的 `startQuill` 同款；那类"未定义的
             //    自由变量" `tsc` 与 `build` 都查不出，只有页面起不来才会暴露）。
-            //    另两个（`makeChair` / `makeCushion`）仍由本段的暖桌部分定义、且同样无读者，故原样保留。
-            ctx.makeChair = makeChair; ctx.makeCushion = makeCushion;
+            //    ⚠️ J4.28：`ctx.makeCushion = makeCushion;` **也已删除** —— `makeCushion` 定义在**暖桌段**里，
+            //    随 12.13 一起搬进了 `world/floor1/kotatsu.js`（同 `J4.20` 的 `startQuill`、`J4.26` 的 `makeCup`：
+            //    那类"靠函数提升引用的段导出"一旦被引用的函数搬走，本段会在装配期抛 ReferenceError）。
+            //    `makeChair` 仍由本段（12.9f 余段的椅子，L373）定义、且同样无读者 ⇒ 原样保留。
+            ctx.makeChair = makeChair;
             ctx.installProp(diningTable);
             // ---- 12.2 星象仪 ----
             // J3（B4）：几何已搬入 src/cabin/world/floor1/orrery.js，此处只留装配调用。
@@ -422,234 +426,16 @@ export function installFloor1(ctx, app) {
             const tarotApi = ctx.installProp(tarot);
             ctx.tarotApi = tarotApi;
             /* ---- 12.13 暖桌（八角桌板 + 等腰梯形垂帘 + 四角倒三角填补）+ 收音机 + 果盆橘子 + 方坐垫 ---- */
-            ctx.kotatsuOn = true;
-            ctx.kotGlowMat = null;
-            ctx.radioNoteRun = 0;
-            const kotatsuG = new THREE.Group();
-            ctx.kotatsuG = kotatsuG;
-            kotatsuG.position.set(ctx.KOT_X, 0, ctx.KOT_Z);
-            kotatsuG.rotation.y = 0.22;
-            ctx.scene.add(kotatsuG);
+            // J4.28：几何 + **5 条交互** + **三段每帧分支** + **光源槽位 3** 已搬入
+            // src/cabin/world/floor1/kotatsu.js。
+            // ★ `J3` 记的两条硬阻塞（① 光源槽位 ② `makeCup` 跨分区复用）都已由 `J4.18` + `J4.26` 解决。
+            // ⚠️ `cupFactory` 经装配**选项**显式传入 —— 装配环境（`propCtx`）里没有它（它是段 08 才建的）。
+            const kotatsuApi = ctx.installProp(kotatsu, { ctx: { cupFactory } });
+            ctx.kotatsuApi = kotatsuApi;
 
-            const kotBody = new THREE.Group();
-            ctx.kotBody = kotBody;
-            kotatsuG.add(kotBody);
-            {
-                const tilt = 0.16;
-                const C = 0.595;
-                const topY = 0.405;
-                const Lc = 0.38;
-                const bz = C + Lc * Math.sin(tilt);
-                const wt = 0.87;
-                const wb = 2 * bz;
-
-                const topShape = new THREE.Shape();
-                topShape.moveTo(-C, -(C - 0.165));
-                topShape.lineTo(-(C - 0.165), -C);
-                topShape.lineTo((C - 0.165), -C);
-                topShape.lineTo(C, -(C - 0.165));
-                topShape.lineTo(C, (C - 0.165));
-                topShape.lineTo((C - 0.165), C);
-                topShape.lineTo(-(C - 0.165), C);
-                topShape.lineTo(-C, (C - 0.165));
-                topShape.closePath();
-                const topGeo = new THREE.ExtrudeGeometry(topShape, { depth: 0.055, bevelEnabled: false });
-                topGeo.rotateX(-Math.PI / 2);
-                ctx.put(ctx.edge(topGeo), 0, ctx.KTOP - 0.055, 0, 0, 0, 0, kotBody);
-
-                for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-                    ctx.put(ctx.box(0.07, 0.40, 0.07), sx * 0.42, 0.20, sz * 0.42, 0, 0, 0, kotBody);
-
-                const quiltMat = ctx.LITMAT(0xc4a484, { side: THREE.DoubleSide });
-                const trapShape = new THREE.Shape();
-                trapShape.moveTo(-wt / 2, 0);
-                trapShape.lineTo(wt / 2, 0);
-                trapShape.lineTo(wb / 2, -Lc);
-                trapShape.lineTo(-wb / 2, -Lc);
-                trapShape.closePath();
-                const trapGeo = new THREE.ExtrudeGeometry(trapShape, { depth: 0.03, bevelEnabled: false });
-                function makeCurtain() {
-                    const g = ctx.solid(trapGeo, quiltMat);
-                    for (const s of [-0.22, 0.22])
-                        ctx.put(ctx.line([[s, -0.035, 0.034], [s, -Lc + 0.05, 0.034]]), 0, 0, 0, 0, 0, 0, g);
-                    const hem = [];
-                    for (let i = 0; i <= 24; i++) {
-                        const t2 = i / 24;
-                        hem.push([-wb / 2 + t2 * wb, -Lc + Math.sin(t2 * Math.PI * 5) * 0.012, 0.034]);
-                    }
-                    ctx.put(ctx.line(hem), 0, 0, 0, 0, 0, 0, g);
-                    return g;
-                }
-                for (const ry of [0, Math.PI, Math.PI / 2, -Math.PI / 2]) {
-                    const w = new THREE.Group();
-                    w.rotation.y = ry;
-                    kotBody.add(w);
-                    ctx.put(makeCurtain(), 0, topY, C, -tilt, 0, 0, w);
-                }
-
-                const yBot = topY - Lc * Math.cos(tilt);
-                for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-                    const P1 = [sx * (wt / 2), topY, sz * C];
-                    const P2 = [sx * C, topY, sz * (wt / 2)];
-                    const P3 = [sx * bz, yBot, sz * bz];
-                    const triGeo = new THREE.BufferGeometry();
-                    triGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-                        P1[0], P1[1], P1[2],
-                        P2[0], P2[1], P2[2],
-                        P3[0], P3[1], P3[2]
-                    ]), 3));
-                    triGeo.computeVertexNormals();
-                    kotBody.add(ctx.solid(triGeo, quiltMat));
-                }
-
-                ctx.kotGlowMat = new THREE.MeshBasicMaterial({
-                    color: 0xffab5e, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide
-                });
-                const kotGlow = new THREE.Mesh(new THREE.CircleGeometry(0.52, 24), ctx.kotGlowMat);
-                kotGlow.userData.noHit = true;
-                ctx.put(kotGlow, 0, 0.015, 0, -Math.PI / 2, 0, 0, kotBody);
-            }
-            ctx.regMagic(kotBody, () => { ctx.kotatsuOn = !ctx.kotatsuOn; });
-
-            /* —— 收音机（点击播放音符）—— */
-            const radioG = new THREE.Group();
-            ctx.radioG = radioG;
-            radioG.position.set(-0.34, ctx.KTOP, 0.30);
-            radioG.rotation.y = -0.45;
-            kotatsuG.add(radioG);
-            {
-                const woodMat = ctx.LITMAT(0x8f6b4e, { side: THREE.DoubleSide });
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.20, 0.115, 0.10), woodMat), 0, 0.0575, 0, 0, 0, 0, radioG);
-                for (let i = 0; i < 4; i++)
-                    ctx.put(ctx.line([[-0.075, 0.032 + i * 0.018, 0.052], [-0.005, 0.032 + i * 0.018, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                ctx.put(ctx.line([[-0.078, 0.026, 0.052], [-0.078, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                ctx.put(ctx.line([[-0.002, 0.026, 0.052], [-0.002, 0.092, 0.052]]), 0, 0, 0, 0, 0, 0, radioG);
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 8)),
-                    0.035, 0.080, 0.052, Math.PI / 2, 0, 0, radioG);
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.012, 8)),
-                    0.070, 0.080, 0.052, Math.PI / 2, 0, 0, radioG);
-                ctx.logBetween([0.085, 0.11, 0], [0.150, 0.235, -0.01], 0.005, radioG);
-                const noteSrc = new THREE.Object3D();
-                noteSrc.position.set(0.150, 0.245, -0.01);
-                radioG.add(noteSrc);
-                radioG.userData.noteSrc = noteSrc;
-            }
-            const noteMat = new THREE.LineBasicMaterial({ color: 0x6b4ea8, transparent: true, opacity: 0 });
-            ctx.noteMat = noteMat;
-            const radioNotes = [];
-            ctx.radioNotes = radioNotes;
-            for (let i = 0; i < 4; i++) {
-                const g = new THREE.Group();
-                const head = [];
-                for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2; head.push([Math.cos(a) * 0.013, Math.sin(a) * 0.009, 0]); }
-                g.add(new THREE.LineLoop(ctx.geo(head), noteMat));
-                g.add(new THREE.Line(ctx.geo([[0.011, 0.007, 0], [0.011, 0.052, 0]]), noteMat));
-                g.add(new THREE.Line(ctx.geo([[0.011, 0.052, 0], [0.024, 0.044, 0]]), noteMat));
-                g.visible = false;
-                ctx.scene.add(g);
-                radioNotes.push({ g, ph: i / 4 });
-            }
-            ctx.regMagic(radioG, () => { ctx.radioNoteRun = 3.2; });
-
-            /* —— 果盆 + 橘子 6 颗 —— */
-            const FB_X = -0.24, FB_Z = 0.10;
-            ctx.FB_X = FB_X; ctx.FB_Z = FB_Z;
-            {
-                const BP = [[0.055, 0], [0.07, 0.018], [0.10, 0.038], [0.14, 0.058], [0.165, 0.078], [0.155, 0.082]];
-                ctx.put(new THREE.Mesh(new THREE.LatheGeometry(BP.map(p => new THREE.Vector2(p[0], p[1])), 18), ctx.FILL),
-                    FB_X, ctx.KTOP, FB_Z, 0, 0, 0, kotatsuG);
-                for (const [ry, rr] of [[0.038, 0.10], [0.078, 0.165], [0.082, 0.155]]) {
-                    const pts = [];
-                    for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2; pts.push([FB_X + Math.cos(a) * rr, ctx.KTOP + ry, FB_Z + Math.sin(a) * rr]); }
-                    ctx.lloop(pts, kotatsuG);
-                }
-                for (const ang of [0, 2.1, 4.2]) {
-                    const c = Math.cos(ang), s = Math.sin(ang);
-                    ctx.put(ctx.line(BP.map(([px, py]) => [FB_X + c * px, ctx.KTOP + py, FB_Z + s * px])), 0, 0, 0, 0, 0, 0, kotatsuG);
-                }
-            }
-            const oranges = [];
-            ctx.oranges = oranges;
-            ctx.orangeState = 'inbowl', ctx.orangeT = 0;
-            const OR = 0.033;
-            ctx.OR = OR;
-            {
-                const orangeG = new THREE.Group();
-                orangeG.position.set(FB_X, ctx.KTOP, FB_Z);
-                kotatsuG.add(orangeG);
-                const oMat = ctx.LITMAT(0xe8963c);
-                const oMat2 = ctx.LITMAT(0xf0a44f);
-                const RA = 0.075;
-                const homes = [
-                    [RA, 0.000, 0.050],
-                    [RA * Math.cos(1.2566), RA * Math.sin(1.2566), 0.050],
-                    [RA * Math.cos(2.5133), RA * Math.sin(2.5133), 0.050],
-                    [RA * Math.cos(3.7699), RA * Math.sin(3.7699), 0.050],
-                    [RA * Math.cos(5.0265), RA * Math.sin(5.0265), 0.050],
-                    [0.000, 0.000, 0.102]
-                ];
-                const rolls = [
-                    [0.42, -0.36],
-                    [0.42, -0.12],
-                    [0.42, 0.12],
-                    [0.42, 0.36],
-                    [0.55, -0.24],
-                    [0.55, 0.02]
-                ];
-                for (let i = 0; i < 6; i++) {
-                    const mesh = ctx.solid(new THREE.SphereGeometry(OR, 10, 8), i % 2 ? oMat2 : oMat);
-                    const hx = homes[i][0], hy = homes[i][2], hz = homes[i][1];
-                    const tx = rolls[i][0], tz = rolls[i][1];
-                    mesh.position.set(hx, hy, hz);
-                    orangeG.add(mesh);
-                    const dx = tx - hx, dz = tz - hz;
-                    oranges.push({ mesh, hx, hy, hz, tx, ty: OR, tz, ax: dz / OR, az: -dx / OR });
-                }
-                const stem = ctx.solid(new THREE.CylinderGeometry(0.004, 0.004, 0.016, 5),
-                    ctx.LITMAT(0x7a5230));
-                ctx.put(stem, 0, 0.038, 0, 0, 0, 0, oranges[5].mesh);
-                ctx.regMagic(orangeG, () => {
-                    if (ctx.orangeState === 'inbowl') { ctx.orangeState = 'out'; ctx.orangeT = 0; }
-                    else if (ctx.orangeState === 'rolled') { ctx.orangeState = 'back'; ctx.orangeT = 0; }
-                });
-            }
-
-            /* —— 茶杯 ×2 —— */
-            // J4.26：暖桌摆的两只茶杯改用共享工厂（`cups` 是同一个数组 ⇒ 每帧动画一并覆盖）
-            cupFactory.makeCup(-0.34, -0.34, ctx.KTOP, kotatsuG);
-            cupFactory.makeCup(-0.14, -0.44, ctx.KTOP, kotatsuG);
-
-            /* —— 方坐垫 ×2 —— */
-            const cushions = [];
-            ctx.cushions = cushions;
-            function makeCushion(x, z, ry, col, colBottom) {
-                const g = new THREE.Group();
-                const m = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide });
-                const m2 = new THREE.MeshBasicMaterial({ color: colBottom, side: THREE.DoubleSide });
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.44, 0.085, 0.44), m), 0, 0.048, 0, 0, 0, 0, g);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.36, 0.032, 0.36), m), 0, 0.098, 0, 0, 0, 0, g);
-                ctx.put(ctx.solid(new THREE.BoxGeometry(0.44, 0.014, 0.44), m2), 0, 0.008, 0, 0, 0, 0, g);
-                ctx.put(ctx.edge(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 8)), 0, 0.118, 0, 0, 0, 0, g);
-                for (let k = 0; k < 4; k++) {
-                    const a = k / 4 * Math.PI * 2 + Math.PI / 4;
-                    ctx.put(ctx.line([[Math.cos(a) * 0.04, 0.115, Math.sin(a) * 0.04],
-                    [Math.cos(a) * 0.15, 0.102, Math.sin(a) * 0.15]]), 0, 0, 0, 0, 0, 0, g);
-                }
-                g.position.set(x, 0, z);
-                g.rotation.y = ry;
-                kotatsuG.add(g);
-                const c = { g, anim: 0, p: 0, from: 0, to: 0 };
-                cushions.push(c);
-                ctx.regMagic(g, () => {
-                    if (c.anim === 0) {
-                        c.from = c.to;
-                        c.to = c.to > Math.PI / 2 ? 0 : Math.PI;
-                        c.anim = 1; c.p = 0;
-                    }
-                });
-            }
-            makeCushion(0.00, 0.98, 0.12, 0xd98a94, 0xb96a75);
-            makeCushion(-0.98, 0.02, 1.62, 0x8fae6e, 0x74915a);
+            // J4.28：以下四段（收音机 / 果盆 + 橘子 6 颗 / 茶杯 ×2 / 方坐垫 ×2）已全部随 12.13
+            // 搬进 src/cabin/world/floor1/kotatsu.js —— 它们的几何、`userData.noteSrc`、
+            // `oranges` 的 homes/rolls 表、`makeCushion` 工厂与各自的 `regMagic` 都在那里。
 
             /* ---- 门铃【墙外侧，与门中间齐平高度】 ---- */
             const doorbellG = new THREE.Group();
