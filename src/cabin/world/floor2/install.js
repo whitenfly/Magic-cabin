@@ -1745,6 +1745,28 @@ export function installFloor2(ctx, app) {
             ctx.junkApi = junkApi;
             /* 18.17 新增装饰统一刷新（独立动画循环） */
             /* ========================================================== */
+            // ★ J4.27 判定（任务 D 第 12 组「`floor2/decor-loop`」的"单独判定"）：
+            //
+            //   **`18.17` 不是一个物件，不该也不能升格 `defineProp`。** 它是两件事的**旧住址**，
+            //   而那两件事现在**各有归属**：
+            //
+            //   | 原来在这里 | 现在在哪 |
+            //   |---|---|
+            //   | 挂画 GIF 帧重绘（每 0.1 秒） | `world/floor2/picture.js` —— 下面**原地调用** |
+            //   | 镜面涟漪老化 + 每 0.12 秒重绘 | `world/floor2/mirror.js` —— 原地调用 |
+            //   | 纸箱开合 6 行 | `world/floor2/junkBoxes.js` —— 原地调用 |
+            //   | 时钟重绘 | **待 `floor2/magic-clock` 升格**（本行 `drawClock()` 是最后一段"原生的"） |
+            //   | 便签编辑器（DOM） | `systems/ui/editors/NoteEditor.js`（`installNoteEditor`，段 11）—— **早已归位** |
+            //
+            //   **为什么它不是物件**（三条，逐条对应 `defineProp` 的必填字段）：
+            //   ① `build` 是必填项，而本函数一行 `scene.add` 都没有 —— 它是**调度器**，不是陈设；
+            //   ② 它有**两条驱动路径**（realtime 由自己的 rAF 自驱、manual 由 `FrameBody` 的
+            //      `frame/101` 调用）—— 搬进某个物件的 `update` 等于把这条循环拔掉；
+            //   ③ `clock` 不在装配环境里，而两条路径都要读 `clock.mode`。
+            //
+            //   ⇒ 它**从"待搬物件清单"里关闭**，不再作为任务 D 的待办项。
+            //      详细判定与遗留见 `docs/实施结果/J4.27-实施结果.md`；
+            //      历史留痕见 `scripts/oneoff/_j3-specs/floor2-decor-loop.SKIP.md`（`J3` 原文，不改）。
             function updateNewDecor(time, dt) {
                 drawClock();
                 // J3（B5）：挂画 GIF 帧重绘（每 0.1 秒）的每帧分支已搬入 world/floor2/picture.js（原地 tick）
@@ -1758,10 +1780,20 @@ export function installFloor2(ctx, app) {
                 junkApi.tick(dt, time);
             }
             ctx.decorLastT = 0;
+            // ⚠️ J4.27：`ctx.mirrorDirtyT` 是**死变量** —— 镜面的节流计时已随 `mirror.js` 升格
+            //    迁进它自己的 `state.dirtyT`（`J3` 的 B4 那批），此后这里只剩一次赋值、无任何读者。
+            //    **本任务刻意不删**：删它属于"清理"，与判定无关；且 `J3` 的 SKIP §2 末段曾把它列为
+            //    `verify-f03.mjs` 的断言对象（那条约束**已过时**：该脚本第 ⑥ 项检查的是
+            //    **F0.3 完成时的快照**，不是当前文件 —— 实测本任务全程 `verify` 全绿）。
             ctx.mirrorDirtyT = 0;
             // F0.3：装饰循环（时钟 / 镜子涟漪 / 挂画 GIF / 纸箱）
             //   realtime：沿用 performance.now()，行为与改动前完全一致
             //   manual  ：读 clock.now / clock.dt，跟随手动步进（由主循环驱动，见 tickOnce 末尾）
+            // ★ J4.27：**这两条路径是有意保留的，不是遗漏** —— realtime 下 `dt` 来自
+            //   `performance.now()` 差值（与 `clock.dt` 解耦，是节流语义的一部分），
+            //   manual 下由 `FrameBody` 的 `frame/101` 驱动（逐帧定格，像素回归靠它）。
+            //   合并成一条路径需要同时满足"realtime 节流不变"与"manual 定格不变"，
+            //   属于**主循环收口的剩余项**，与 `magic-clock` 的升格耦合（见 J4.27 §6）。
             (function decorLoop() {
                 requestAnimationFrame(decorLoop);
                 if (clock.mode === 'manual') return;   // 手动模式由 tickOnce 负责调用
