@@ -22,6 +22,10 @@
  *
  * ## ★ 欠账：只还了一半 —— **自建射线留给 `J4`**
  *
+ * ★ **`J4.8`（路线图 `J4` 的缺口 **C1**）已把这一半接回** —— 见下方 `build()` 里的自建射线段。
+ *   下面这段是 `J3` 当时的判断记录（事实仍然成立：那 6 行确实需要 `camera`/`renderer`），
+ *   `J4` 的做法就是给装配环境补上它们，然后原样贴回。
+ *
  * `J2.6` 的 §5 把「镜子的自建射线」明确留给 `J3`（`types.js` 里已备好 `localPointOf()`）。
  * 本轮**没还上这一半**，理由可复核：射线那 6 行（搬迁前 `L5498–L5517`：`let mirrorDown = null;`
  * → 第二个 `addEventListener('pointerup', …)` 结束）需要三样本物件拿不到的东西 ——
@@ -93,7 +97,7 @@ export default defineProp({
     spawnRipple: null,  // build 里填入：加涟漪的入口（J4 接回射线时用它）
   }),
 
-  build({ scene, L, put, cbox, colEdge, MAT, LITMAT, rng, state }) {
+  build({ scene, L, put, cbox, colEdge, MAT, LITMAT, rng, state, camera, renderer }) {
     const { MIRROR_X, MIRROR_Z, FY } = L
     const runtimeRng = rng.runtime
 
@@ -238,6 +242,38 @@ export default defineProp({
     state.spawnRipple = spawnMirrorRipple;
 
     // 返回根 + 需要后续访问的两个部件（`parts.pane` 是 J4 射线的求交对象）
+    // ── 自建射线：点击镜面泛起涟漪（原 `index.html` L6630–L6649，逐字搬迁）──────────
+    //
+    // ★ 为什么**不能**改走 `magicMeshes` 主射线（路线图 `J4` 的 C1 已写明）：
+    //   主射线要过家具遮挡判定 ⇒ 镜子一旦被家具挡住就点不到；而这条射线只对 `mirrorPane`
+    //   求交（`intersectObject(mirrorPane, false)`）—— **不看遮挡**，这正是原语义。
+    //   所以本件**不声明** `interactables`（见文件头「本件没有 interactables」），探针的 26 件
+    //   准星入口列表里也没有它 —— 这是设计，不是遗漏。
+    //
+    // 它需要 `camera` / `renderer`（`J4.8` 起由 `installProp` 的装配环境提供），
+    // 以及 `mirrorPane` / `spawnMirrorRipple` —— 两者都是本函数内的局部（`J3` 已分别作为
+    // `parts.pane` 与 `state.spawnRipple` 交出去；射线用局部名即可，与原实现同源）。
+    let mirrorDown = null;
+    const mirrorRay = new THREE.Raycaster();
+    const mirrorMouse = new THREE.Vector2();
+    renderer.domElement.addEventListener('pointerdown', function (e) {
+      mirrorDown = { x: e.clientX, y: e.clientY };
+    });
+    renderer.domElement.addEventListener('pointerup', function (e) {
+      if (!mirrorDown) return;
+      const moved = Math.abs(e.clientX - mirrorDown.x) + Math.abs(e.clientY - mirrorDown.y);
+      mirrorDown = null;
+      if (moved >= 6) return;
+      mirrorMouse.x = (e.clientX / innerWidth) * 2 - 1;
+      mirrorMouse.y = -(e.clientY / innerHeight) * 2 + 1;
+      mirrorRay.setFromCamera(mirrorMouse, camera);
+      const hits = mirrorRay.intersectObject(mirrorPane, false);
+      if (hits.length) {
+        const lp = mirrorPane.worldToLocal(hits[0].point.clone());
+        spawnMirrorRipple((lp.x / 0.54 + 0.5) * 160, (0.5 - lp.y / 1.60) * 480);
+      }
+    });
+
     return { root: mirrorG, parts: { pane: mirrorPane, tilt: mirrorTilt } }
   },
 

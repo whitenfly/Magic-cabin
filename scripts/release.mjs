@@ -606,15 +606,37 @@ function appendRecord(entry, commands = null) {
 }
 
 /* ────────────────────────────── 门禁 ────────────────────────────── */
+/**
+ * 等价的本地可执行入口（§11：`pnpm <别名>` 与直调**等价**）。
+ *
+ * ★ L20：受限环境里 **pnpm 子进程无法删除 `dist/`**（实测 `EPERM`，连 `fs.rmSync` 也一样），
+ *   于是经 pnpm 跑的 `build` **必然失败**，让 `task:done` 的门禁 die。
+ *   门禁因此改用直调 —— 门禁的**实质**仍是 typecheck / verify / build 三项，
+ *   只是换了执行方式（正是 §11.1 的降级路径）。
+ */
+function localBin(name) {
+  const ext = process.platform === 'win32' ? '.CMD' : '';
+  return join(ROOT, 'node_modules', '.bin', `${name}${ext}`);
+}
+
+/** build 步骤：先清理输出目录（规避 astro `emptyDir` 的偶发 EPERM），再构建 */
+function runBuild() {
+  const c = run('node', ['scripts/clean-dist.mjs']);
+  if (!c.ok) return c;
+  return run(localBin('astro'), ['build']);
+}
+
 function runGates(quick = false) {
+  const typecheck = () => run(localBin('tsc'), ['--noEmit']);
+  const verify = () => run('node', ['scripts/_verify.mjs']);
   const plan = quick
-    ? [['typecheck', ['pnpm', 'typecheck']], ['verify', ['pnpm', 'verify']]]
-    : [['typecheck', ['pnpm', 'typecheck']], ['verify', ['pnpm', 'verify']], ['build', ['pnpm', 'build']]];
+    ? [['typecheck', typecheck], ['verify', verify]]
+    : [['typecheck', typecheck], ['verify', verify], ['build', runBuild]];
   const parts = [];
-  for (const [name, cmd] of plan) {
+  for (const [name, fn] of plan) {
     process.stdout.write(`  ${C.d}跑 ${name} …${C.x}`);
     const t0 = Date.now();
-    const r = run(cmd[0], cmd.slice(1));
+    const r = fn();
     const sec = ((Date.now() - t0) / 1000).toFixed(1);
     parts.push({ name, ok: r.ok, sec: Number(sec), out: r.out });
     process.stdout.write(`\r  ${r.ok ? `${C.g}✓${C.x}` : `${C.r}✗${C.x}`} ${name} ${C.d}(${sec}s)${C.x}\n`);
@@ -713,8 +735,14 @@ function nextDevVersion(st, task, baseOverride) {
     if (!/^\d+\.\d+\.\d+$/.test(baseOverride)) die(`--base 应为 x.y.z 形式，收到：${baseOverride}`);
     base = baseOverride;
   } else if (m) base = m[2] ? `0.${m[1]}.${m[2]}` : `0.${m[1]}.0`;
-  const existing = st.localTags.filter((t) => t.startsWith(`v${base}-dev.`)).length;
-  return { base, tag: `v${base}-dev.${existing + 1}` };
+  // ★ L1 修正（对齐 VERSIONING.md §2.4 / R8）：序号取「**历史最大 N + 1**」，
+  //   而不是「现存同 base tag 的数量 + 1」。数量法在**删过**同 base 的 tag 之后会算错：
+  //   例如 dev.1/dev.2/dev.3 删掉 dev.2 后数量变 2，下一个又会算出 dev.3（与现存 tag 冲突）。
+  const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^v${esc}-dev\\.(\\d+)$`);
+  const used = st.localTags.map((t) => re.exec(t)).filter(Boolean).map((mm) => Number(mm[1]));
+  const nextN = used.length ? Math.max(...used) + 1 : 1;
+  return { base, tag: `v${base}-dev.${nextN}`, nextN };
 }
 
 function cmdDone(args) {
@@ -741,7 +769,23 @@ function cmdDone(args) {
   }
   ok('门禁全绿');
 
-  const { base, tag } = nextDevVersion(st, task, baseOverride);
+  const { base, tag, nextN } = nextDevVersion(st, task, baseOverride);
+
+  // ★ L2：**强制校验** package.json 的 version 是否已对齐（R9）。
+  //   规范 §3④ 的分工是「开发者在 ④ 步对齐版本号」，工具负责**验证**。
+  //   为什么不做"自动代改"：那会让 §3④ 的描述失真，而规范修订必须另走 §12.2 流程、
+  //   不能混进工具任务（R14）—— 校验既能消除"忘了改"，又不破坏规范与实现的分工。
+  const wantVersion = `${base}-dev.${nextN}`;
+  const pkgVersion = String(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version);
+  if (pkgVersion !== wantVersion) {
+    die(
+      `package.json 的 version 是 ${pkgVersion}，但本次将打 tag ${tag}（应为 ${wantVersion}）。\n` +
+      `    请先对齐（§4④）：把 package.json 的 version 改为 ${wantVersion}，\n` +
+      `    与实施结果文档一起提交后，再重跑 done。  依据：R9（version 必须与最近 tag 一致）。`,
+    );
+  }
+  ok(`版本号已对齐：${wantVersion}`);
+
   const srcBranch = collect(false).branch;
   const mergeMsg = `merge ${task}：合入 ${DEV_BRANCH}`;
   const cmds = [
@@ -765,7 +809,7 @@ function cmdDone(args) {
       kind: 'done',
       st: after,
       body: [
-        `- 版本号：\`${base}\`（package.json 的 version 请同步）`,
+        `- 版本号：\`${wantVersion}\`（**已校验**与 package.json 的 version 一致，R9）`,
         `- tag：\`${tag}\`（开发版快照，只打在 ${DEV_BRANCH} 上）`,
         `- 合并至：\`${DEV_BRANCH}\` @ \`${after.head}\``,
         `- 待补：\`docs/实施结果/${task}-实施结果.md\`（DoD 核对 / 落点 / 门禁项数 / 遗留交接）`,
@@ -797,6 +841,12 @@ function printPending(st) {
   for (const c of cmds) say(`  ${c}`);
 }
 
+/** `0.3.0` → `0.3.1`（补丁位 +1）—— 用于「已发布阶段的收尾任务需要单独发版」时给出正确版本号 */
+function bumpPatch(ver) {
+  const mm = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(ver));
+  return mm ? `${mm[1]}.${mm[2]}.${Number(mm[3]) + 1}` : ver;
+}
+
 function cmdShip(args) {
   const target = args.find((a) => !a.startsWith('-')) ?? 'push';
   const st = collect(false);
@@ -804,28 +854,61 @@ function cmdShip(args) {
   if (target === MAIN_BRANCH) {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
     const ver = String(pkg.version).replace(/-dev\.\d+$/, '');
+
+    // ★ L16 修正：该正式版**已存在**时，不再生成「重复发布」的计划。
+    //   背景：`ver` 由 package.json 的 version 去掉 `-dev.N` 推出，隐含假设
+    //   「dev 上的 version 指向**下一个**待发布版本」。但 §1.1 允许在**已发布阶段**上
+    //   继续挂收尾任务（如 J3.7–J3.11），此时 dev 的 version 仍是旧 base（`0.3.0-dev.N`），
+    //   于是会生成一份「发布已存在的 v0.3.0」的计划 —— 照做会直接撞上已存在的 tag。
+    if (st.localTags.includes(`v${ver}`)) {
+      warn(`正式版 v${ver} **已经发布过** —— 不会生成重复发布的计划`);
+      info(`当前 dev 的 version 是 ${pkg.version}（去掉 -dev 后缀 = ${ver}），但 tag v${ver} 已存在。`);
+      info(`⇒ 说明 dev 上这些提交是【已发布阶段】的后续收尾任务（收尾 / 规范 / 工具 / 文档）。`);
+      say('');
+      info('两种正确做法：');
+      info('  ① 无需发布（推荐）：直接 `ship` 推送 dev 与开发版 tag —— 这些收尾改动会随下一阶段一起发布。');
+      info(`  ② 需要单独发布：它们属【补丁位】（修复 / 护栏 / 纯文档 / 纯重构，见 §2）。`);
+      info(`     做法是在 dev 上另起一条 \`${bumpPatch(ver)}-dev.N\` 序列（package.json 的 base 改成 ${bumpPatch(ver)}），`);
+      info(`     再走本节流程发布 \`v${bumpPatch(ver)}\`。`);
+      return;
+    }
+
     step(`生成正式版发布计划（target=${MAIN_BRANCH}，version=${ver}）`);
     const cmds = [
       `git switch ${DEV_BRANCH}`,
       `git switch ${MAIN_BRANCH}`,
       `git merge --no-ff ${DEV_BRANCH} -m "release: v${ver}（${st.lastTag || '阶段验收通过'} 之后）"`,
-      `# 手动：把 package.json 的 version 改为 ${ver}（去掉 -dev 后缀）`,
-      `git commit -am "chore(release): v${ver}"`,
+      `# ★ package.json 会【冲突】—— 这是预期（dev 侧是 -dev.N、main 侧停在上一次的正式号）`,
+      `#   处理：直接在冲突处写成 ${ver}（下面本来就要写它），然后 git add + 完成合并`,
+      `git add package.json`,
+      `git commit -m "release: v${ver}（阶段验收通过）"`,
+      `#   ↑ 这一个 merge commit 同时完成「合并」与「去掉 -dev 后缀」`,
+      `#     ⇒ SPEC-1.1.0 起**不再需要**单独的 chore(release) 提交（§5.2）`,
       `git tag -a v${ver} -m "v${ver} 正式版"`,
       `# --follow-tags 会把 v${ver} 一起推上去（它是附注 tag 且指向 main 上的提交）`,
       `git push origin ${MAIN_BRANCH} --follow-tags`,
       `git switch ${DEV_BRANCH}`,
-      `# 回到 dev 后仍需推送 dev 与开发版 tag —— 用 pnpm ship 复查`,
+      `# ★ 发布提交【不回流 dev】（§5.2）；回到 dev 后仍需推送 dev 与开发版 tag —— 用 ship 复查`,
     ];
     say('');
     for (const c of cmds) say(`  ${c.startsWith('#') ? `${C.d}${c}${C.x}` : c}`);
+    // ★ L18 修正：**只有推送类命令**进入「待执行命令」区。
+    //   本地变更类（switch / merge / add / commit / tag）由**模型经 exec 入口执行**（§8 / R10）：
+    //   它们既不需要人工在普通终端跑，也**永远无法**被 isCommandDone() 自动翻成 [x]
+    //   （§9.2 只认 push 类）—— 写进「待执行」区只会留下永不消失的 `[ ]` 噪音，
+    //   并让人误以为"还有一堆命令没执行"。
+    const pushCmds = cmds.filter((c) => /^git push\b/.test(c));
     const flipped = appendRecord(
       buildEntry({
         task: `发布计划 v${ver}`, kind: 'ship', st,
-        body: ['- 计划内容：`dev` → `main` 的 `--no-ff` 合并 + 正式版 tag', '- 以下命令**待人工执行**'],
+        body: [
+          '- 计划内容：`dev` → `main` 的 `--no-ff` 合并 + 正式版 tag',
+          '- ★ **本地变更类命令（switch / merge / add / commit / tag）由模型经 `exec` 入口自动执行** —— 完整计划见上方输出（§8 / R10）',
+          '- 下面**只列推送类命令**：只有它们需要人工在普通终端执行',
+        ],
         note: '`main` 上永远不要直接开发；发布完立刻 `git switch dev`。本工具不做任何 push。',
       }),
-      cmds,
+      pushCmds.length ? pushCmds : null,
     );
     say('');
     reportFlipped(flipped);

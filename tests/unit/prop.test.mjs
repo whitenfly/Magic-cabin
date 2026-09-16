@@ -94,7 +94,7 @@ function fakeRoot(name = 'g') {
   }
 }
 
-test('★ aim 桥：声明了交互的物件必须同时接上 magicMeshes 与 userData.onClick', () => {
+test('★ aim 桥：声明了交互的物件必须同时接上 magicMeshes 与注册中心的 aim 记录', () => {
   const env = makeEnv()
   const root = fakeRoot('broom')
   let fired = 0
@@ -110,14 +110,15 @@ test('★ aim 桥：声明了交互的物件必须同时接上 magicMeshes 与 u
   // ① 命中集合：只有 isMesh 且未被 noHit 排除的会进去
   assert.equal(env.registry.magicMeshes.length, 1, '命中集合应恰好收 1 个 mesh（noHit 的被排除）')
   assert.equal(env.registry.magicMeshes[0], root.__mesh)
-  assert.equal(root.__mesh.userData.magicRoot, root, 'raycast 需要靠 magicRoot 找回物件根')
 
-  // ② 激活通路：monolith 的 fireMagic 读的就是 userData.onClick
-  assert.equal(typeof root.userData.onClick, 'function')
-  assert.equal(root.userData.aimLabel, '让魔法扫帚飞起来', '准星提示要语义化，不能落回"交互"')
-  assert.equal(root.userData.sfx, 'toggle', '与 regMagic 的默认音效一致')
-  root.userData.onClick()
-  assert.equal(fired, 1, 'onClick 应当真的激活了交互')
+  // ② 激活通路：`J4.11`（C3）起不再经 `userData`，改由注册中心的 **aim 记录**承载
+  const target = env.registry.aimTargetOf(root.__mesh)
+  assert.ok(target, 'raycast 命中后要能问出"这条 Mesh 属于哪条交互"')
+  assert.equal(target.propId, 'floor1/broom', '来源标记（magicPropIds 靠它）')
+  assert.equal(target.label, '让魔法扫帚飞起来', '准星提示要语义化，不能落回"交互"')
+  assert.equal(target.sfx, 'toggle', '与 regMagic 的默认音效一致')
+  target.onActivate()
+  assert.equal(fired, 1, 'onActivate 应当真的激活了交互')
 
   // ③ 近距通路：条目进了 registry，会被 InteractionSystem 认领
   assert.equal(env.registry.interactables.length, 1)
@@ -175,7 +176,7 @@ function fakeTree(name, parts) {
   }
 }
 
-test('★ aim 桥（J3.1）：每条 hits 各建一个代理根 ⇒ 点哪只盘转哪只（餐桌三只盘）', () => {
+test('★ aim 桥（J3.1/J4.11）：每条 hits 各有一条 aim 记录 ⇒ 点哪只盘转哪只（餐桌三只盘）', () => {
   const env = makeEnv()
   const fish = fakePart('fish'), egg = fakePart('egg'), pancakes = fakePart('pancakes')
   const fired = []
@@ -191,12 +192,12 @@ test('★ aim 桥（J3.1）：每条 hits 各建一个代理根 ⇒ 点哪只盘
   }))
 
   assert.equal(env.registry.magicMeshes.length, 3, '三只盘各有一个命中体（旧实现只有第一只）')
-  assert.notEqual(fish.__mesh.userData.magicRoot, egg.__mesh.userData.magicRoot, '每条一个代理根')
+  assert.notEqual(env.registry.aimTargetOf(fish.__mesh), env.registry.aimTargetOf(egg.__mesh), '每条一条 aim 记录')
   for (const [part, want, label] of [[fish, 'fish', '鱼盘'], [egg, 'egg', '煎蛋盘'], [pancakes, 'pancakes', '松饼盘']]) {
-    const proxy = part.__mesh.userData.magicRoot
-    assert.equal(proxy.userData.cabinProp, 'floor1/long-table', '代理根带来源标记（magicPropIds 靠它）')
-    assert.equal(proxy.userData.cabinInteraction, `long-table/spin-${want}`, '代理根记得自己属于哪条交互')
-    proxy.userData.onClick()
+    const t = env.registry.aimTargetOf(part.__mesh)
+    assert.equal(t.propId, 'floor1/long-table', 'aim 记录带来源标记（magicPropIds 靠它）')
+    assert.equal(t.id, `magic:long-table/spin-${want}`, 'aim 记录记得自己属于哪条交互')
+    t.onActivate()
     assert.equal(fired[fired.length - 1], want, `点${label}应当跑它自己那条回调`)
   }
   assert.deepEqual(env.registry.stats().aimMissing, [], '三条都有入口 ⇒ 不该有缺失')
@@ -223,13 +224,14 @@ test('★ aim 桥（J3.1）：root 兜底桥**不覆盖** build 里已注册过�
     }],
   }))
 
-  assert.equal(hanger.__mesh.userData.magicRoot, hanger, '挂衣的 magicRoot 必须仍是它自己（不被 root 桥改写）')
+  const hangerTarget = env.registry.aimTargetOf(hanger.__mesh)
+  assert.ok(hangerTarget, '挂衣必须有自己的 aim 记录（不被 root 桥改写）')
   assert.equal(env.registry.magicMeshes.filter((m) => m === hanger.__mesh).length, 1, '也不该被重复注册')
-  hanger.__mesh.userData.magicRoot.userData.onClick()
+  hangerTarget.onActivate()
   assert.equal(wobbled, 1, '点挂衣应当晃动')
   assert.equal(drawerFired, 0, '而不是被解析成拉抽屉')
   // 柜体仍由 root 兜底桥接管 —— 这是 `J3` 的既有语义（真实实现已用 `hits` 收紧到抽屉本体）
-  assert.equal(body.__mesh.userData.magicRoot, root)
+  assert.equal(env.registry.aimTargetOf(body.__mesh).propId, 'floor2/wardrobe-legacy')
 })
 
 test('★ aim 判据（J3.1）：没给 hits 的多条目会被 stats().aimMissing 逐条点出来', () => {
@@ -264,9 +266,9 @@ test('aim 桥（J3.1）：mode "aim" 的条目给出 hits 就有入口（抽纸�
   }))
 
   assert.deepEqual(env.registry.stats().aimMissing, [], '两条都该有入口（旧实现里第二条是死条目）')
-  paper.__mesh.userData.magicRoot.userData.onClick()
+  env.registry.aimTargetOf(paper.__mesh).onActivate()
   assert.equal(crumpled, 1, '点纸 ⇒ 揉成团')
-  box.__mesh.userData.magicRoot.userData.onClick()
+  env.registry.aimTargetOf(box.__mesh).onActivate()
   assert.equal(pulled, 1, '盒子仍走 root 兜底桥')
   assert.equal(env.registry.magicMeshes.length, 2)
 })

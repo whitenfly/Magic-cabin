@@ -60,8 +60,14 @@ console.log('\n【① 主脚本 src/cabin/legacy/monolith.js  ←  源 844–980
   check('裸 Math.random() 已归零', left === 0, left ? `残留 ${left} 处` : '')
 
   // 当前文件侧：时钟注入（F0.3）
-  const live = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
-  check('当前文件已注入时钟（F0.3）', /from '\.\.\/app\/clock\.js'/.test(live))
+  // ★ J4.7：monolith 已删除 —— 判据的**语义没变**（"时间来自注入的 clock"），
+  //   但范围必须跟着实现走：主循环现在住在 app/scene/ 的三个文件里。
+  const clockScope = ['app/scene/installCabin.js', 'app/scene/SceneLoop.js', 'app/scene/FrameBody.js']
+    .map((f) => path.join(ROOT, 'src/cabin', f))
+    .filter((p) => fs.existsSync(p))
+    .map((p) => fs.readFileSync(p, 'utf8'))
+    .join('\n')
+  check('主循环已注入时钟（F0.3）', /from '\.\.\/clock\.js'/.test(clockScope), `扫 ${clockScope ? '3' : '0'} 个文件`)
 }
 
 console.log('\n【② 样式 src/styles/cabin.css  ←  源 10–748 行】')
@@ -136,7 +142,11 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
       return e.isFile() && p.endsWith('.js') ? [p] : []
     })
   const cabinRoot = path.join(ROOT, 'src/cabin')
-  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props']
+  // ★ J4.7：`app/` 也必须在范围内 —— 段切片把"源自 monolith 的实现"搬进了
+  //   `app/scene/**`（SceneCore / PropInstaller / FrameBody / SceneLoop / installCabin）。
+  //   不收进来的话，下面那批"与源文件对比"的计数会因为**实现搬家**而减少，
+  //   看起来像"代码变少了"，实际上只是没被扫到。
+  const MIGRATED_DIRS = ['legacy', 'core', 'systems', 'world', 'props', 'app']
   const cabinFiles = [
     ...MIGRATED_DIRS.flatMap((d) => (fs.existsSync(path.join(cabinRoot, d)) ? walkJs(path.join(cabinRoot, d)) : [])),
     path.join(cabinRoot, 'dom.js'),
@@ -167,12 +177,18 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   const KNOWN_DELTA = {
     // ── J2.5 配置编排层：菜单里 6 个手写控件的绑定搬进 `systems/ui/SettingsForm.js`
     'getElementById(': -8,
-    'SND.play(': -4,
+    // ★ J4.11（缺口 C3）：`aim` 通路收进统一契约后，`Bridge.js` 的 `magic` 命中源里多了一处
+    //   `ctx.SND.play(t.sfx)`（原先那一声在 `fireMagic(o)` 里、读 `userData.sfx`）。
+    //   两处加起来仍是"每条 aim 交互命中时响一声"—— 行为不变，计数 −4 → −3。
+    'SND.play(': -3,
     // J2.5 −1（手写绑定 → bus.on('ui:click')）；J3 再 −3：
     //   · 全身镜的**自建射线段**（`renderer.domElement.addEventListener('pointerdown'/'pointerup')`）
     //     随几何段一起搬走 —— 射线那一半留给 `J4`（见 `J3-实施结果.md` §3④）；
     //   · 前墙挂画的编辑器监听器同理。
-    'addEventListener(': -4,
+    // ★ J4.8（缺口 C1）：那 2 个监听器**回来了** ⇒ −3 回到 −1，加上 J2.5 的 −1 ⇒ **−2**。
+    //   这是**回归被修复**的计数证据（把镜子射线接回来 = 把两行 addEventListener 贴回去），
+    //   所以这里改的是"预期值"，不是"阈值" —— 与"放宽判据"是两件事。
+    'addEventListener(': -2,
     // ── J3 物件模块化：`regMagic(o, onClick)` 被 `defineProp` 的 `interactables` 取代
     //    每搬走一处，这个计数就少 1 —— **这正是本阶段的目的**，不是回归。
     //    当前已搬 35 件，其中 17 件带 `regMagic` ⇒ −17（收尾时按实际搬迁数核对）。
@@ -220,7 +236,18 @@ console.log('\n【⑤ 资源与依赖】')
 
 console.log('\n【⑥ 外部依赖未新增（与源文件对比）】')
 {
-  const mono = fs.readFileSync(`${ROOT}/src/cabin/legacy/monolith.js`, 'utf8')
+  // ★ J4.7：monolith 已删除 —— 这一节（外部依赖 / three.min.js / 静态资源字面量）
+  //   的**语义没变**，但扫描范围必须从"一个文件"变成"整个 src/cabin/**"。
+  const cabinAll = []
+  const gather = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) gather(p)
+      else if (p.endsWith('.js')) cabinAll.push(p)
+    }
+  }
+  gather(path.join(ROOT, 'src/cabin'))
+  const mono = cabinAll.map((p) => fs.readFileSync(p, 'utf8')).join('\n')
   // 去掉块注释与行注释后再检查，避免把说明文字当成代码
   const codeOnly = mono.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
@@ -236,7 +263,28 @@ console.log('\n【⑥ 外部依赖未新增（与源文件对比）】')
 
   // three.min.js：只应出现在注释里，代码中不得再有加载它的痕迹
   check('代码中无 three.min.js / CDN 回退逻辑', !/three\.min\.js|document\.write/.test(codeOnly))
-  check('音效路径保持相对 sounds/', /'sounds\/'\s*\+/.test(codeOnly))
+  // ★ J4.2：音效实现已随段切片搬进 `systems/audio/AudioSystem.js` ——
+  //   判据的**范围**必须跟着实现走：这里就地扫 `src/cabin/**`（不能只看 monolith，
+  //   否则"实现搬家"会让一条本来正确的判据永远失败，然后被人删掉）。
+  //   判据的**语义未变**：音效只允许用相对路径 `sounds/`。
+  const cabinJs = []
+  const collectJs = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) collectJs(p)
+      else if (e.isFile() && p.endsWith('.js')) cabinJs.push(p)
+    }
+  }
+  for (const d of ['legacy', 'core', 'systems', 'world', 'props', 'app']) {
+    const p = path.join(ROOT, 'src/cabin', d)
+    if (fs.existsSync(p)) collectJs(p)
+  }
+  const cabinCode = cabinJs
+    .map((f) => fs.readFileSync(f, 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+  check('音效路径保持相对 sounds/', /'sounds\/'\s*\+/.test(cabinCode))
 
   // 静态资源字面量（排除拼接片段如 '.mp3'）
   const assets = [...new Set([...codeOnly.matchAll(/['"`]([^'"`\s/]*\.(?:png|jpe?g|gif|webp|svg|woff2?|ttf|glb|gltf|fbx))['"`]/gi)].map((m) => m[1]))]
