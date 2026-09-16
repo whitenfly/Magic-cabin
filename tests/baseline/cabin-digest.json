@@ -2,12 +2,12 @@
   "what": "src/cabin/** 逐字节摘要（3D 源码指纹）",
   "why": "J1.5 期间它是「站点那一半没碰 3D」的判据（当时本项目还不是 git 仓库，用摘要代替 git diff 为空）；J2 起作为 3D 源码指纹防意外改动。",
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
-  "recordedAt": "2026-09-15",
+  "recordedAt": "2026-09-16",
   "totals": {
     "files": 95,
-    "lines": 17257
+    "lines": 17298
   },
-  "combined": "6832e26c6aa442a8b480a7686704a7ff5d2889162a34f46a4ab4d1c17916bac4",
+  "combined": "fb0bdf7424f10ef2b46b25a61753ff659993c0ca9576b6366e20667edd224215",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -22,7 +22,7 @@
     "app/scene/Env.js": "024ab5e8b80745f9",
     "app/scene/FrameBody.js": "bfccd3989332729e",
     "app/scene/installCabin.js": "1d014929344d7765",
-    "app/scene/PropInstaller.js": "eb6bbffdfd7f3dac",
+    "app/scene/PropInstaller.js": "578d8aebcdf0e2ab",
     "app/scene/SceneCore.js": "908bb049d736ec30",
     "app/scene/SceneLoop.js": "ec741c0cadfb4bd9",
     "app/settings.js": "13cf5214a1ce76ba",
@@ -91,7 +91,7 @@
     "world/floor2/deskHourglass.js": "1feabafaac6c450c",
     "world/floor2/install.js": "96ca6cfe67da9cfb",
     "world/floor2/junkBoxes.js": "32875ea83387c986",
-    "world/floor2/mirror.js": "0e966c12ebe50962",
+    "world/floor2/mirror.js": "b81e4d75f639473d",
     "world/floor2/nightstand.js": "ca4e1f56f021ea29",
     "world/floor2/picture.js": "0f96fe143504638c",
     "world/floor2/rubik.js": "002b82aabd8565d9",
