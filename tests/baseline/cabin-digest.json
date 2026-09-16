@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-16",
   "totals": {
     "files": 107,
-    "lines": 18856
+    "lines": 18888
   },
-  "combined": "fc882d064d0f2737c8b178997c1a673a27c670a85db554848c264c531245437e",
+  "combined": "6a12a3080b065c5a8d8b138a5bc40cabbb362e292b6c06fc423499c1a681241a",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -66,7 +66,7 @@
     "world/floor1/bookshelf.js": "6d68f742e2521b21",
     "world/floor1/broom.js": "2c4dade66bf52a51",
     "world/floor1/cartShelf.js": "d7708b6760b4dd9c",
-    "world/floor1/cauldron.js": "30c7bc2a2dc2b4e9",
+    "world/floor1/cauldron.js": "6d861f965b58460c",
     "world/floor1/chest.js": "4d91878a277cfdb6",
     "world/floor1/crystalBall.js": "83827665012250bf",
     "world/floor1/diningBook.js": "02c9aadec7b81115",
@@ -111,7 +111,7 @@
     "world/floor2/witchHat.js": "0e4ec7173d43aba6",
     "world/house/shell.js": "2fc521071b549c56",
     "world/layout.js": "27138a304acd1cbb",
-    "world/lights.js": "bdc4ef80f4018f60",
+    "world/lights.js": "43f93bbf937b1cd9",
     "world/outdoor/fireflies.js": "22e28e002f214d5d",
     "world/outdoor/yardSpot.js": "37e6e8cf4ff2fd2d",
     "world/outdoor/yardStatic.js": "b66e7901e0962d72",
