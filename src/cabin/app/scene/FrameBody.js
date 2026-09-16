@@ -16,6 +16,11 @@
  * @param {object} app 应用内核（`scheduler` 从这里取）
  */
 import { clock } from '../clock.js'
+// ★ J4.14「每帧分支归位」：三个原住在 WeatherSystem.js 里的每帧分支，现在从**各自模块**取。
+//   路径从 app/scene/ 到 cabin/ 是两级（J4.9 §2.3 坑①：级数写错只有 build 能拦下）。
+import { updateSignMaterials } from '../../world/house/shell.js'
+import { updateFlowerMaterials } from '../../world/outdoor/yardStatic.js'
+import { updateFireflyOpacity } from '../../world/outdoor/fireflies.js'
 
 export function installFrameBody(ctx, app) {
   const { scheduler } = app
@@ -36,9 +41,34 @@ ctx.updateSprings();
 ctx.updatePlayer(dt, time);
   })
 
-  // L197–L197（1 行）
-  F('frame/02', (dt, time) => {
-ctx.updateWeatherSystem(dt, time);
+  // L197–L197（1 行）—— ★ J4.14：原 `frame/02`（一个任务）拆成 5 个，把「路牌材质 /
+  //   花材质 / 萤火虫不透明度」三个每帧分支**归还各自模块**。
+  //   拆分的唯一要求是 **登记顺序 = 拆分前的执行顺序** —— 它们原来是 updateWeatherSystem()
+  //   里的第 ⑨⑩⑪ 段，夹在"大气"与"效果"之间。顺序不变，画面才逐字节不变。
+  F('weather/atmosphere', (dt, time) => {
+ctx.updateWeatherAtmosphere(dt, time);
+  })
+
+  // 归位①：路牌材质（原 WeatherSystem L461–L462）
+  F('world/signMaterials', (dt, time) => {
+updateSignMaterials(ctx);
+  })
+
+  // 归位②：花材质（原 WeatherSystem L463）
+  F('world/flowerMaterials', (dt, time) => {
+updateFlowerMaterials(ctx);
+  })
+
+  // 归位③：萤火虫不透明度（原 WeatherSystem L465–L468）
+  //   读 `ctx._night`，因此必须排在 weather/atmosphere **之后**；
+  //   又必须排在 frame/10（萤火虫位置更新）之前 —— 那个任务用 ctx.ffOpacity 判可见性。
+  F('world/fireflyOpacity', (dt, time) => {
+updateFireflyOpacity(ctx, dt);
+  })
+
+  // 原 frame/02 的后半段：太阳 / 月亮 / 星星 / 云 / 雨 / 雪 / 闪电 / 时钟
+  F('weather/effects', (dt, time) => {
+ctx.updateWeatherEffects(dt, time);
   })
 
   // L197–L197（1 行）

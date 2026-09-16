@@ -320,3 +320,22 @@ export function installHouseShell(ctx, app) {
             /* ============ 室外场景：森林 · 草地 · 石头 · 花 · 萤火虫 ============ */
             /* ========================================================== */
 }
+
+/**
+ * 每帧：路牌材质跟随环境光色。
+ *
+ * `J4.14`（缺口「每帧分支归位」）从 `systems/weather/WeatherSystem.js` 搬回这里 ——
+ * 路牌是**世界**侧的物件，它的每帧更新不该住在天气模块里。原实现是天气模块里的两行：
+ * `ctx.signSideMat.color.copy(ctx.FILL.uniforms.uColor.value)`（face 同理）。
+ *
+ * **输入**：`ctx.FILL.uniforms.uColor.value` —— 天气每帧算出的环境光色（即 `ctx._amb`）。
+ * **约束**：调度登记顺序必须落在 `weather/atmosphere` **之后**、`weather/effects` **之前**
+ * —— 这正是它搬迁前在 `updateWeatherSystem()` 里的位置（见 `app/scene/FrameBody.js`）。
+ * 位置错了画面就会变，`node tests/visual/compare.mjs` 会拦下。
+ *
+ * @param {object} ctx 段间通信载体
+ */
+export function updateSignMaterials(ctx) {
+  ctx.signSideMat.color.copy(ctx.FILL.uniforms.uColor.value)
+  ctx.signFaceMat.color.copy(ctx.FILL.uniforms.uColor.value)
+}

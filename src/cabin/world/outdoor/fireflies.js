@@ -3,10 +3,11 @@
 
  * 内容：`FF_N` / `fireflies` 分布 / `ffPos` / `ffGeo` / `ffUniforms` / `Points`。
 
- * ⚠️ **每帧逻辑不在这里**：萤火虫的位置更新住在 `app/scene/FrameBody.js` 的帧任务里、
- * 不透明度渐变住在 `systems/weather/WeatherSystem.js` 的环境分支里 —— 两者都经 `ctx.ff*`
- * 取值。本次**不动**它们（动了就改变帧顺序），只把几何与状态搬成独立一件。
- * 「把这些每帧分支归位到本件的 `update`」记在 `J4.9` 结果文档的遗留里。
+ * 每帧逻辑分两处（`J4.14`「每帧分支归位」之后）：
+ *   - **不透明度渐变** → 本文件的 `updateFireflyOpacity()` —— 原住在
+ *     `systems/weather/WeatherSystem.js` 的环境分支里，`J4.14` 搬回本件；
+ *   - **位置更新** → 仍住 `app/scene/FrameBody.js` 的 `frame/10`（它读 `ctx.ffOpacity` 判可见性）。
+ * 两者都经 `ctx.ff*` 取值，先后顺序由 `FrameBody.js` 的登记顺序固定 —— 顺序即画面。
  */
 import * as THREE from 'three'
 import { scene } from '../../app/rng.js'
@@ -72,4 +73,29 @@ export function installOutdoorFireflies(ctx, app) {
             /* ============ 室内陈设专用：圆角几何与材质工具 ============ */
             /* ========================================================== */
             // J2.1：圆角几何已提取到 cabin/core/geometry/roundBox.js（实现零改动）
+}
+
+/**
+ * 每帧：萤火虫整体不透明度的渐变。
+ *
+ * `J4.14`（缺口「每帧分支归位」）从 `systems/weather/WeatherSystem.js` 搬回这里 ——
+ * `ctx.ffOpacity` / `ctx.ffUniforms` 都是本件的状态。原实现是天气模块里的四行
+ * （`ffTarget` 计算 + 指数趋近 + 写 uniform）。
+ *
+ * **输入**：`ctx.wx`（天气类型）、`ctx._night`（由 `weather/atmosphere` 每帧写入）。
+ * **约束**（两条都是搬迁前就成立的顺序，见 `app/scene/FrameBody.js`）：
+ *   ① 必须排在 `weather/atmosphere` **之后** —— `_night` 由它写；
+ *   ② 必须排在 `frame/10`（萤火虫**位置**更新）**之前** ——
+ *      那个任务用 `ctx.ffOpacity > 0.01` 判断要不要更新顶点，本函数负责写它。
+ *
+ * @param {object} ctx 段间通信载体
+ * @param {number} dt 帧间隔（秒）
+ */
+export function updateFireflyOpacity(ctx, dt) {
+  const wx = ctx.wx
+  const night = ctx._night
+  let ffTarget = 0
+  if ((wx.type === 'sunny' || wx.type === 'cloudy') && night > 0.5) ffTarget = night
+  ctx.ffOpacity += (ffTarget - ctx.ffOpacity) * Math.min(1, dt * 1.2)
+  ctx.ffUniforms.uOpacity.value = ctx.ffOpacity
 }

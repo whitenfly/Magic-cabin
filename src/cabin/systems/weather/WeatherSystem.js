@@ -20,7 +20,11 @@ export function installWeatherSystem(ctx, app) {
   const runtimeRng = runtime
             // ↓ J4 段导出（weather）：本段函数声明挂到 ctx（借提升，段内任何位置都可见）
             ctx.setWeather = setWeather; ctx.skyColorAt = skyColorAt; ctx.capDir = capDir; ctx.mwDir = mwDir; ctx.spawnMeteor = spawnMeteor; ctx.updateMeteors = updateMeteors;
-            ctx.makeCloud = makeCloud; ctx.spawnBolt = spawnBolt; ctx.roofTopAt = roofTopAt; ctx.updateWeatherSystem = updateWeatherSystem;
+            ctx.makeCloud = makeCloud; ctx.spawnBolt = spawnBolt; ctx.roofTopAt = roofTopAt;
+            // J4.14：「每帧分支归位」把原 updateWeatherSystem() 拆成两段 —— 中间插入三个
+            //        已归位到世界侧的帧任务（先后顺序见 app/scene/FrameBody.js）。
+            ctx.updateWeatherAtmosphere = updateWeatherAtmosphere;
+            ctx.updateWeatherEffects = updateWeatherEffects;
             ctx.gameSec = 10 * 3600, ctx.timeScale = store.get('time.scale');   // J2.8：时间流速来自设置
             const curHour = () => (ctx.gameSec / 3600) % 24;
             ctx.curHour = curHour;
@@ -411,7 +415,25 @@ export function installWeatherSystem(ctx, app) {
             }
 
             ctx.clockTick = 0;
-            function updateWeatherSystem(dt, time) {
+
+            /**
+             * `weather/atmosphere` → `weather/effects` 之间的**帧内状态传递**。
+             *
+             * `J4.14` 把原 `updateWeatherSystem()` 拆成两段，好让「路牌材质 / 花材质 /
+             * 萤火虫不透明度」三个每帧分支**归位**到各自模块、并插回它们**原来的执行位置**
+             * （见 `app/scene/FrameBody.js` 的登记顺序）。两段之间不再有别的天气代码，
+             * 这些量只在**同一帧内**有效。
+             */
+            const frameSt = { hour: 0, night: 0, twilight: 0, moonFade: 0 };
+
+            /**
+             * 天气的**大气**半段（原 `updateWeatherSystem()` 的 L415–L459）：
+             * 参数插值 → 天空色 / 雾 → `night` / `twilight` → 环境光 `_amb` → `FILL` → 窗体。
+             *
+             * 结束时把本帧状态写进 `frameSt`（供 `weather/effects`）与 `ctx._night`
+             * （供世界侧的 `world/fireflyOpacity`）。
+             */
+            function updateWeatherAtmosphere(dt, time) {
                 const cfg = WX_CFG[wx.type]; const k = 1 - Math.exp(-dt * 0.55);
                 wx.clouds += (cfg.clouds - wx.clouds) * k; wx.rain += (cfg.rain - wx.rain) * k; wx.snow += (cfg.snow - wx.snow) * k; wx.fog += (cfg.fog - wx.fog) * k; wx.gray += (cfg.gray - wx.gray) * k; wx.wind += (cfg.wind - wx.wind) * k;
                 if (wx.random) { wx.timer -= dt; if (wx.timer <= 0) { const others = WX_LIST.filter(t => t !== wx.type); setWeather(others[Math.floor(runtimeRng() * others.length)]); wx.timer = 16 + runtimeRng() * 18; } }
@@ -458,14 +480,27 @@ export function installWeatherSystem(ctx, app) {
                 if (twilight > 0.03) ctx.WIN_GLASS_UP.color.lerp(_warm, twilight * 0.3);
                 if (ctx.lampP > 0) { ctx.WIN_GLASS_UP.color.lerp(_lampGlowColor, ctx.lampP * 0.65 * (1 - dayFactor)); }
 
-                ctx.signSideMat.color.copy(ctx.FILL.uniforms.uColor.value);
-                ctx.signFaceMat.color.copy(ctx.FILL.uniforms.uColor.value);
-                for (const f of ctx.flowerMats) f.mat.color.copy(f.base).multiply(_amb);
+                // ★ J4.14「每帧分支归位」：以下三段不再住这里 ——
+                //   ① 路牌材质        → world/house/shell.js        的 updateSignMaterials()
+                //   ② 花材质          → world/outdoor/yardStatic.js 的 updateFlowerMaterials()
+                //   ③ 萤火虫不透明度  → world/outdoor/fireflies.js  的 updateFireflyOpacity()
+                //   它们仍是本帧链的一环，登记为独立帧任务，**先后顺序与搬迁前逐字相同**
+                //   （atmosphere → sign → flower → firefly → effects，见 app/scene/FrameBody.js）。
 
-                let ffTarget = 0;
-                if ((wx.type === 'sunny' || wx.type === 'cloudy') && night > 0.5) ffTarget = night;
-                ctx.ffOpacity += (ffTarget - ctx.ffOpacity) * Math.min(1, dt * 1.2);
-                ctx.ffUniforms.uOpacity.value = ctx.ffOpacity;
+                // 本帧状态交给 effects 半段（以及读 ctx._night 的世界侧帧任务）
+                frameSt.hour = hour; frameSt.night = night;
+                frameSt.twilight = twilight; frameSt.moonFade = moonFade;
+                ctx._night = night;
+            }
+
+            /**
+             * 天气的**效果**半段（原 `updateWeatherSystem()` 的 L470–L578）：
+             * 太阳 / 月亮 / 星星 / 云 / 雨 / 雪 / 闪电 / 时钟显示。
+             *
+             * 读 `frameSt` —— 由 `weather/atmosphere` 在**同一帧**写入。
+             */
+            function updateWeatherEffects(dt, time) {
+                const { hour, night, twilight, moonFade } = frameSt;
 
                 const sunA = ((hour - 6) / 12) * Math.PI;
                 sunGroup.position.set(Math.cos(sunA) * 44, Math.sin(sunA) * 44, -30); sunGroup.lookAt(0, 2, 0);
