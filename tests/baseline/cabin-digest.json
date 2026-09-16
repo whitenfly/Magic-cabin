@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-16",
   "totals": {
     "files": 106,
-    "lines": 18633
+    "lines": 18688
   },
-  "combined": "9391c8ae42c92f0914f0c3830429a924a2f756ba52f1655d66a265f32481fe66",
+  "combined": "d597495dc63f0da6fb3052460e553063af355056ef1c12e27c47317196b3adf1",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -46,7 +46,7 @@
     "core/util/spring.js": "41856e5c23266369",
     "dom.js": "c6eac6dd98798a5b",
     "props/cup.js": "181af2cbed7b26a8",
-    "props/README.md": "600f9c9259b2ee19",
+    "props/README.md": "ecab680bb5afa7f2",
     "systems/audio/AudioSystem.js": "2b622e38bc52fb82",
     "systems/interaction/Bridge.js": "dad73a74b9688daa",
     "systems/interaction/HintUI.js": "1794afdcb98dae86",
@@ -97,7 +97,7 @@
     "world/floor2/desk.js": "3812a993d0dad740",
     "world/floor2/deskChair.js": "688ca1eb4509fcb2",
     "world/floor2/deskHourglass.js": "1feabafaac6c450c",
-    "world/floor2/install.js": "f062df3d975d39ad",
+    "world/floor2/install.js": "8a7cebb3bc580b91",
     "world/floor2/junkBoxes.js": "32875ea83387c986",
     "world/floor2/mirror.js": "b81e4d75f639473d",
     "world/floor2/nightstand.js": "ca4e1f56f021ea29",
