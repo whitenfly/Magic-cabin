@@ -1,28 +1,59 @@
-# oneoff —— 一次性脚本（F1 搬迁 + J0.4 机位，已执行完毕，保留以便重现）
+# oneoff —— 一次性脚本
 
 这些脚本**各执行过一次**，记录在此是为了让过程**可重现、可审计**。
 日常开发**不需要**运行它们。
 
-| 脚本 | 作用 | 产物 |
+---
+
+## `archive/` —— 已退役（`J4.16` 归档，2026-09-16）
+
+`src/cabin/legacy/monolith.js` 已于 **`J4.7` 删除**。
+**所有读写它的脚本随之失效** —— 已移入 [`archive/`](./archive/)，作为历史档案保留。
+
+> **判据是确定性的，不是凭印象**：
+> 脚本在**运行时**引用 `src/cabin/legacy/monolith.js` ⇒ 该文件不存在 ⇒ 必然失效
+> （多数还在文件头自带"整体退役"分支，跑一下就打印一行提示然后退出）。
+>
+> 归档时**不修内部路径** —— 它们已经没有对象可操作了，修了也只是让档案失真。
+
+| 归档的脚本 | 原属阶段 |
+|---|---|
+| `_diag.mjs` · `_migrate.mjs` | F1 源文件切分与差异定位 |
+| `_f02-analyze/apply/marks/diagnose-wrap/report.mjs` + `.template.md` | F0.2 种子随机 |
+| `_f03-apply.mjs` · `_f03-diagnose.mjs` | F0.3 可步进时钟 |
+| `_j06-freeze.mjs` | J0.6 渲染统计钩子 |
+| `_j22-extract.mjs` · `_j22-rewrite.mjs` · `_j29-rewrite.mjs` | J2.2 材质逐字节提取 / J2.9 坐标常量 |
+| `_j3-apply.mjs` · `_j3-check-refs.mjs` · `_j3-verify-b3-props/b4-scene/b5/dining-table/mirror.mjs` | J3 物件搬迁（35 件的应用器与逐批验证） |
+| `_j4-analyze.mjs` · `_j4-apply.mjs` · `_j4-frame.mjs` · `_j4-tick-analyze.mjs` | J4 段切片（21 段的应用器与两个分析器） |
+| `_j3-b4-mirror-report.md` · `_j3-b6-report.md` | J3 阶段报告（含阻塞地图） |
+
+---
+
+## ★ 仍在使用 —— **不要**归档
+
+| 脚本 | 作用 | 谁在用 |
 |---|---|---|
-| `_probe.mjs` | 用 Node（UTF-8）精确探明源文件各处边界行号 | 控制台输出 |
-| `_diag.mjs` | 定位搬迁差异的精确字符位置（用于确认「仅末尾多 1 个换行」） | 控制台输出 |
-| `_migrate.mjs` | 切分源文件：CSS / 主脚本 / UI DOM | `src/styles/cabin.css`、`src/cabin/legacy/monolith.js` |
-| `_gen-html.mjs` | 生成 UI DOM 模块与新 `index.html` | `src/cabin/dom.js`、`index.html` |
-| `_assemble.mjs` | （已并入 `_gen-html.mjs`） | — |
-| `_scaffold.mjs` | 批量创建占位目录与 README | `src/cabin/*`、`src/data/`、`src/domains/*`、`src/config/` ⚠️ 见下方注意 |
-| `_extract.mjs` | 从源文件提取注释分区，生成搬迁索引 | `docs/_partition-map.md` |
-| `_doc.mjs` | 组装 `docs/MIGRATION.md`（并入分区索引） | `docs/MIGRATION.md` |
-| `_probe-kill.mjs` | 探测受限环境下能否用 `process.kill` 终止进程（结论：可以；`taskkill` 被拒绝） | 控制台输出 |
-| `_f02-*.mjs` / `_f03-*.mjs` | F0.2 种子随机 / F0.3 可步进时钟的替换与诊断脚本 | `.cache/` 快照 + 逐行清单 |
-| **`_j04-explore.mjs`** | **J0.4 挑机位**：用一张候选表（`capturePoses` 的 `poseTable` 通道）批量抓图，人工/视觉审查后再写进正式机位表 | `_shots/explore/*.png` |
-| **`_j06-freeze.mjs`** | **J0.6 冻结快照**：撤销 J0.6 的改动得到 `after-j04` 快照，并**自检**"再撤销 J0.4 能否回到 `after-f03`"；自检不过则拒绝写入 | `.cache/monolith.after-j04.js` |
+| **`_j4-segments.mjs`** | **段表** —— `installCabin.js` 的 21 次调用顺序由它守 | `tests/unit/segments.test.mjs` **会 import 它** |
+| **`_j4-dev-sync.mjs`** | **五处状态副本同步**（专防判例 P4 复发） | **阶段发布收尾必须跑**（`--check` 自检 / `<N>` 同步） |
+| `_j3-diag.mjs` | 页面诊断（约 20 秒）—— **每切开一个函数边界都要跑** | `J4` 搬迁期的固定动作（`tsc`/`build` 查不出的自由变量它查得出） |
+| `probe-page.mjs` · `probe-dev-3d.mjs` · `probe-picomatch.mjs` · `probe-cdp.mjs` · `probe-j25-errors.mjs` · `probe-single-file.mjs` | 各类运行期 / 构建期诊断 | 排障（`astro.config.mjs` 与 `verify-j15.mjs` 的注释指向它们） |
+| `_j3-specs/`（**目录**） | **未升格物件的施工图**：35 份 `.json`（已搬）+ 16 份 `.SKIP.md`（未搬，含阻塞点与前置条件） | ★ **任务 D（35 件升格 `defineProp`）的唯一权威清单** —— 见 `docs/实施结果/J4.15-实施结果.md` |
+
+---
+
+## 暂留 —— 未确认是否退役
+
+`_probe.mjs` · `_probe-kill.mjs` · `_rng-digest-test.mjs` · `_scaffold.mjs` · `_v8-msg.mjs` ·
+`_assemble.mjs` · `_doc.mjs` · `_extract.mjs` · `_gen-html.mjs` · `_j04-explore.mjs` · `_j3-verify-b2.mjs`
+
+它们**不读** `monolith.js`，因此不会立刻失效；但也**没有活跃引用**。
+按「**质量高于数量**」（`J3` 跳过 32 件的同一条纪律）**暂不归档** —— 归档要基于确定性判据，
+而不是"看起来像是一次性的"。
+
+---
 
 ## 注意
 
-- 这些脚本**读取** `line-art-style-magic-cabin-main/index.html`（只读），**写入**本工程。
-- 重跑 `_migrate.mjs` 会**覆盖** `src/cabin/legacy/monolith.js` —— 若 J3 已开始搬迁，
-  重跑会丢失已迁出的改动。仅在没有搬迁进度时才可重跑。
 - ⚠️ **`_scaffold.mjs` 不要重跑**：它创建的两个目录 `src/data/` 与 `src/domains/` 来自
   已失效的 `ArtLine-Part/07`/`08`，**已于 2026-09-13 按规划删除**，
   由 `src/features/`（一模块一目录）取代。见
@@ -30,15 +61,16 @@
 - `_j04-explore.mjs` 的候选机位与正式机位**是两回事**：正式机位的唯一真源是
   [`tests/visual/poses.js`](../../tests/visual/poses.js)（它与基线同住，是判据的一部分）；
   脚本里的候选表只用于"挑"，不要反过来把候选表当成机位定义。
-- ⚠️ **改 `legacy/monolith.js` 之前先冻结快照**（`cp src/cabin/legacy/monolith.js .cache/monolith.after-<阶段>.js`）。
-  `verify-f02/f03/f04/f06` 的判据都是"撤销本次改动后与上一份快照逐字节一致"，
-  少一份快照就少一环证据。`_j06-freeze.mjs` 是**事后补**的做法（靠撤销规则可验证才成立），不要当成常规流程。
+- **`archive/` 里的脚本不要再跑**：它们的操作对象（`legacy/monolith.js`、源 `index.html`）已不存在。
+  留着是为了"当时到底改了什么"可查，不是为了重放。
 
 ## 日常使用的脚本（在上级 `scripts/`）
 
 | 脚本 | 作用 |
 |---|---|
-| `scripts/serve.mjs` | 零依赖静态服务器（零构建路径）；写 PID 文件、端口自动顺延、优雅退出 |
-| `scripts/ctl.mjs` | 服务管理：`status` 查看状态 / `stop` 停止（轮询确认进程退出） |
-| `scripts/verify-migration.mjs` | 搬迁一致性静态校验（19 项） |
-| `scripts/verify-runtime.mjs` | 运行时 DOM 校验（11 项，需先导出 headless DOM） |
+| `scripts/release.mjs` | ★ 版本管理唯一入口（`start` / `verify` / `done` / `ship` / `status` / `exec`） |
+| `scripts/serve.mjs` | 零依赖静态服务器；写 PID 文件、端口自动顺延、优雅退出 |
+| `scripts/ctl.mjs` | 服务管理：`status` / `stop` |
+| `scripts/_verify.mjs` | 静态门禁七件套（`typecheck` 之外的 57 项断言） |
+| `scripts/verify-j15.mjs` | 工程化骨架 + `src/cabin/**` 逐字节摘要（`--record` 重录基线） |
+| `scripts/verify-migration.mjs` | 搬迁一致性静态校验 |
