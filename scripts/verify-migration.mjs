@@ -177,7 +177,10 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   const KNOWN_DELTA = {
     // ── J2.5 配置编排层：菜单里 6 个手写控件的绑定搬进 `systems/ui/SettingsForm.js`
     'getElementById(': -8,
-    'SND.play(': -4,
+    // ★ J4.11（缺口 C3）：`aim` 通路收进统一契约后，`Bridge.js` 的 `magic` 命中源里多了一处
+    //   `ctx.SND.play(t.sfx)`（原先那一声在 `fireMagic(o)` 里、读 `userData.sfx`）。
+    //   两处加起来仍是"每条 aim 交互命中时响一声"—— 行为不变，计数 −4 → −3。
+    'SND.play(': -3,
     // J2.5 −1（手写绑定 → bus.on('ui:click')）；J3 再 −3：
     //   · 全身镜的**自建射线段**（`renderer.domElement.addEventListener('pointerdown'/'pointerup')`）
     //     随几何段一起搬走 —— 射线那一半留给 `J4`（见 `J3-实施结果.md` §3④）；

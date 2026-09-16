@@ -174,30 +174,26 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
         })
       }
       if (meshes.length === 0) continue // 命中体全是 noHit / 空组：不注册，留给 `aimMissing` 诊断
-      // `registry.registerMagic()` 只把第一个参数写进 `mesh.userData.magicRoot`（不要求是 Object3D），
-      // 所以"一条交互一个代理根"用普通对象就够 —— 造 Group 会改 `scene.children`（像素回归的雷区）。
-      const proxy = {
-        userData: {
-          onClick: () => { if (typeof it.onActivate === 'function') it.onActivate() },
-          aimLabel: it.label,
+      // ★ `J4.11`（缺口 C3）：**不再造代理根、不再写 userData** —— 直接把这条交互的
+      //   `label` / `onActivate` 交给注册中心（`registerAim`），命中时由 `Bridge.js` 取回。
+      //   原来那层"普通对象当代理根"是为了骗过 `registerMagic` 的 `userData` 契约，现在没有契约要骗了。
+      registry.registerAim(
+        {
+          id: 'magic:' + it.id,
+          label: it.label,
           sfx: 'toggle',
-          cabinProp: prop.id,
-          cabinInteraction: it.id,
+          propId: prop.id,
+          onActivate: () => { if (typeof it.onActivate === 'function') it.onActivate() },
         },
-      }
-      registry.registerMagic(proxy, meshes)
+        meshes,
+      )
       // 装配期标注（不是契约字段）：`registry.stats().aimMissing` 靠它做**逐条**覆盖判据
       it.aimBound = true
     }
     const aimEntry = interactions.find((it) => it.mode !== 'proximity' && !it.hits)
     if (aimEntry && root && root.isObject3D && typeof root.traverse === 'function') {
-      const ud = (root.userData ||= {})
-      ud.onClick = () => { if (typeof aimEntry.onActivate === 'function') aimEntry.onActivate() }
-      ud.aimLabel = aimEntry.label
-      if (typeof ud.sfx !== 'string') ud.sfx = 'toggle'
-      // 来源标记：`registry.stats().magicPropIds` 靠它回答"哪些物件真的有准星入口"。
-      // 这条通路任何测试都守不住（画面不变、冒烟不覆盖），所以留一个可诊断的痕迹。
-      ud.cabinProp = prop.id
+      // `J4.11`：同样不再写 userData —— 下面的 `registerAim` 会带上 `propId`，
+      // `stats().magicPropIds` 从 aim 记录派生，痕迹仍然可诊断。
       const meshes = []
       // ★ 两个 `!` 都不可省：
       //   · `claimed` —— 已被逐条 `hits` 拿走的 Mesh 不重复注册（同一 Mesh 注册两次会出现两个
@@ -205,10 +201,19 @@ export function createPropInstaller({ registry, scheduler, mounts = null, ctx = 
       //   · `magicRoot` —— **已有 `magicRoot` 的 Mesh 一律不覆盖**。`regWobble()` 这类
       //     "在 `build` 里就自己注册过"的对象（衣柜挂衣）靠它保住自己的回调，
       //     否则点挂衣会落到物件根的回调上（点挂衣 = 拉抽屉）。
-      root.traverse((m) => { if (m.isMesh && !m.userData.noHit && !m.userData.magicRoot && !claimed.has(m)) meshes.push(m) })
+      root.traverse((m) => { if (m.isMesh && !m.userData.noHit && !registry.aimTargetOf(m) && !claimed.has(m)) meshes.push(m) })
       // 顺序 = 装配顺序 = 原 `regMagic` 的调用位置 ⇒ `magicMeshes` 的命中优先级不变
       if (meshes.length) {
-        registry.registerMagic(root, meshes)
+        registry.registerAim(
+          {
+            id: 'magic:' + aimEntry.id,
+            label: aimEntry.label,
+            sfx: 'toggle',
+            propId: prop.id,
+            onActivate: () => { if (typeof aimEntry.onActivate === 'function') aimEntry.onActivate() },
+          },
+          meshes,
+        )
         aimEntry.aimBound = true
       }
     }
