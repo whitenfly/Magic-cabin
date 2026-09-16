@@ -252,78 +252,13 @@ ctx.cartShelfApi.tick(dt, time);
   // ★ J4.20：原 `frame/30`（纸堆：腾空扇动绕一楼一圈后飞回）已并入上面的 `cartShelfApi.tick`。
 
   // L470–L470（1 行）
+  // ★ J4.28：暖桌已升格为 `world/floor1/kotatsu.js` —— 它那**三段连续的每帧分支**
+  //   （原 `frame/31` 暖光呼吸 + 收音机音符 / `frame/32` 橘子 / `frame/33` 坐垫）全部搬进物件的
+  //   `update()`；同时把 `frame/94` 的强度平滑也并进同一个 `update`（一件物件只有一个 `update`），
+  //   于是那一段**提前**到本位置执行 —— 等价性论证见该模块文件头「★ 帧顺序」。
+  //   ⚠️ 合并后只在这里登记一次；`frame/32` / `frame/33` 与 `frame/94` 的任务已删除。
   F('frame/31', (dt, time) => {
-{
-                    if (ctx.kotGlowMat) {
-                        ctx.kotGlowMat.opacity = ctx.kotatsuOn ? 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(time * 4.2)) : 0;
-                    }
-                    if (ctx.radioNoteRun > 0) {
-                        ctx.radioNoteRun -= dt;
-                        for (const nt of ctx.radioNotes) {
-                            const p = (time * 0.55 + nt.ph) % 1;
-                            if (p < 0.85) {
-                                nt.g.visible = true;
-                                const env = Math.min(p * 7, 1) * (1 - Math.max(0, (p - 0.7) / 0.15));
-                                ctx.noteMat.opacity = 0.9 * env;
-                                const src = ctx.radioG.userData.noteSrc;
-                                src.getWorldPosition(ctx._tv);
-                                nt.g.position.set(
-                                    ctx._tv.x + Math.sin(time * 2 + nt.ph * 6) * 0.030 + p * 0.06,
-                                    ctx._tv.y + p * 0.28,
-                                    ctx._tv.z + Math.cos(time * 1.6 + nt.ph * 5) * 0.025
-                                );
-                                nt.g.rotation.y = Math.sin(time * 3 + nt.ph * 4) * 0.6;
-                                nt.g.rotation.z = Math.sin(time * 2.5 + nt.ph * 3) * 0.25;
-                            } else {
-                                nt.g.visible = false;
-                            }
-                        }
-                    } else {
-                        for (const nt of ctx.radioNotes) nt.g.visible = false;
-                    }
-                }
-  })
-
-  // L501–L501（1 行）
-  F('frame/32', (dt, time) => {
-{
-                    const n = ctx.oranges.length;
-                    if (ctx.orangeState === 'out' || ctx.orangeState === 'back') {
-                        ctx.orangeT += dt;
-                        let done = true;
-                        for (let i = 0; i < n; i++) {
-                            const o = ctx.oranges[i];
-                            const delay = i * 0.085;
-                            let p = Math.min(Math.max((ctx.orangeT - delay) / 0.65, 0), 1);
-                            if (p < 1) done = false;
-                            const e = p * p * (3 - 2 * p);
-                            const f = ctx.orangeState === 'out' ? e : 1 - e;
-                            o.mesh.position.set(
-                                o.hx + (o.tx - o.hx) * f,
-                                o.hy + (o.ty - o.hy) * f + Math.sin(f * Math.PI) * 0.09,
-                                o.hz + (o.tz - o.hz) * f
-                            );
-                            o.mesh.rotation.set(o.ax * f, 0, o.az * f);
-                        }
-                        if (done) ctx.orangeState = ctx.orangeState === 'out' ? 'rolled' : 'inbowl';
-                    }
-                }
-  })
-
-  // L525–L525（1 行）
-  F('frame/33', (dt, time) => {
-{
-                    for (const c of ctx.cushions) {
-                        if (c.anim) {
-                            c.p += dt * 2.2;
-                            if (c.p >= 1) { c.p = 1; c.anim = 0; }
-                            const e = c.p * c.p * (3 - 2 * c.p);
-                            const ang = c.from + (c.to - c.from) * e;
-                            c.g.rotation.x = ang;
-                            c.g.position.y = Math.sin(c.p * Math.PI) * 0.24 + (ang / Math.PI) * 0.125;
-                        }
-                    }
-                }
+ctx.kotatsuApi.tick(dt, time);
   })
 
   // L538–L538（1 行）
@@ -823,10 +758,10 @@ ctx.pendant.rotation.y -= 0.008;
   //   （提前约 74 个帧任务，等价性论证见 `world/floor1/hangingLantern.js` 文件头「★ 帧顺序」）。
   //   本帧任务已删除，槽位 0 的强度改由 `lights()` 的 `strength: () => s.pt` 惰性读取。
 
-  // L888–L888（1 行）
-  F('frame/93', (dt, time) => {
-ctx.ptKot += ((ctx.kotatsuOn ? 1 : 0) - ctx.ptKot) * 0.07;
-  })
+  // ★ J4.28：原 `frame/93`（`ctx.ptKot += …`）已并入暖桌物件的 `update()`
+  //   —— 与 `frame/31`–`frame/33` 的三段几何分支合并在那里执行（提前，等价性论证见
+  //   `world/floor1/kotatsu.js` 文件头「★ 帧顺序」）。槽位 3 的强度改由
+  //   `lights()` 的 `strength: (time) => s.pt * (0.82 + …)` 惰性读取。
 
   // ★ J4.24：原 `frame/94`（`ctx.ptMc += …`）已并入紫色魔法阵物件的 `update()`
   //   —— 与 `frame/38` 的几何分支合并在那里执行（提前，等价性论证见

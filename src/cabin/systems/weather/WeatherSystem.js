@@ -616,11 +616,13 @@ export function installWeatherSystem(ctx, app) {
             // J0.4：截图回归的测试机位覆盖（六元数组 [px,py,pz,lx,ly,lz]）。
             //       仅 manual 模式由宿主设置；null = 不覆盖 —— realtime 下恒为 null，画面与改动前完全一致。
             ctx.testCam = null;
-            // ★ J4.22–J4.25：`ctx.ptLantern` / `ctx.ptPlant` / `ctx.ptMc` / `ctx.ptCb` 已随各自的物件搬走
-            //   （改为 `world/floor1/` 下 `hangingLantern.js` / `moonPlant.js` / `magicCircle.js` /
-            //    `crystalBall.js` 的 `state.pt`，初值仍是 1 / 0 / 0 / 0，平滑也由各自物件的 `update` 做）。
-            //   ⇒ 一楼只剩 `ctx.ptKot`（暖桌，槽位 3）这一个中间量。
-            ctx.ptKot = 1;
+            // ★ J4.22–J4.28：`ctx.ptLantern` / `ctx.ptPlant` / `ctx.ptMc` / `ctx.ptCb` / `ctx.ptKot`
+            //   **全部**已随各自的物件搬走（改为 `world/floor1/` 下 `hangingLantern.js` / `moonPlant.js` /
+            //   `magicCircle.js` / `crystalBall.js` / `kotatsu.js` 的 `state.pt`，
+            //   初值仍是 1 / 0 / 0 / 0 / 1，平滑也由各自物件的 `update` 做）。
+            //   ⇒ **一楼的点光源中间量到此清零**，本段不再持有任何 `ptXxx`。
+            //   （`WeatherSystem` 里已无光源状态；这里刻意留一段注释而不是删空，
+            //     免得后来者以为"漏了一行"。）
             // F0.3：帧体（原 animate 的函数体）。时间来自 clock —— realtime 下等价于原实现，
             //       manual 下可逐帧定格，用于像素级回归比对。
 }

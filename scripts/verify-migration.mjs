@@ -229,7 +229,13 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     //
     // ★ J4.25 `floor1/crystal-ball` ⇒ −25 更新为 **−26**：
     //   `install.js` 里删掉 **1** 处 regMagic 调用（水晶球那一条）⇒ **−1**。
-    'regMagic(': -26,
+    //
+    // ★ J4.28 `floor1/kotatsu` ⇒ −26 更新为 **−30**（**本阶段最大的一次**）：
+    //   `install.js` 的 12.13 段里删掉 **4** 处 regMagic 调用
+    //   （桌体 `kotBody` / 收音机 `radioG` / 橘子 `orangeG` / 坐垫那只在 `makeCushion` 里的）
+    //   ⇒ **−4**；新模块 `world/floor1/kotatsu.js` 用 `interactables` 声明 **5 条**交互
+    //   （坐垫 2 只各一条），**不含任何 regMagic 调用** ⇒ 不再回补计数。
+    'regMagic(': -30,
   }
   // ★ J3：计数前先**剥掉块注释**。
   //
