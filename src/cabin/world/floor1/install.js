@@ -15,6 +15,7 @@ import broom from './broom.js'
 import cartShelf from './cartShelf.js'
 import cauldron from './cauldron.js'
 import chest from './chest.js'
+import crystalBall from './crystalBall.js'
 import diningBook from './diningBook.js'
 import diningTable from './diningTable.js'
 import doorHangBar from './doorHangBar.js'
@@ -400,68 +401,10 @@ export function installFloor1(ctx, app) {
             ctx.broomApi = broomApi;
 
             /* ---- 12.11 水晶球占卜台【门侧前右墙角】 ---- */
-            const orbStandG = new THREE.Group();
-            ctx.orbStandG = orbStandG;
-            orbStandG.position.set(ctx.CBX, 0, ctx.CBZ);
-            ctx.scene.add(orbStandG);
-            for (let i = 0; i < 3; i++) {
-                const a = i * Math.PI * 2 / 3 + 0.5;
-                ctx.logBetween([Math.cos(a) * 0.15, 0.62, Math.sin(a) * 0.15],
-                    [Math.cos(a) * 0.26, 0.02, Math.sin(a) * 0.26], 0.028, orbStandG);
-            }
-            ctx.put(ctx.edge(new THREE.TorusGeometry(0.17, 0.02, 6, 20)), 0, 0.40, 0, Math.PI / 2, 0, 0, orbStandG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.13, 0.17, 0.06, 12)), 0, 0.62, 0, 0, 0, 0, orbStandG);
-            {
-                const cbGlassMat = new THREE.MeshBasicMaterial({ color: 0xdceef5, transparent: true, opacity: 0.20, depthWrite: false });
-                const cbLineMat = new THREE.LineBasicMaterial({ color: 0x8ab8c8 });
-                const cbSphere = new THREE.Group();
-                cbSphere.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), cbGlassMat));
-                cbSphere.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(0.24, 12, 8)), cbLineMat));
-                const hc = [];
-                for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2; hc.push([Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]); }
-                cbSphere.add(new THREE.LineLoop(ctx.geo(hc), cbLineMat));
-                ctx.put(cbSphere, 0, 0.90, 0, 0, 0, 0, orbStandG);
-            }
-            const cbInner = new THREE.Group();
-            ctx.cbInner = cbInner;
-            cbInner.position.set(0, 0.90, 0);
-            orbStandG.add(cbInner);
-            const cbMistMat = new THREE.LineBasicMaterial({ color: 0x9b6fd8, transparent: true, opacity: 0.5 });
-            ctx.cbMistMat = cbMistMat;
-            const cbMists = [];
-            ctx.cbMists = cbMists;
-            for (let i = 0; i < 3; i++) {
-                const pts = [];
-                const r = 0.08 + i * 0.045;
-                for (let k = 0; k <= 24; k++) {
-                    const a = k / 24 * Math.PI * 2;
-                    pts.push([Math.cos(a) * r, Math.sin(a * 2 + i) * 0.05, Math.sin(a) * r]);
-                }
-                const l = new THREE.Line(ctx.geo(pts), cbMistMat);
-                cbInner.add(l);
-                cbMists.push({ l, ph: i });
-            }
-            const cbStars = [];
-            ctx.cbStars = cbStars;
-            for (let i = 0; i < 5; i++) {
-                const st = ctx.solid(new THREE.OctahedronGeometry(0.014),
-                    new THREE.MeshBasicMaterial({ color: 0xcab4f0 }));
-                st.position.set((i - 2) * 0.075, (i % 2 ? 0.07 : -0.05), (floor1Rng() - 0.5) * 0.1);
-                cbInner.add(st);
-                cbStars.push(st);
-            }
-            const cbGlowMat = new THREE.MeshBasicMaterial({ color: 0xb49bf0, transparent: true, opacity: 0, depthWrite: false });
-            ctx.cbGlowMat = cbGlowMat;
-            const cbGlow = new THREE.Mesh(new THREE.SphereGeometry(0.30, 12, 8), cbGlowMat);
-            ctx.cbGlow = cbGlow;
-            cbGlow.userData.noHit = true;
-            ctx.put(cbGlow, 0, 0.90, 0, 0, 0, 0, orbStandG);
-            const cbHit = new THREE.Mesh(new THREE.SphereGeometry(0.27, 8, 6), ctx.HITMAT);
-            ctx.cbHit = cbHit;
-            ctx.put(cbHit, 0, 0.90, 0, 0, 0, 0, orbStandG);
-            ctx.cbRun = 0;
-            ctx.regMagic(orbStandG, () => { ctx.cbRun = 5.0; });
-            orbStandG.userData.sfx = 'magic';
+            // J4.25：几何 + 交互 + 每帧分支 + **光源槽位 4** 已搬入 src/cabin/world/floor1/crystalBall.js。
+            // ★ J4.18 契约的第四个真实用户。
+            const crystalBallApi = ctx.installProp(crystalBall);
+            ctx.crystalBallApi = crystalBallApi;
 
             /* ---- 月光魔法盆栽【门侧前右墙角】 ---- */
             // J4.23：几何 + 交互 + 每帧分支 + **光源槽位 7** 已搬入 src/cabin/world/floor1/moonPlant.js。
