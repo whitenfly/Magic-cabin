@@ -221,19 +221,11 @@ ctx.hangingLanternApi.tick(dt, time);
   })
 
   // L299–L299（1 行）
+  // ★ J4.25：水晶球占卜台已升格为 `world/floor1/crystalBall.js` —— 本段与 `frame/95`
+  //   的强度平滑并进同一个 `update`（一件物件只有一个 `update`），登记位置取本段（早）。
+  //   等价性论证见该模块文件头「★ 帧顺序」。`frame/95` 的任务已删除。
   F('frame/25', (dt, time) => {
-{
-                    if (ctx.cbRun > 0) ctx.cbRun -= dt;
-                    const act = ctx.cbRun > 0;
-                    for (let i = 0; i < ctx.cbMists.length; i++)
-                        ctx.cbMists[i].l.rotation.y += dt * (act ? 2.0 + i * 0.5 : 0.35 + i * 0.1);
-                    for (let i = 0; i < ctx.cbStars.length; i++) {
-                        ctx.cbStars[i].rotation.y += dt * (act ? 3.0 : 0.8);
-                        ctx.cbStars[i].position.y = (i % 2 ? 0.07 : -0.05) + Math.sin(time * 1.4 + i * 1.7) * 0.02;
-                    }
-                    ctx.cbMistMat.opacity = act ? 0.85 : 0.5;
-                    ctx.cbGlowMat.opacity = act ? 0.10 + 0.06 * Math.sin(time * 6) : 0;
-                }
+ctx.crystalBallApi.tick(dt, time);
   })
 
   // L313–L313（1 行）
@@ -851,10 +843,10 @@ ctx.ptKot += ((ctx.kotatsuOn ? 1 : 0) - ctx.ptKot) * 0.07;
   //   `world/floor1/magicCircle.js` 文件头「★ 帧顺序」）。槽位 2 的强度改由
   //   `lights()` 的 `strength: () => s.pt` 惰性读取。
 
-  // L890–L890（1 行）
-  F('frame/95', (dt, time) => {
-ctx.ptCb += ((ctx.cbRun > 0 ? 1 : 0) - ctx.ptCb) * 0.055;
-  })
+  // ★ J4.25：原 `frame/95`（`ctx.ptCb += …`）已并入水晶球占卜台物件的 `update()`
+  //   —— 与 `frame/25` 的几何分支合并在那里执行（提前，等价性论证见
+  //   `world/floor1/crystalBall.js` 文件头「★ 帧顺序」）。槽位 4 的强度改由
+  //   `lights()` 的 `strength: () => s.pt` 惰性读取。
 
   // ★ J4.23：原 `frame/96`（`ctx.ptPlant += …`）已并入月光魔法盆栽物件的 `update()`
   //   —— 与 `frame/26` 的几何分支合并在那里执行（提前，等价性论证见

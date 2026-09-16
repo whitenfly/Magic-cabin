@@ -226,7 +226,10 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     // ★ J4.24 `floor1/magic-circle` ⇒ −24 更新为 **−25**：
     //   `install.js` 里删掉 **1** 处 regMagic 调用（魔法阵那一条）⇒ **−1**。
     //   同样一次到位（措辞已固化成惯例）。
-    'regMagic(': -25,
+    //
+    // ★ J4.25 `floor1/crystal-ball` ⇒ −25 更新为 **−26**：
+    //   `install.js` 里删掉 **1** 处 regMagic 调用（水晶球那一条）⇒ **−1**。
+    'regMagic(': -26,
   }
   // ★ J3：计数前先**剥掉块注释**。
   //
