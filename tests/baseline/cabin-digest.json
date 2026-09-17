@@ -4,10 +4,10 @@
   "note": "⚠️ J2 起 monolith 进入搬迁期：每个任务都会**合法**改变 src/cabin/**。节奏是——任务内本项变红属预期，收尾前先在 docs/实施结果/J2-实施结果.md 记一笔原因，再重跑 --record。",
   "recordedAt": "2026-09-17",
   "totals": {
-    "files": 117,
-    "lines": 20111
+    "files": 118,
+    "lines": 20210
   },
-  "combined": "02f4f394be1676f323dc8d5986cce72e60bc35fcd23e5a7896aa65e9750258ed",
+  "combined": "bee3156940a9e652ab810074a70cf6b1db8e514f2fc9420949a602d0c3ad137f",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,7 +20,7 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "e0aedef62849bd89",
+    "app/scene/FrameBody.js": "831325ed2761b53e",
     "app/scene/installCabin.js": "afcfbe7e73fbe813",
     "app/scene/PropInstaller.js": "823db08626a503af",
     "app/scene/SceneCore.js": "908bb049d736ec30",
@@ -104,7 +104,7 @@
     "world/floor2/desk.js": "3812a993d0dad740",
     "world/floor2/deskChair.js": "688ca1eb4509fcb2",
     "world/floor2/deskHourglass.js": "1feabafaac6c450c",
-    "world/floor2/install.js": "58346a046ec3329a",
+    "world/floor2/install.js": "2bf0d57fadde5a90",
     "world/floor2/junkBoxes.js": "d65dea2078e7c424",
     "world/floor2/magicBook.js": "a9280261f4de49fb",
     "world/floor2/magicClock.js": "28646b2b723e10f1",
@@ -117,6 +117,7 @@
     "world/floor2/snowGlobe.js": "7a3ee95824df726a",
     "world/floor2/starParticles.js": "aa6063f70552f513",
     "world/floor2/tissueBox.js": "fd230fee74fa82d5",
+    "world/floor2/wand.js": "c06f6621df3429b3",
     "world/floor2/wardrobe.js": "7aa910d3d37ce2ba",
     "world/floor2/witchHat.js": "0e4ec7173d43aba6",
     "world/house/shell.js": "2fc521071b549c56",
