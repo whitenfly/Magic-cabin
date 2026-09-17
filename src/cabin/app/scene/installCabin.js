@@ -77,7 +77,8 @@ export function installCabin(app) {
   // ★ J4.43：原来的 `installNoteEditor(ctx, app)`（段 11）**已删除** —— 便签编辑器
   //   按 J4.42 §2 的裁决**整体归物件**：`applyNote` + 两个 DOM 监听已搬进
   //   `world/floor2/board.js` 的 `build` 闭包，`systems/ui/editors/NoteEditor.js` 文件已删除。
-  //   `ctx.noteInput` 由 `installFloor2` 里的 board 装配写回（显式跨层豁免，见该处注释）。
+  //   ★ J4.51：原来 `installFloor2` 里的 `ctx.noteInput = boardApi.parts.noteInput;`
+  //   （唯一一处跨层豁免）**也已删除** —— 系统层改用统一判据 `ctx.isTypingTarget()`。
   installChandelier(ctx, app)
   installMagicSystem(ctx, app)
   // ── 段 14–18：碰撞 / 交互通路 / 输入 / 菜单面板 / 玩家控制 ──────────────

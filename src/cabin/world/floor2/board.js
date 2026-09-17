@@ -24,16 +24,15 @@
  * ⇒ **`applyNote` + 两个 DOM 监听搬进本模块**，`NoteEditor.js` **被删除**，
  * `installCabin.js` 的段调用一并去掉。
  *
- * ### ⚠️ 唯一保留的跨层豁免：`ctx.noteInput`
+ * ### ✅ 跨层豁免已取消（`J4.51`）
  *
- * `ctx.noteInput` 有两个**系统层**读者（`Input.js` L24 · `PlayerController.js` L20，
- * 作用都是"在输入框里打字时吞掉游戏快捷键"）。按 `J4.42` §2.4 的方案 (a)：
- * 本模块经 `parts.noteInput` 把它**交出去**，由 `install.js` 写一行
- * `ctx.noteInput = boardApi.parts.noteInput;`（显式、带注释的豁免）。
+ * `J4.42` §2.4 方案 (a) 曾在这里保留**唯一一处跨层豁免**：本模块经 `parts.noteInput` 把便签
+ * 输入框交给 `install.js`，由它写 `ctx.noteInput`，供两个**系统层**读者
+ * （`Input.js` · `PlayerController.js` —— "在输入框里打字时吞掉游戏快捷键"）使用。
  *
- * ⚠️ **不能在 `build` 里直接写 `ctx.noteInput = …`** —— `propCtx` 的属性是**只读 getter**
- * （`PropInstaller.js` 用 `Object.defineProperty(propCtx, name, { get })`，无 setter），
- * 而 ES module 是严格模式 ⇒ 赋值会**抛 `TypeError`**。必须经 `parts` 走到装配层赋值。
+ * `J4.51` 把那两处改成**统一判据** `ctx.isTypingTarget()`（焦点在 `INPUT` / `TEXTAREA` /
+ * `contentEditable` 上就吞按键）⇒ 系统层不再需要认识任何具体输入框，本模块**不必再交出去**，
+ * `parts.noteInput` 一并删除。判据：`pnpm test:input`。
  *
  * ## ★ `rng`：1020 次 `textureRng()`（不变量 `N8`）
  *
@@ -431,8 +430,7 @@ export default defineProp({
         boardG, boardTilt, boardTex, boardCanvas, bctx,
         notes, eraserG, chalkG, CHALK_HOME, glyphPlane, glyphTex, glyphCanvas,
         glyphLocalX, glyphLocalY, SCROLL_R,
-        // ★ 跨层豁免（`J4.42` §2.4 方案 a）：由 `install.js` 写回 `ctx.noteInput`
-        noteInput,
+        // ★ J4.51：`noteInput` 已从 `parts` 移除 —— 跨层豁免取消，系统层改用统一判据
         openNoteEditor, updateChalk,
         consts: { BOARD_X: -2.9, BOARD_Z: 2.8 },
       },

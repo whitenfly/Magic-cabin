@@ -246,6 +246,28 @@ export function installSceneLoop(ctx, app) {
                     ctx.scene.traverse((o) => { if (o.uuid === uuid) hit = true; });
                     return hit;
                 };
+
+                // J4.51：玩家运行时状态探针 —— `test:input` 判据要回答"**按了键，玩家到底动没动**"。
+                //   ★ 为什么必须有它：玩家**不是** `defineProp` 物件（`ctx.player` 由
+                //     `MagicSystem.js` 建立），`__cabinPropState` 读不到；而**相机也不能代替** ——
+                //     `viewMode === 'fixed'` 下相机固定在屋外，玩家在屋里走动时它一动不动。
+                //   `keys` 一并给出：被"正在输入"判据吞掉的按键**不会**进 `ctx.keys`
+                //     （`Input.js` 在写它之前就 `return` 了），所以这两组量互为佐证。
+                window.__cabinPlayer = function () {
+                    const p = ctx.player;
+                    if (!p) return null;
+                    const r6 = (v) => Math.round(v * 1e6) / 1e6;
+                    return {
+                        pos: [r6(p.pos.x), r6(p.pos.y), r6(p.pos.z)],
+                        onGround: !!p.onGround,
+                        moveSpeed: r6(p.moveSpeed || 0),
+                        viewMode: ctx.viewMode,
+                        keys: {
+                            KeyW: !!ctx.keys['KeyW'], KeyA: !!ctx.keys['KeyA'],
+                            KeyS: !!ctx.keys['KeyS'], KeyD: !!ctx.keys['KeyD'],
+                        },
+                    };
+                };
             }
             addEventListener('resize', () => { ctx.camera.aspect = innerWidth / innerHeight; ctx.camera.updateProjectionMatrix(); ctx.renderer.setSize(innerWidth, innerHeight); });
 }

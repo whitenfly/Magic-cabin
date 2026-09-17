@@ -235,11 +235,11 @@ export function installFloor2(ctx, app) {
             // ★ 帧任务：原 frame/55 + frame/56 + frame/57 **三条相邻** ⇒ 合并天然等价（判据 ①）。
             const boardApi = ctx.installProp(board);
             ctx.boardApi = boardApi;
-            // ★ 唯一保留的跨层豁免（施工图 §2.4 方案 a）：`ctx.noteInput` 有两个**系统层**读者
-            //   （Input.js L24 · PlayerController.js L20 —— 「在输入框里打字时吞掉游戏快捷键」），
-            //   所以由装配层显式写回。⚠️ **不能在 board.js 的 build 里写** —— `propCtx` 的属性是
-            //   只读 getter，ES module 严格模式下赋值会直接抛 TypeError ⇒ 必须经 parts 走出来。
-            ctx.noteInput = boardApi.parts.noteInput;
+            // ★ J4.51（R4b）：原来的 `ctx.noteInput = boardApi.parts.noteInput;`（`J4.42` §2.4 方案 a
+            //   留下的**唯一一处跨层豁免**）**已删除** —— 系统层不再需要认识任何具体的输入框：
+            //   `Input.js` 与 `PlayerController.js` 改为共用统一判据 `ctx.isTypingTarget()`
+            //   （焦点在 INPUT/TEXTAREA/contentEditable 上就吞按键）⇒ 本件不必再把 `noteInput` 交出去。
+            //   判据：`pnpm test:input`。
 
             /* 18.9 左墙中央的魔法杖 */
             // J4.45：整段（610 行，J4.44 施工图 §1 的 16 个子块）已搬入
