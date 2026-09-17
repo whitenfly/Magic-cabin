@@ -19,9 +19,29 @@ export function installInput(ctx, app) {
             ctx.signEditor = signEditor; const picInput = document.getElementById('picInput');
             ctx.picInput = picInput;
             ctx.joyX = 0, ctx.joyY = 0, ctx.sprintBtnDown = false;
+            /**
+             * ★ J4.51（R4b）：**统一判据** —— 焦点是否落在"正在输入"的元素上。
+             *
+             * 原来是**逐个列举**（`signInput` / `ctx.noteInput` / `picInput`），有两个毛病：
+             *   · 任何**新增**的输入框（设置面板的 range 滑块、将来 `features/**` 带来的控件）
+             *     都得记得回来补一句 —— 漏了就"打字时人还在走"；
+             *   · `ctx.noteInput` 还得靠 `install.js` 里一处**跨层豁免**才能拿到（`J4.42` §2.4）。
+             * 现在只看 `tagName`：`INPUT` / `TEXTAREA`（外加 `contentEditable`）一律算"正在输入"。
+             *
+             * ⚠️ 这是**有意的行为变更**：range 滑块等控件从此也会吞按键。
+             *    而滑块拖完**不会 blur**（`SettingsForm.js` 只把 `dragging` 清掉）⇒ 拖过音量 /
+             *    时间流速之后若不去点别处，键盘就走不动了。判据 `pnpm test:input` 把这个行为
+             *    写成了断言（`J4.51`），所以它是"被记录的决定"，不是悄悄发生的事故。
+             */
+            function isTypingTarget() {
+                const el = document.activeElement;
+                if (!el) return false;
+                return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true;
+            }
+            ctx.isTypingTarget = isTypingTarget;
             function tryJump() { const now = clock.now; if (ctx.player.onGround || (now - ctx.player.groundT) < 0.15) { ctx.player.vy = 7.0; ctx.player.onGround = false; ctx.player.groundT = -10; ctx.slime.squashV += 1.3; ctx.slime.wobV += 2.2; } }
             addEventListener('keydown', e => {
-                if (document.activeElement === signInput || document.activeElement === ctx.noteInput || document.activeElement === picInput) return;
+                if (isTypingTarget()) return;   // ★ J4.51：统一判据（原来是逐个列举三个输入框 + 一处跨层豁免）
                 keys[e.code] = true;
                 if (e.code === 'KeyV' && ctx.viewMode !== 'fixed') ctx.setViewMode(ctx.viewMode === 'fp' ? 'tp' : 'fp');
                 if (e.code === 'Space') { e.preventDefault(); tryJump(); }
