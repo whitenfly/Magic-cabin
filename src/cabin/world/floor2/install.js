@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import bag from './bag.js'
 import bin from './bin.js'
+import board from './board.js'
 import astro from './astro.js'
 import candle from './candle.js'
 import calendar from './calendar.js'
@@ -60,8 +61,12 @@ export function installFloor2(ctx, app) {
             //   （下方仍保留的是**其它段**的导出 —— 与已搬走的物件无关。）
             // ★ J4.41：`ctx.addHalo` 也已**移除** —— 它是 18.7 星空粒子的局部工厂，已随该段
             //   搬进 `floor2/starParticles.js` 的 `build` 闭包。搬前已 grep 全仓确认无外部读者。
-            ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
-            ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
+            // ★ J4.43：`drawBoardFace` / `drawNote` / `openNoteEditor` / `drawGlyphSet` /
+            //   `updateChalk` 与下一行的 `scrollRoll` **六项**已全部移除 —— 它们随 18.8 整段
+            //   搬进 `floor2/board.js`（编辑器也一并归位）。搬前已 grep 全仓确认无外部读者。
+            //   ⇒ ★ 本清单现在**只剩 18.9 魔法杖那一段的导出**（`woodPart` / `wandGlowSphere` /
+            //     `ringPts2` / `polyPts2` / `starPts2`）—— 等 `wand` 搬完即可整行消失。
+            ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
             //    它们靠**函数声明提升**引用本段的局部函数，而那两个函数已提取到
             //    `core/geometry/jitter.js`（本文件顶部 import 同名进来）。
@@ -205,342 +210,28 @@ export function installFloor2(ctx, app) {
             //   读组 9 的 `magicP`（owner = astro，本件在 18.7 装配、晚于 18.5 ⇒ 直接注入）。
             ctx.starParticlesApi = ctx.installProp(starParticles, { ctx: { astroApi } });
 
-            /* ========================================================== */
             /* 18.8 小魔女计划板 */
-            /* ========================================================== */
-            const boardG = new THREE.Group();
-            ctx.boardG = boardG;
-            boardG.position.set(-2.9, ctx.FY, 2.8);
-            boardG.rotation.y = 2.33;
-            ctx.scene.add(boardG);
-            const boardTilt = new THREE.Group();
-            ctx.boardTilt = boardTilt;
-            boardTilt.rotation.x = -0.09;
-            boardG.add(boardTilt);
-            const boardCanvas = document.createElement('canvas');
-            ctx.boardCanvas = boardCanvas;
-            boardCanvas.width = 512;
-            boardCanvas.height = 392;
-            const bctx = boardCanvas.getContext('2d');
-            ctx.bctx = bctx;
-
-            function drawBoardFace() {
-                bctx.fillStyle = '#2f4136';
-                bctx.fillRect(0, 0, 512, 392);
-                for (let i = 0; i < 340; i++) {
-                    bctx.fillStyle = 'rgba(255,255,255,' + (textureRng() * 0.045).toFixed(3) + ')';
-                    bctx.fillRect(textureRng() * 512, textureRng() * 392, 2, 2);
-                }
-                const chalk = 'rgba(238,244,238,0.88)';
-                bctx.fillStyle = chalk;
-                bctx.strokeStyle = chalk;
-                bctx.font = '34px serif';
-                bctx.textAlign = 'center';
-                bctx.textBaseline = 'alphabetic';
-                bctx.fillText('✦ ✧ ❖ ✧ ✦', 256, 52);
-                bctx.lineWidth = 2;
-                bctx.beginPath();
-                bctx.moveTo(120, 68);
-                bctx.lineTo(392, 68);
-                bctx.stroke();
-                bctx.beginPath();
-                bctx.moveTo(150, 76);
-                bctx.lineTo(362, 76);
-                bctx.stroke();
-                bctx.lineWidth = 2.2;
-                bctx.beginPath();
-                bctx.arc(120, 215, 62, 0, 7);
-                bctx.stroke();
-                bctx.beginPath();
-                bctx.arc(120, 215, 40, 0, 7);
-                bctx.stroke();
-                bctx.beginPath();
-                bctx.moveTo(120, 162);
-                bctx.lineTo(167, 246);
-                bctx.lineTo(73, 246);
-                bctx.closePath();
-                bctx.stroke();
-                bctx.beginPath();
-                bctx.moveTo(120, 268);
-                bctx.lineTo(73, 184);
-                bctx.lineTo(167, 184);
-                bctx.closePath();
-                bctx.stroke();
-                for (let k = 0; k < 8; k++) {
-                    const a = k * Math.PI / 4;
-                    bctx.beginPath();
-                    bctx.moveTo(120 + Math.cos(a) * 62, 215 + Math.sin(a) * 62);
-                    bctx.lineTo(120 + Math.cos(a) * 70, 215 + Math.sin(a) * 70);
-                    bctx.stroke();
-                }
-                bctx.font = '22px serif';
-                bctx.fillText('✦', 120, 223);
-                bctx.textAlign = 'left';
-                bctx.font = '26px serif';
-                bctx.fillText('△ + ◯ ⇒ ✦', 245, 130);
-                bctx.fillText('∴ ✦ ∝ ☽', 262, 172);
-                bctx.fillText('☾ ∝ ✱ ∝ ❍', 248, 214);
-                bctx.fillText('⟡ ☽ → ● ⟡', 250, 258);
-                bctx.fillText('☽ ◐ ● ◑ ☾', 250, 308);
-                bctx.font = '16px serif';
-                bctx.fillText('✧', 60, 110);
-                bctx.fillText('✦', 440, 100);
-                bctx.fillText('✧', 470, 225);
-                bctx.fillText('✦', 62, 335);
-                bctx.fillText('✧', 310, 350);
-                bctx.fillText('❖', 455, 175);
-
-                function sticker(x, y, w, h, col, rot) {
-                    bctx.save();
-                    bctx.translate(x, y);
-                    bctx.rotate(rot);
-                    bctx.fillStyle = col;
-                    bctx.fillRect(-w / 2, -h / 2, w, h);
-                    bctx.strokeStyle = 'rgba(0,0,0,0.35)';
-                    bctx.lineWidth = 2;
-                    bctx.strokeRect(-w / 2, -h / 2, w, h);
-                    bctx.fillStyle = 'rgba(255,255,255,0.45)';
-                    bctx.fillRect(-w / 2 - 8, -h / 2 - 6, 16, 10);
-                    bctx.restore();
-                }
-                sticker(455, 335, 46, 34, '#ffd166', 0.3);
-                sticker(52, 185, 38, 30, '#ff8fab', -0.35);
-                sticker(462, 58, 36, 28, '#8fd6ff', 0.15);
-                boardTex.needsUpdate = true;
-            }
-            const boardTex = new THREE.CanvasTexture(boardCanvas);
-            ctx.boardTex = boardTex;
-            drawBoardFace();
-            ctx.put(ctx.log(1.55, 0.035), -0.56, 0.77, 0.04, 0.05, 0, 0.05, boardTilt);
-            ctx.put(ctx.log(1.55, 0.035), 0.56, 0.77, 0.04, 0.05, 0, -0.05, boardTilt);
-            ctx.put(ctx.log(1.40, 0.035), 0.00, 0.70, -0.32, 0.30, 0, 0, boardTilt);
-            ctx.put(ctx.log(1.10, 0.025), 0.00, 0.45, 0.06, 0, 0, Math.PI / 2, boardTilt);
-            ctx.put(ctx.log(1.10, 0.025), 0.00, 1.30, 0.02, 0, 0, Math.PI / 2, boardTilt);
-            ctx.put(ctx.box(1.27, 1.00, 0.06), 0, 1.00, 0, 0, 0, 0, boardTilt);
-            {
-                const woodSide = ctx.LITMAT(0xe8e2d0);
-                const faceMat = new THREE.MeshBasicMaterial({ map: boardTex });
-                const faceMesh = new THREE.Mesh(new THREE.BoxGeometry(1.13, 0.86, 0.03), [woodSide, woodSide, woodSide, woodSide, faceMat, woodSide]);
-                faceMesh.position.set(0, 1.00, 0.032);
-                boardTilt.add(faceMesh);
-                const eLines = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.13, 0.86, 0.03)), ctx.MAT);
-                eLines.position.set(0, 1.00, 0.032);
-                boardTilt.add(eLines);
-            }
-            ctx.put(ctx.box(1.20, 0.04, 0.14), 0, 0.54, 0.09, 0, 0, 0, boardTilt);
-            const notes = [
-                { col: '#ffe66d', txt: '采月光草', rz: 0.12, px: -0.40, py: 1.26 },
-                { col: '#ffb3c6', txt: '归还魔法书', rz: -0.08, px: -0.05, py: 1.14 },
-                { col: '#aecdff', txt: '作者：YIBI2333', rz: 0.18, px: 0.36, py: 0.84 }
-            ];
-            ctx.notes = notes;
-            ctx.noteEditing = 0;
-            for (let i = 0; i < notes.length; i++) {
-                const n = notes[i];
-                n.canvas = document.createElement('canvas');
-                n.canvas.width = 128;
-                n.canvas.height = 128;
-                n.ctx = n.canvas.getContext('2d');
-                n.tex = new THREE.CanvasTexture(n.canvas);
-                drawNote(i);
-                const g = new THREE.Group();
-                const sideMat = ctx.LITMAT(0xffffff);
-                const faceMat = new THREE.MeshBasicMaterial({ map: n.tex });
-                g.add(new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.17, 0.008), [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]));
-                g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.17, 0.17, 0.008)), ctx.MAT));
-                g.position.set(n.px, n.py, 0.052);
-                g.rotation.z = n.rz;
-                boardTilt.add(g);
-                ctx.regMagic(g, () => openNoteEditor(i));
-            }
-
-            function drawNote(i) {
-                const n = notes[i];
-                const c = n.ctx;
-                c.fillStyle = n.col;
-                c.fillRect(0, 0, 128, 128);
-                c.fillStyle = 'rgba(0,0,0,0.08)';
-                c.fillRect(0, 112, 128, 16);
-                c.fillStyle = 'rgba(255,255,255,0.55)';
-                c.fillRect(44, 0, 40, 14);
-                const len = Math.max(n.txt.length, 1);
-                const size = len <= 3 ? 34 : len <= 5 ? 26 : len <= 7 ? 20 : 16;
-                c.fillStyle = '#3a3a3a';
-                c.font = 'bold ' + size + 'px "Microsoft YaHei", monospace';
-                c.textAlign = 'center';
-                c.textBaseline = 'middle';
-                c.fillText(n.txt, 64, 68);
-                n.tex.needsUpdate = true;
-            }
-
-            function openNoteEditor(i) {
-                ctx.noteEditing = i;
-                const ed = document.getElementById('noteEditor');
-                const inp = document.getElementById('noteInput');
-                inp.value = notes[i].txt;
-                ed.classList.add('show');
-                inp.focus();
-                inp.select();
-            }
-            ctx.eraserOpen = false, ctx.eraserT = 0;
-            const eraserG = new THREE.Group();
-            ctx.eraserG = eraserG;
-            eraserG.position.set(-0.30, 0.585, 0.09);
-            boardTilt.add(eraserG);
-            ctx.put(ctx.box(0.18, 0.05, 0.08), 0, 0, 0, 0, 0, 0, eraserG);
-            ctx.put(ctx.iline([[-0.08, 0.028, -0.035], [-0.08, 0.028, 0.035]]), 0, 0, 0, 0, 0, 0, eraserG);
-            ctx.regMagic(eraserG, () => { ctx.eraserOpen = !ctx.eraserOpen; });
-            const GLYPHS = ['✦', '☾', '✧', '∴', '⟡', '✱', '☽', '✸'];
-            ctx.GLYPHS = GLYPHS;
-            const GLYPH_WARM = ['#fff3c9', '#ffd97a'];
-            ctx.GLYPH_WARM = GLYPH_WARM;
-            const GLYPH_COOL = ['#d9fbff', '#8ff3ff'];
-            ctx.GLYPH_COOL = GLYPH_COOL;
-            const glyphCanvas = document.createElement('canvas');
-            ctx.glyphCanvas = glyphCanvas;
-            glyphCanvas.width = 512;
-            glyphCanvas.height = 200;
-            const gctx = glyphCanvas.getContext('2d');
-            ctx.gctx = gctx;
-            const glyphTex = new THREE.CanvasTexture(glyphCanvas);
-            ctx.glyphTex = glyphTex;
-            const glyphPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.4), new THREE.MeshBasicMaterial({ map: glyphTex, transparent: true, opacity: 0, depthWrite: false }));
-            ctx.glyphPlane = glyphPlane;
-            glyphPlane.position.set(0, 0.95, 0.056);
-            glyphPlane.renderOrder = 10;
-            boardTilt.add(glyphPlane);
-
-            function drawGlyphSet(curIdx, prog) {
-                gctx.clearRect(0, 0, 512, 200);
-                for (let i = 0; i < GLYPHS.length; i++) {
-                    const gx = 40 + i * 62;
-                    const gy = 100 + Math.sin(i * 1.3) * 14;
-                    const warm = i % 2 === 1;
-                    const col = warm ? GLYPH_WARM[0] : GLYPH_COOL[0];
-                    const tr0 = warm ? 'rgba(255,243,201,0)' : 'rgba(217,251,255,0)';
-                    gctx.save();
-                    gctx.shadowColor = warm ? GLYPH_WARM[1] : GLYPH_COOL[1];
-                    gctx.shadowBlur = 22;
-                    gctx.font = 'bold 64px serif';
-                    gctx.textAlign = 'center';
-                    gctx.textBaseline = 'middle';
-                    if (i < curIdx) {
-                        gctx.fillStyle = col;
-                        gctx.fillText(GLYPHS[i], gx, gy);
-                    } else if (i === curIdx) {
-                        const p = Math.max(0, Math.min(1, prog));
-                        const top = gy - 38, bot = gy + 38;
-                        const grad = gctx.createLinearGradient(0, top, 0, bot);
-                        const wipe = top + (bot - top) * p;
-                        const g0 = Math.max(0, (wipe - top) / (bot - top));
-                        grad.addColorStop(0, col);
-                        grad.addColorStop(Math.max(0.001, g0 - 0.02), col);
-                        grad.addColorStop(Math.min(0.999, g0 + 0.02), tr0);
-                        grad.addColorStop(1, tr0);
-                        gctx.fillStyle = grad;
-                        gctx.fillText(GLYPHS[i], gx, gy);
-                    }
-                    gctx.restore();
-                }
-                glyphTex.needsUpdate = true;
-            }
-            drawGlyphSet(0, 0);
-            const chalkG = new THREE.Group();
-            ctx.chalkG = chalkG;
-            const CHALK_HOME = ctx.V(0.18, 0.578, 0.09);
-            ctx.CHALK_HOME = CHALK_HOME;
-            chalkG.position.copy(CHALK_HOME);
-            boardTilt.add(chalkG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.013, 0.013, 0.11, 8)), 0, 0, 0, 0, 0, Math.PI / 2, chalkG);
-            ctx.put(ctx.edge(new THREE.CircleGeometry(0.011, 8)), 0.056, 0, 0, 0, Math.PI / 2, 0, chalkG);
-            const chalkState = { active: false, start: 0 };
-            ctx.chalkState = chalkState;
-            const glyphLocalX = i => ((40 + i * 62) / 512 - 0.5) * 1.0;
-            ctx.glyphLocalX = glyphLocalX;
-            const glyphLocalY = i => 0.95 - (Math.sin(i * 1.3) * 14) / 200 * 0.4;
-            ctx.glyphLocalY = glyphLocalY;
-            // ★ J4.31：`const smooth = k => k * k * (3 - 2 * k);` 原先定义在这里（18.8 计划板段内），
-            //   却是 18.9（魔法杖）每帧分支的 3 处缓动所依赖的东西 —— 已提取到
-            //   `core/math/easing.js`，本文件顶部 import 同名进来（段内调用一字未改）。
-            ctx.regMagic(chalkG, () => {
-                if (!chalkState.active) {
-                    chalkState.active = true;
-                    chalkState.start = clock.now;
-                }
-            });
-
-            function updateChalk(time) {
-                if (!chalkState.active) return;
-                const RISE = 0.7, WPS = 0.55, HOLD = 1.8, FADE = 0.8, FALL = 0.7;
-                const N = GLYPHS.length;
-                const tWrite = RISE + N * WPS;
-                const tHold = tWrite + HOLD;
-                const tFade = tHold + FADE;
-                const tEnd = tFade + FALL;
-                const e = time - chalkState.start;
-                if (e < RISE) {
-                    const k = smooth(e / RISE);
-                    const i = 0;
-                    chalkG.position.lerpVectors(CHALK_HOME, ctx.V(glyphLocalX(i) + 0.06, glyphLocalY(i) + 0.05, 0.10), k);
-                    chalkG.position.y += Math.sin(e * 10) * 0.02 * k;
-                    glyphPlane.material.opacity = 0;
-                } else if (e < tWrite) {
-                    const k = (e - RISE) / WPS;
-                    const i = Math.min(Math.floor(k), N - 1);
-                    const prog = k - i;
-                    drawGlyphSet(i, prog);
-                    glyphPlane.material.opacity = Math.min(1, (e - RISE) * 3);
-                    const revealY = glyphLocalY(i) + (prog - 0.5) * 0.15;
-                    chalkG.position.set(
-                        glyphLocalX(i) + 0.06 + Math.sin(time * 26) * 0.012,
-                        Math.min(glyphLocalY(i) + 0.05, revealY + 0.03) + Math.sin(time * 19) * 0.008, 0.10
-                    );
-                } else if (e < tHold) {
-                    drawGlyphSet(N, 1);
-                    glyphPlane.material.opacity = 0.75 + 0.25 * Math.sin(time * 4);
-                    const i = N - 1;
-                    chalkG.position.set(glyphLocalX(i) + 0.06, glyphLocalY(i) + 0.05, 0.10);
-                } else if (e < tFade) {
-                    glyphPlane.material.opacity = Math.max(0, 1 - (e - tHold) / FADE);
-                    const i = N - 1;
-                    chalkG.position.set(glyphLocalX(i) + 0.06, glyphLocalY(i) + 0.05, 0.10);
-                } else if (e < tEnd) {
-                    const k = smooth((e - tFade) / FALL);
-                    glyphPlane.material.opacity = 0;
-                    chalkG.position.lerpVectors(ctx.V(glyphLocalX(N - 1) + 0.06, glyphLocalY(N - 1) + 0.05, 0.10), CHALK_HOME, k);
-                } else {
-                    chalkState.active = false;
-                    glyphPlane.material.opacity = 0;
-                    drawGlyphSet(0, 0);
-                    chalkG.position.copy(CHALK_HOME);
-                }
-            }
-            const SCROLL_R = 0.055;
-            ctx.SCROLL_R = SCROLL_R;
-
-            function scrollRoll(x, z, ry, y) {
-                const s = new THREE.Group();
-                const body = ctx.edge(new THREE.CylinderGeometry(SCROLL_R, SCROLL_R, 0.52, 10));
-                body.rotation.z = Math.PI / 2;
-                s.add(body);
-                for (const ex of [-0.26, 0.26]) {
-                    const c = ctx.edge(new THREE.CircleGeometry(SCROLL_R * 0.9, 10), 1, ctx.IN_MAT);
-                    c.position.x = ex;
-                    c.rotation.y = Math.sign(ex) * Math.PI / 2;
-                    s.add(c);
-                }
-                const band = ctx.edge(new THREE.TorusGeometry(SCROLL_R + 0.003, 0.012, 6, 16));
-                band.rotation.y = Math.PI / 2;
-                band.position.x = 0.10;
-                s.add(band);
-                s.position.set(x, y !== undefined ? y : ctx.FY + SCROLL_R, z);
-                s.rotation.y = ry;
-                ctx.scene.add(s);
-            }
-            scrollRoll(-3.42, 3.28, 0.42);
-            scrollRoll(-3.44, 3.50, 0.42);
-            scrollRoll(-3.43, 3.39, 0.42, ctx.FY + SCROLL_R * (1 + Math.sqrt(3)));
-            scrollRoll(-3.72, 3.02, 1.05);
+            // J4.43：整段（336 行，`J4.42` 施工图 §1）已搬入 src/cabin/world/floor2/board.js，
+            //   此处只留装配调用。该段实际含**三块**内容：
+            //     A 计划板本体 + 3 张便签 + 便签编辑器 · B 粉笔与字形组 · C scrollRoll + 4 个卷轴
+            //   （C 与计划板无语义关系，按施工图 §1 的裁决一并搬，将来可拆成 floor2/scrolls）。
+            // ★ 编辑器**整体归物件**（施工图 §2 的裁决，照 floor2/picture.js 的既有先例）：
+            //   `systems/ui/editors/NoteEditor.js` 的 `applyNote` + 两个 DOM 监听已搬进 board.js，
+            //   该文件**已删除**、installCabin.js 的段调用一并去掉。
+            // ★ `rng`：本件消耗 **1020 次** `rng.texture`（`drawBoardFace` 里 340 × 3）——
+            //   **全项目单件最多**，且全在 build 期 ⇒ 装配位置必须留在原位（不变量 N8）。
+            //   ⚠️ 本行原写作「textureRng 带括号」，但那会污染 `verify-migration.mjs` 的
+            //     `Math.random` 计数（它的剥注释只处理块注释、不处理行注释，
+            //     而带括号的 textureRng 会被反向还原成 Math.random）⇒ 已去掉括号。
+            //     （本注释本身也必须遵守同一条 —— 所以这里连括号都不写。）
+            // ★ 帧任务：原 frame/55 + frame/56 + frame/57 **三条相邻** ⇒ 合并天然等价（判据 ①）。
+            const boardApi = ctx.installProp(board);
+            ctx.boardApi = boardApi;
+            // ★ 唯一保留的跨层豁免（施工图 §2.4 方案 a）：`ctx.noteInput` 有两个**系统层**读者
+            //   （Input.js L24 · PlayerController.js L20 —— 「在输入框里打字时吞掉游戏快捷键」），
+            //   所以由装配层显式写回。⚠️ **不能在 board.js 的 build 里写** —— `propCtx` 的属性是
+            //   只读 getter，ES module 严格模式下赋值会直接抛 TypeError ⇒ 必须经 parts 走出来。
+            ctx.noteInput = boardApi.parts.noteInput;
 
             /* ========================================================== */
             /* 18.9 左墙中央的魔法杖 */

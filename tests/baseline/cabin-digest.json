@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-17",
   "totals": {
     "files": 117,
-    "lines": 19964
+    "lines": 20111
   },
-  "combined": "24eb7751d1774154d3408d5f07805dd108454a75ae864aaeac6704fd3f823b53",
+  "combined": "02f4f394be1676f323dc8d5986cce72e60bc35fcd23e5a7896aa65e9750258ed",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,8 +20,8 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "20293c43c2caba9d",
-    "app/scene/installCabin.js": "0afec776b0558568",
+    "app/scene/FrameBody.js": "e0aedef62849bd89",
+    "app/scene/installCabin.js": "afcfbe7e73fbe813",
     "app/scene/PropInstaller.js": "823db08626a503af",
     "app/scene/SceneCore.js": "908bb049d736ec30",
     "app/scene/SceneLoop.js": "ec741c0cadfb4bd9",
@@ -59,7 +59,6 @@
     "systems/player/Input.js": "f2c84fc36f63ad9f",
     "systems/player/PlayerController.js": "8b889ce04ab4884e",
     "systems/README.md": "25cf6e90cec951e8",
-    "systems/ui/editors/NoteEditor.js": "598c56de72cbd21e",
     "systems/ui/MenuPanel.js": "710248c601e0ed86",
     "systems/ui/SettingsForm.js": "c6389a80b73924a6",
     "systems/weather/environment.js": "65393605ebd7501d",
@@ -95,6 +94,7 @@
     "world/floor2/astro.js": "14cac6cbf7113a3c",
     "world/floor2/bag.js": "13eef6c8d8c2b50d",
     "world/floor2/bin.js": "b84a7bccf7e0f29f",
+    "world/floor2/board.js": "2f9e4aaab150d7e6",
     "world/floor2/calendar.js": "af00921a5b766087",
     "world/floor2/candle.js": "eebc2b491c90a85e",
     "world/floor2/cardDeck.js": "48ee9e9e5bedd455",
@@ -104,7 +104,7 @@
     "world/floor2/desk.js": "3812a993d0dad740",
     "world/floor2/deskChair.js": "688ca1eb4509fcb2",
     "world/floor2/deskHourglass.js": "1feabafaac6c450c",
-    "world/floor2/install.js": "7f94b72ca5937ce5",
+    "world/floor2/install.js": "58346a046ec3329a",
     "world/floor2/junkBoxes.js": "d65dea2078e7c424",
     "world/floor2/magicBook.js": "a9280261f4de49fb",
     "world/floor2/magicClock.js": "28646b2b723e10f1",

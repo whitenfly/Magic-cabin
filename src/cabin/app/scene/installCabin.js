@@ -42,7 +42,6 @@ import { installJunkBoxes } from '../../world/floor1/junkBoxes.js'
 import { installFloor2 } from '../../world/floor2/install.js'
 import { installChandelier } from '../../world/floor2/chandelier.js'
 import { installAudio } from '../../systems/audio/AudioSystem.js'
-import { installNoteEditor } from '../../systems/ui/editors/NoteEditor.js'
 import { installMagicSystem } from '../../systems/magic/MagicSystem.js'
 import { installCollision } from '../../systems/player/collision.js'
 import { installInteractionBridge } from '../../systems/interaction/Bridge.js'
@@ -74,8 +73,11 @@ export function installCabin(app) {
   installFloor1(ctx, app)
   installJunkBoxes(ctx, app)
   installFloor2(ctx, app)
-  // ── 段 11–13：便签编辑器 / 魔法吊灯 / 超位魔法系统 ──────────────────────
-  installNoteEditor(ctx, app)
+  // ── 段 11–13：魔法吊灯 / 超位魔法系统 ────────────────────────────────
+  // ★ J4.43：原来的 `installNoteEditor(ctx, app)`（段 11）**已删除** —— 便签编辑器
+  //   按 J4.42 §2 的裁决**整体归物件**：`applyNote` + 两个 DOM 监听已搬进
+  //   `world/floor2/board.js` 的 `build` 闭包，`systems/ui/editors/NoteEditor.js` 文件已删除。
+  //   `ctx.noteInput` 由 `installFloor2` 里的 board 装配写回（显式跨层豁免，见该处注释）。
   installChandelier(ctx, app)
   installMagicSystem(ctx, app)
   // ── 段 14–18：碰撞 / 交互通路 / 输入 / 菜单面板 / 玩家控制 ──────────────

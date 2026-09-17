@@ -458,20 +458,13 @@ const pe = ctx.pillowT * ctx.pillowT * (3 - 2 * ctx.pillowT);
 ctx.pillowG.rotation.x = Math.PI * pe;
   })
 
-  // L768–L768（1 行）
-  F('frame/55', (dt, time) => {
-ctx.eraserT += ((ctx.eraserOpen ? 1 : 0) - ctx.eraserT) * 0.06;
-  })
-
-  // L769–L770（2 行）
-  F('frame/56', (dt, time) => {
-const ee = ctx.eraserT * ctx.eraserT * (3 - 2 * ctx.eraserT);
-ctx.eraserG.rotation.x = Math.PI * ee;
-  })
-
-  // L771–L771（1 行）
-  F('frame/57', (dt, time) => {
-ctx.updateChalk(time);
+  // ★ J4.43：原 `frame/55`（板擦强度一阶低通）、`frame/56`（板擦翻面 = π·smooth）、
+  //   `frame/57`（粉笔写字 `updateChalk`）**三条已合并**进 `floor2/board.js` 的 `update`。
+  //   三条**相邻** ⇒ 合并**天然等价**（判据 ①「相邻」），登记在原 `frame/55` 的位置，
+  //   内部顺序 55 → 56 → 57 与原实现一致。
+  //   ⇒ 18.8 计划板（任务 D 最大的一件）到此搬完。
+  F('prop/board', (dt, time) => {
+ctx.boardApi.tick(dt, time);
   })
 
   // L772–L772（1 行）
