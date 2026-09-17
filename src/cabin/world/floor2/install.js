@@ -30,6 +30,7 @@ import picture from './picture.js'
 import rubik from './rubik.js'
 import rugLarge from './rugLarge.js'
 import snowGlobe from './snowGlobe.js'
+import starParticles from './starParticles.js'
 import tissueBox from './tissueBox.js'
 import wardrobe from './wardrobe.js'
 import witchHat from './witchHat.js'
@@ -57,7 +58,9 @@ export function installFloor2(ctx, app) {
             //     （J4.36 删 4 项 · J4.38 删 `glowBall` · 本件删 `makeCandleGlow`）
             //     —— 这一类"段导出悬空"的存量债**首次归零**：从此每搬一件只减不增。
             //   （下方仍保留的是**其它段**的导出 —— 与已搬走的物件无关。）
-            ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
+            // ★ J4.41：`ctx.addHalo` 也已**移除** —— 它是 18.7 星空粒子的局部工厂，已随该段
+            //   搬进 `floor2/starParticles.js` 的 `build` 闭包。搬前已 grep 全仓确认无外部读者。
+            ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
             //    它们靠**函数声明提升**引用本段的局部函数，而那两个函数已提取到
@@ -190,94 +193,17 @@ export function installFloor2(ctx, app) {
             /* ========================================================== */
             /* 18.7 宇宙星空粒子系统 */
             /* ========================================================== */
-            const STAR_COLORS = [0xffffff, 0xbfd8ff, 0xffe9b0, 0xd9c1ff, 0x9fd8ff, 0xc9a2ff, 0x9ffce8, 0xffd166];
-            ctx.STAR_COLORS = STAR_COLORS;
-            const VIVID_COLORS = [0xff2255, 0x22ee66, 0x00b4ff, 0xffee00, 0xff00cc, 0x00ffe0];
-            ctx.VIVID_COLORS = VIVID_COLORS;
-            const magicParts = [];
-            ctx.magicParts = magicParts;
-
-            function addHalo(parent, color, r, opIn, opOut) {
-                const h1 = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-                const h2 = new THREE.Mesh(new THREE.SphereGeometry(r * 1.5, 10, 8), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-                h1.renderOrder = 7;
-                h2.renderOrder = 7;
-                parent.add(h1);
-                parent.add(h2);
-                return { h1: h1, h2: h2, opIn: opIn, opOut: opOut };
-            }
-            for (let i = 0; i < 96; i++) {
-                const typ = i % 6;
-                const g = new THREE.Group();
-                let cl;
-                if (typ === 5) {
-                    cl = VIVID_COLORS[i % VIVID_COLORS.length];
-                    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: cl })));
-                    g.userData.halo = addHalo(g, cl, 0.028, 0.42, 0.14);
-                    g.userData.vivid = true;
-                } else {
-                    cl = STAR_COLORS[i % STAR_COLORS.length];
-                    if (typ === 0) {
-                        g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.013), new THREE.MeshBasicMaterial({ color: cl })));
-                        g.userData.halo = addHalo(g, cl, 0.026, 0.35, 0.12);
-                        g.userData.sharp = true;
-                    } else if (typ === 1) {
-                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), ctx.LITMAT(0xffffff)));
-                        const spikeMat = new THREE.LineBasicMaterial({ color: cl, transparent: true, opacity: 0 });
-                        const spikeLen = 0.075;
-                        g.add(new THREE.LineSegments(
-                            new THREE.BufferGeometry().setFromPoints([
-                                ctx.V(-spikeLen, 0, 0), ctx.V(spikeLen, 0, 0),
-                                ctx.V(0, -spikeLen * 0.7, 0), ctx.V(0, spikeLen * 0.7, 0)
-                            ]), spikeMat
-                        ));
-                        g.userData.spikes = spikeMat;
-                        g.userData.halo = addHalo(g, cl, 0.040, 0.45, 0.16);
-                    } else if (typ === 2) {
-                        g.add(new THREE.Mesh(
-                            new THREE.SphereGeometry(0.015, 10, 8),
-                            new THREE.MeshBasicMaterial({ color: cl, transparent: true, opacity: 0.75 })
-                        ));
-                        g.userData.halo = addHalo(g, cl, 0.070, 0.30, 0.22);
-                        g.userData.nebula = true;
-                    } else if (typ === 3) {
-                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), ctx.LITMAT(0xffffff)));
-                        g.userData.tails = [];
-                        for (let s = 1; s <= 4; s++) {
-                            const tp = new THREE.Mesh(
-                                new THREE.SphereGeometry(0.016 * (1 - (s - 1) * 0.16), 6, 5),
-                                new THREE.MeshBasicMaterial({ color: cl, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })
-                            );
-                            tp.renderOrder = 7;
-                            g.add(tp);
-                            g.userData.tails.push({ m: tp, s: s });
-                        }
-                        g.userData.halo = addHalo(g, cl, 0.036, 0.40, 0.14);
-                    } else {
-                        g.userData.cluster = [];
-                        for (let c = 0; c < 3; c++) {
-                            const sg = new THREE.Group();
-                            sg.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.009), new THREE.MeshBasicMaterial({ color: c === 0 ? 0xffffff : cl })));
-                            g.add(sg);
-                            g.userData.cluster.push({ g: sg, ph: c * 2.09 });
-                        }
-                        g.userData.halo = addHalo(g, cl, 0.042, 0.22, 0.10);
-                    }
-                }
-                g.visible = false;
-                const th = floor2Rng() * 6.28, orbR = 1.0 + floor2Rng() * 2.6;
-                g.userData.p = {
-                    cx: Math.cos(th) * orbR * 0.85,
-                    cz: Math.sin(th) * orbR,
-                    y0: ctx.FY + 0.40 + floor2Rng() * 2.5,
-                    ph: floor2Rng() * 6.28,
-                    sp: 0.10 + floor2Rng() * 0.28,
-                    bob: 0.06 + floor2Rng() * 0.10,
-                    rs: (floor2Rng() - 0.5) * 0.012
-                };
-                ctx.scene.add(g);
-                magicParts.push(g);
-            }
+            /* 18.7 宇宙星空粒子系统 */
+            // J4.41：96 颗星的几何（六种形态 + `addHalo` 局部工厂）已搬入
+            // src/cabin/world/floor2/starParticles.js，此处只留装配调用。
+            // ★ 本件**单件消耗 672 次 `floor2Rng`**（96 颗 × 7 次）—— 全项目最多，
+            //   且全部发生在 `build` 期 ⇒ **装配位置必须留在原位**，否则它之后所有依赖
+            //   `floor2Rng` 的段（18.8 计划板 / 18.9 魔法杖 / 18.10 垃圾桶…）抽到的随机数
+            //   全部错位、画面必变（不变量 N8）。它从装配环境取 `rng.floor2`，与本文件
+            //   顶部的 `const floor2Rng = scene.floor2` 是**同一个实例**。
+            // ★ 本件没有交互（原段无 regMagic）、不持有光源槽位；唯一帧任务 frame/77
+            //   读组 9 的 `magicP`（owner = astro，本件在 18.7 装配、晚于 18.5 ⇒ 直接注入）。
+            ctx.starParticlesApi = ctx.installProp(starParticles, { ctx: { astroApi } });
 
             /* ========================================================== */
             /* 18.8 小魔女计划板 */
