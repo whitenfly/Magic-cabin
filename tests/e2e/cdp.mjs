@@ -182,6 +182,17 @@ export async function launch({ port = 9333, width = 1440, height = 900, browser,
   if (!gpu) {
     // headless 下默认没有 GPU，WebGL 走 SwiftShader；新版 Chrome 需要显式允许
     args.push('--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader')
+  } else {
+    // ★ J4.49：`gpu: true` 时**不强制**软件渲染（让 Chrome 自己挑），但**仍带上**
+    //   `--enable-unsafe-swiftshader` 作为**回落保险**。
+    //
+    //   为什么必需：新版 Chrome 把 SwiftShader 判为 unsafe，**在"没有可用 GPU"的机器上会直接
+    //   拒绝创建 WebGL context** —— 不带这个开关时，判据在那类机器上不是"变慢"，而是
+    //   **建不出 WebGL ⇒ 直接失败**。带上它：有 GPU 就用 GPU，没有就优雅回落到 SwiftShader，
+    //   判据在两种机器上都能跑（只是慢）。
+    //   ⚠️ 这里**不能**加 `--disable-gpu` / `--use-angle=swiftshader` —— 那会把 GPU 强制关掉，
+    //      正好抵消 `gpu: true` 的意图（那正是 `gpu: false` 分支做的事）。
+    args.push('--enable-unsafe-swiftshader')
   }
   args.push('about:blank')
 
