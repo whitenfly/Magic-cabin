@@ -50,6 +50,20 @@ export function installSceneLoop(ctx, app) {
                         ctx.renderer.render(ctx.scene, ctx.camera);
                     })();
                 };
+                // J4.48：推进 N 帧**并推进时钟** —— 与 `__cabinStepFrame` 的区别**很重要**：
+                //   后者就是 `tickOnce()`，**不推进 `clock`**（这正是 J0.4「定格帧」要的：
+                //   120 帧定格之后画面必须停住，`gameSec` 不许继续走）。
+                //   但**由绝对时间驱动**的动画（`e = time - s.t0`，如魔杖的五段状态机、
+                //   沙漏的 `t0`、魔术书的 `t0`）在时钟冻结时**永远走不出第一段** ——
+                //   实测：点魔杖后推 330 次 `__cabinStepFrame`，`phase` 一直停在 `fly`。
+                //   ⇒ 判据需要一个"带时钟"的推进器；步长默认 `1/60`，与 `clock.step()` 的
+                //     手动步长一致（`F0.3`：120 帧 = 2 秒，精确）。
+                window.__cabinAdvance = function (n, dt) {
+                    const k = Math.max(0, Math.floor(n || 1));
+                    const step = Number.isFinite(dt) && dt > 0 ? dt : 1 / 60;
+                    for (let i = 0; i < k; i++) { clock.step(step); ctx.tickOnce(); }
+                    return k;
+                };
             } else {
                 animate(0);
             }
@@ -99,6 +113,57 @@ export function installSceneLoop(ctx, app) {
                         collide: (p.collide || []).map((q) => ctx.collideXZ(q[0], q[1], q[2]).map(r6)),
                         rails: (p.rails || []).map((q) => ctx.railCollide(q[0], q[1], q[2], q[3], q[4]).map(r6)),
                     };
+                };
+
+                // J4.48：物件运行期状态钩子 —— 与上面两个钩子同一个开关（`?stats=1`）、同一个理由。
+                //   ★ 为什么需要它：`j3-probe` 只能证明"交互入口**存在**"，证明不了"点开之后**行为正确**"
+                //     （`J4.20` 的结论就是：**"能点开" ≠ "点开后行为正确"**）；`test:visual` 看的是
+                //     **没人去点的**定格帧。于是 wand 的五段状态机 / 造物"加了又清" / 归位、
+                //     board 的便签编辑、magic-book 的六相位翻页…… 此前都只有"同构先例"这一条弱保证。
+                //   数据源：`ctx.propInstalled`（`installProp` 的装配记录 Map，每件物件含 `state`）——
+                //     它本来就导出了 `get(id)`（`installProp.js` 里写着"诊断与测试用"），
+                //     这里只是把这条**已存在**的只读通路接到页面上，**不新增任何状态**。
+                //   ⚠️ 返回**可序列化视图**：原始值原样；`Object3D` 给 `type + 位姿`；
+                //     几何 / 材质 / 数组 / 函数只给占位符 —— 避免把整个场景图塞进测试。
+                window.__cabinPropState = function (id) {
+                    const rec = ctx.propInstalled && ctx.propInstalled.get(id);
+                    if (!rec) return null;
+                    const r6 = (v) => Math.round(v * 1e6) / 1e6;
+                    const vec = (v) => [r6(v.x), r6(v.y), r6(v.z)];
+                    const snap = (v) => {
+                        if (v === null || v === undefined) return null;
+                        const t = typeof v;
+                        if (t === 'number' || t === 'string' || t === 'boolean') return v;
+                        if (t === 'function') return '<function>';
+                        if (Array.isArray(v)) return `<array[${v.length}]>`;
+                        // `inScene`：对象是否**还挂在场景图上**（`scene.remove()` 会把 `parent` 置回 null）。
+                        // ★ 判据只读 `state.crea === null` 是**不够的** —— "状态置空了、对象却还留在场景里"
+                        //   （漏掉 `scene.remove`）会**假绿**。这个字段让"真的移除了"成为可断言的事实。
+                        if (v.isObject3D) return { type: v.type, uuid: v.uuid, inScene: !!v.parent, pos: vec(v.position), quat: [r6(v.quaternion.x), r6(v.quaternion.y), r6(v.quaternion.z), r6(v.quaternion.w)] };
+                        if (v.isVector3) return vec(v);
+                        if (v.isQuaternion) return [r6(v.x), r6(v.y), r6(v.z), r6(v.w)];
+                        if (v.isBufferGeometry || v.isGeometry) return '<geometry>';
+                        if (v.isMaterial) return '<material>';
+                        return `<${(v.constructor && v.constructor.name) || 'object'}>`;
+                    };
+                    const outState = {};
+                    for (const k of Object.keys(rec.state || {})) outState[k] = snap(rec.state[k]);
+                    const outParts = {};
+                    for (const k of Object.keys(rec.parts || {})) outParts[k] = snap(rec.parts[k]);
+                    return { id: rec.prop.id, state: outState, parts: outParts };
+                };
+
+                // J4.48：按 `uuid` 查场景 —— 与 `__cabinPropState` 成套使用，补上后者**查不到**的那一类问题。
+                //   ★ 为什么需要它：`__cabinPropState().state.crea` 一旦被置 null，**就再也指不到**
+                //     那个对象了。于是"`s.crea = null` 置空了、但 `scene.remove(s.crea)` 漏掉了"
+                //     这种**场景泄漏**在状态视图里完全看不见（实测：负例删掉 `scene.remove` 后判据**照样绿**）。
+                //   用法：测试在采样中把见过的 `uuid` 记下来，最后逐个回场景图里查 —— 断言
+                //     "它**确实离开了**"，而不是"状态变量被清空了"。
+                window.__cabinSceneHas = function (uuid) {
+                    if (typeof uuid !== 'string' || !uuid) return false;
+                    let hit = false;
+                    ctx.scene.traverse((o) => { if (o.uuid === uuid) hit = true; });
+                    return hit;
                 };
             }
             addEventListener('resize', () => { ctx.camera.aspect = innerWidth / innerHeight; ctx.camera.updateProjectionMatrix(); ctx.renderer.setSize(innerWidth, innerHeight); });
