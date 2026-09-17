@@ -75,6 +75,31 @@ export function installSceneLoop(ctx, app) {
                         sceneObjects: objects, sceneMeshes: meshes, sceneLines: lineObjs, scenePoints: points
                     };
                 };
+
+                // J4.47：碰撞表摘要钩子 —— 与 `__cabinRenderStats` **同一个开关**（`?stats=1`）、同一个理由：
+                //   正常游玩路径上不存在这个接口。
+                //   ★ 为什么必须有它：碰撞**不参与渲染** ⇒ `test:visual` 原理上看不见它
+                //     （像素逐字节相同**也证明不了**碰撞没坏），而 `j3-probe` 只问交互入口存不存在。
+                //     于是"物件搬走后碰撞坐标 / 引用错了"此前**只有人工论证**兜底 —— 论证不能自动重跑。
+                //   形态：**结构化数值摘要**（不是哈希）—— 判据失败时能直接指出是哪一项、差多少。
+                //     ① `platformBoxes` / `activePlatforms`：碰撞盒的**数值本身**（坐标改 0.1 当场可见）；
+                //     ② `ground` / `stairs` / `collide` / `rails`：五个纯函数在**测试给定探测点**上的输出
+                //        （抓"数值没变但判据逻辑被改坏"）。
+                //   ⚠️ 探测点由**测试**传入（`tests/e2e/collision.mjs`）：世界坐标常量属测试资产，
+                //     不进产品代码（沿用 J0.4「机位表不进产品代码」的边界）。
+                window.__cabinCollisionDigest = function (probes) {
+                    const r6 = (v) => Math.round(v * 1e6) / 1e6;
+                    const box = (b) => [r6(b.x1), r6(b.z1), r6(b.x2), r6(b.z2), r6(b.top), r6(b.bot || 0)];
+                    const p = probes || {};
+                    return {
+                        platformBoxes: ctx.platformBoxes.map(box),
+                        activePlatforms: ctx.activePlatforms.map(box),
+                        ground: (p.ground || []).map((q) => r6(ctx.groundAt(q[0], q[1], q[2]))),
+                        stairs: (p.stairs || []).map((a) => r6(ctx.stairHeightAt(a))),
+                        collide: (p.collide || []).map((q) => ctx.collideXZ(q[0], q[1], q[2]).map(r6)),
+                        rails: (p.rails || []).map((q) => ctx.railCollide(q[0], q[1], q[2], q[3], q[4]).map(r6)),
+                    };
+                };
             }
             addEventListener('resize', () => { ctx.camera.aspect = innerWidth / innerHeight; ctx.camera.updateProjectionMatrix(); ctx.renderer.setSize(innerWidth, innerHeight); });
 }
