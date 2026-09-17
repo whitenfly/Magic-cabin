@@ -50,7 +50,9 @@ const HOME = await resolveHomePath(BASE, { onError: (w) => console.error('无法
 if (!HOME) process.exit(2)
 
 fs.mkdirSync(SHOTS, { recursive: true })
-const chrome = await launch({ port: 9351, width: 900, height: 600 })
+// ★ `gpu: true`（`J4.49`）：比的是**点击前后的像素变化量**，不是与基线 PNG 逐字节比对
+//   ⇒ 不必走 SwiftShader 软件渲染（软件渲染下 3D 场景只有 ~3.5 FPS，推几百帧就把核吃满）。
+const chrome = await launch({ port: 9351, width: 900, height: 600, gpu: true })
 const page = await connect(chrome.port)
 let fail = 0
 const check = (name, ok, detail = '') => {

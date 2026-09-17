@@ -130,20 +130,48 @@ export function installSceneLoop(ctx, app) {
                     if (!rec) return null;
                     const r6 = (v) => Math.round(v * 1e6) / 1e6;
                     const vec = (v) => [r6(v.x), r6(v.y), r6(v.z)];
-                    const snap = (v) => {
+                    const snap = (v, depth) => {
+                        const d = depth || 0;
                         if (v === null || v === undefined) return null;
                         const t = typeof v;
                         if (t === 'number' || t === 'string' || t === 'boolean') return v;
                         if (t === 'function') return '<function>';
-                        if (Array.isArray(v)) return `<array[${v.length}]>`;
                         // `inScene`：对象是否**还挂在场景图上**（`scene.remove()` 会把 `parent` 置回 null）。
                         // ★ 判据只读 `state.crea === null` 是**不够的** —— "状态置空了、对象却还留在场景里"
                         //   （漏掉 `scene.remove`）会**假绿**。这个字段让"真的移除了"成为可断言的事实。
-                        if (v.isObject3D) return { type: v.type, uuid: v.uuid, inScene: !!v.parent, pos: vec(v.position), quat: [r6(v.quaternion.x), r6(v.quaternion.y), r6(v.quaternion.z), r6(v.quaternion.w)] };
+                        // `world`：**世界坐标**（从 `matrixWorld` 取平移分量）。`pos` 是**局部**坐标 ——
+                        //   对挂在 `boardTilt` 这类容器下的部件（`board` 的 `notes[i].g`），
+                        //   局部坐标不能用来对准点击（判据要靠它设机位）。
+                        if (v.isObject3D) {
+                            const me = v.matrixWorld ? v.matrixWorld.elements : null;
+                            return {
+                                type: v.type, uuid: v.uuid, inScene: !!v.parent,
+                                pos: vec(v.position),
+                                world: me ? [r6(me[12]), r6(me[13]), r6(me[14])] : vec(v.position),
+                                quat: [r6(v.quaternion.x), r6(v.quaternion.y), r6(v.quaternion.z), r6(v.quaternion.w)],
+                            };
+                        }
                         if (v.isVector3) return vec(v);
                         if (v.isQuaternion) return [r6(v.x), r6(v.y), r6(v.z), r6(v.w)];
                         if (v.isBufferGeometry || v.isGeometry) return '<geometry>';
                         if (v.isMaterial) return '<material>';
+                        // ★ J4.49：数组与**纯对象**受控展开（此前只给占位符）。
+                        //   补 `board` / `magic-book` 判据时发现这层必须打开：`board` 的部件里
+                        //   `notes` 是"每张便签一个 `{ g, txt, … }`"的**对象数组** —— 判据既要读
+                        //   `notes[i].g` 的世界坐标（用它对准点击），又要读 `notes[i].txt`
+                        //   （验证便签文字真的改了）。
+                        //   三重限幅保证不会把整个场景图塞给测试：深度 ≤ 2、数组取前 16 项、纯对象取前 32 键；
+                        //   非纯对象（`Map`／`Set`／类实例）一律仍是占位符。
+                        if (Array.isArray(v)) {
+                            if (d >= 2) return `<array[${v.length}]>`;
+                            return v.slice(0, 16).map((x) => snap(x, d + 1));
+                        }
+                        if (v.constructor && v.constructor.name === 'Object') {
+                            if (d >= 2) return '<object>';
+                            const o = {};
+                            for (const k of Object.keys(v).slice(0, 32)) o[k] = snap(v[k], d + 1);
+                            return o;
+                        }
                         return `<${(v.constructor && v.constructor.name) || 'object'}>`;
                     };
                     const outState = {};
@@ -159,6 +187,59 @@ export function installSceneLoop(ctx, app) {
                 //     这种**场景泄漏**在状态视图里完全看不见（实测：负例删掉 `scene.remove` 后判据**照样绿**）。
                 //   用法：测试在采样中把见过的 `uuid` 记下来，最后逐个回场景图里查 —— 断言
                 //     "它**确实离开了**"，而不是"状态变量被清空了"。
+                // J4.49：准星命中探针 —— 回答"**现在准星指着谁**"。
+                //   ★ 这是 aim 判据的**诊断刚需**：点击没生效时必须能区分两种原因 ——
+                //     ① 机位没对准（射线打空）；② 射线命中了**更近的别的物件**
+                //     （`InteractionSystem.aimTarget` 是"一次性对全部 `magicMeshes` 求交、取最近"）。
+                //   数据源 `ctx.aimHit`：`Bridge.js` 每帧用**屏幕中心**射线更新它；
+                //   而点击走的是**鼠标位置**射线（`Input.js` 的 `setFromCamera(ctx.mouse, …)`），
+                //   所以点屏幕中心时两者同一条射线 —— 探针读到的就是点击会命中的目标。
+                window.__cabinAimHit = function () {
+                    const h = ctx.aimHit;
+                    if (!h) return null;
+                    return { id: h.id, label: h.label };
+                };
+
+                // J4.49：相机与射线探针 —— aim 判据的**眼睛**。
+                //   实测教训：书本判据第一版点空时，只靠 `__cabinAimHit` 读到 `null` **无法区分**
+                //   "相机没被覆盖 / 射线打空 / 命中了更近的别的物件"这三件事。这两个探针一次说清：
+                //     · `__cabinCameraInfo()`：相机此刻在哪、朝向、`testCam` 覆盖是否生效、`viewMode`；
+                //     · `__cabinRayProbe(nx, ny)`：用**与点击通路同一条**射线求出命中列表（含距离与可见性）。
+                //   ⚠️ `__cabinRayProbe` 会写 `ctx.mouse`（点击通路本来也写它）—— 仅供测试。
+                window.__cabinCameraInfo = function () {
+                    const c = ctx.camera;
+                    const r3 = (v) => Math.round(v * 1e3) / 1e3;
+                    return {
+                        pos: [r3(c.position.x), r3(c.position.y), r3(c.position.z)],
+                        quat: [r3(c.quaternion.x), r3(c.quaternion.y), r3(c.quaternion.z), r3(c.quaternion.w)],
+                        testCam: ctx.testCam ? ctx.testCam.slice() : null,
+                        viewMode: ctx.viewMode,
+                    };
+                };
+                window.__cabinRayProbe = function (nx, ny) {
+                    const m = ctx.mouse;
+                    m.x = Number.isFinite(nx) ? nx : 0;
+                    m.y = Number.isFinite(ny) ? ny : 0;
+                    ctx.raycaster.setFromCamera(m, ctx.camera);
+                    const hits = ctx.raycaster.intersectObjects(ctx.magicMeshes, false);
+                    // ★ 用 `app.registry`，**不是** `ctx.registry` —— 后者**根本不存在**
+                    //   （全项目没有任何地方给 `ctx.registry` 赋值）。踩过：拿 `ctx.registry` 时
+                    //   本探针恒返回 `aim: null`，把"射线命中了邻居物件"误报成"解析不出目标"，
+                    //   白查了一轮。registry 由 `installSceneLoop(ctx, app)` 的第二个参数带进来。
+                    const reg = app.registry;
+                    return hits.slice(0, 6).map((h) => {
+                        const t = reg && typeof reg.aimTargetOf === 'function' ? reg.aimTargetOf(h.object) : null;
+                        return {
+                            n: h.object.name || h.object.type,
+                            d: Math.round(h.distance * 1e3) / 1e3,
+                            vis: h.object.visible,
+                            // 这个 mesh **属于哪个 aim 目标**（`null` = 在 `magicMeshes` 里但解析不出目标，
+                            // 那正是"射线有命中、`aimHit` 却是 null"的原因）
+                            aim: t ? t.id : null,
+                        };
+                    });
+                };
+
                 window.__cabinSceneHas = function (uuid) {
                     if (typeof uuid !== 'string' || !uuid) return false;
                     let hit = false;

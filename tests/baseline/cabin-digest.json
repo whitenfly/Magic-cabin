@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-17",
   "totals": {
     "files": 118,
-    "lines": 20300
+    "lines": 20381
   },
-  "combined": "40d469629c744b22fd3c780157249e37f5d95c86f734fb28fadd37c8b398c0cd",
+  "combined": "f9d35d3568c52d8123f807ed8c7ecee2cf5ee8ec4bc89ae202be28b66338ba1e",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -24,7 +24,7 @@
     "app/scene/installCabin.js": "afcfbe7e73fbe813",
     "app/scene/PropInstaller.js": "823db08626a503af",
     "app/scene/SceneCore.js": "908bb049d736ec30",
-    "app/scene/SceneLoop.js": "58a6657036653bdd",
+    "app/scene/SceneLoop.js": "757cf0c6927c56b8",
     "app/settings.js": "13cf5214a1ce76ba",
     "app/store.js": "318fc3660d177614",
     "app/UpdateScheduler.js": "dae922480a1212fa",

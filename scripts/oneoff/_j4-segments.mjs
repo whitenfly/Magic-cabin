@@ -111,7 +111,15 @@ export const SEGMENTS = [
     note: '二楼陈设', bind: rng('runtimeRng', 'floor2Rng', 'textureRng'),
   },
   // ── 系统（`systems/`）────────────────────────────────────────────────────
-  { id: 'noteEditor', hint: 3384, module: 'systems/ui/editors/NoteEditor.js', fn: 'installNoteEditor', note: '便签编辑器（二楼计划板）' },
+  // ★ J4.49：原来的 `noteEditor` 段（`installNoteEditor`）**已删除**，本表同步补齐。
+  //   `J4.43` 按 `J4.42` §2.4 的裁决把便签编辑器整体收进 `world/floor2/board.js`，
+  //   `systems/ui/editors/NoteEditor.js` 文件与 `installCabin.js` 的调用都去掉了，
+  //   但**漏了同步本表** ⇒ `tests/unit/segments.test.mjs` 的
+  //   「段序 = 执行序」与「每个段都有模块、都导出 (ctx, app)」两条**从 `J4.43` 起一直红**。
+  //   ⚠️ 为什么能潜伏 6 个任务：`J4.42` §2.4 记的"段表不参与门禁"在当时**成立** ——
+  //   `release.mjs done` 的门禁只有 `typecheck + verify + build`，**不含 `test:unit`**，
+  //   所以这两条红了也没人跑、没人看见。本表被 `segments.test.mjs` **import**，
+  //   改它必须跟着跑一次 `pnpm test:unit`。
   {
     id: 'chandelier', hint: 3406, module: 'world/floor2/chandelier.js', fn: 'installChandelier',
     note: '二楼顶中央魔法吊灯', bind: rng('slimeRng'),
