@@ -468,8 +468,11 @@ ctx.boardApi.tick(dt, time);
   })
 
   // L772–L772（1 行）
-  F('frame/58', (dt, time) => {
-ctx.updateWand2(time);
+  // ★ J4.45：18.9 魔法杖（任务 D **最大**的一件，610 行）已升格为 `floor2/wand.js`
+  //   ⇒ 本行改走它自己的 `update`。本件**只有这一条**帧任务（不涉及合并），登记在原位置；
+  //   它内部跑五段状态机：飞起 → 展开魔法阵 → 生成元素造物 → 淡出 → 归位。
+  F('prop/wand', (dt, time) => {
+ctx.wandApi.tick(dt, time);
   })
 
   // L775–L775（1 行）
