@@ -181,7 +181,11 @@ const HOME = await resolveHomePath(BASE, {
 })
 if (!HOME) process.exit(2)
 
-const chrome = await launch({ port: 9361, width: 900, height: 600 })
+// ★ `gpu: true`：本判据**只读数值摘要、不比对像素**，没必要走 SwiftShader 软件渲染 ——
+//   实测软件渲染下这个 3D 场景只有 ~3.5 FPS（perf 报告的实测值），推几百帧就会把一个核吃满。
+//   ⚠️ 反之，凡是用**像素阈值**做判据的脚本（`test:visual` / `test:cart` / `test:mirror` /
+//   `test:smoke` / `j3-probe`）**必须**留软件渲染 —— 它们的阈值是在软件渲染下标定的。
+const chrome = await launch({ port: 9361, width: 900, height: 600, gpu: true })
 const page = await connect(chrome.port)
 await page.setViewport(900, 600)
 

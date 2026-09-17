@@ -194,7 +194,10 @@ const HOME = await resolveHomePath(OPTS.url, {
 if (!HOME) process.exit(2)
 
 fs.mkdirSync(SHOTS, { recursive: true })
-const chrome = await launch({ port: 9334, width: OPTS.viewport.width, height: OPTS.viewport.height })
+// ★ `gpu: true`（`J4.49`）：冒烟比的是**交互前后的像素变化比例**（`ratio > 0.002` 这类），
+//   不是与基线 PNG 逐字节比对 ⇒ 不必走 SwiftShader 软件渲染
+//   （软件渲染下 3D 场景只有 ~3.5 FPS；冒烟全程要跑 4 分钟，是 CPU 占用最大的一环）。
+const chrome = await launch({ port: 9334, width: OPTS.viewport.width, height: OPTS.viewport.height, gpu: true })
 const page = await connect(chrome.port)
 await page.setViewport(OPTS.viewport.width, OPTS.viewport.height)
 
