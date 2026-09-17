@@ -174,6 +174,9 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
   //   ⚠️ 后续阶段（J3/J4）再动这些调用点时，一并更新这里的期望值并在结果文档里说明。
   // 已知差值白名单 —— **每一项都必须能解释**（哪个阶段、删了什么、搬到了哪）。
   // 与预期不符即失败，所以仍能抓住意外的增删；而"合法下降"本身不必让门禁变红。
+  // ★ J4.46 起**口径**为「剥块注释 + 行注释」（见下方 `stripComments`）：下列 8 个数值
+  //   全部是**新口径下的实测值**（重算依据见 `docs/实施结果/J4.46-实施结果.md`）。
+  //   除 `regMagic(` 外其余 7 项在新旧口径下**同值** —— 因为它们的字面量在行注释里出现 **0** 次。
   const KNOWN_DELTA = {
     // ── J2.5 配置编排层：菜单里 6 个手写控件的绑定搬进 `systems/ui/SettingsForm.js`
     'getElementById(': -8,
@@ -255,16 +258,143 @@ console.log('\n【④ 关键标识符计数（搬迁后 vs 源文件）】')
     //   ⇒ 文本计数额外 **−2**。**白名单记的是「文本计数差」**，所以这里写 **−35**。
     //   （这正是本文件顶部记过的那条老坑：`stripComments` 只剥块注释、不剥行注释 ——
     //    `J4.19`/`J4.21`/`J4.36`/`J4.39`/`J4.41` 都踩过；本次是**首次由「删注释」引起的负向偏移**。）
-    'regMagic(': -35,
+    //
+    // ══════════════════════════════════════════════════════════════════════════════════
+    // ★ J4.46（**口径变更**）：`stripComments` 起同时剥**行注释** ⇒ `J4.19`–`J4.43` 那批
+    //   「文本计数差」的记账**不再是本表的依据**（它们只在"行注释也计入"的旧口径下成立，
+    //   连 `J4.43` 那条"实测 −3 而不是 −5"的困惑也是旧口径的产物）。上面原文保留，作为搬迁史。
+    //
+    //   本项在新口径下**实测 `64 → 12`，差 −52** —— 两侧都只剩**代码里**的
+    //   「函数名 + 左括号」，块注释与行注释里的字面量一律不计。
+    //   分解（当前残留的 **12** 处，逐处可查，共 6 个文件）：
+    //     · `world/floor1/install.js` **4** 处：猫 / 毛线球 / 循环里的 `g` / 门铃
+    //     · `world/floor2/install.js` **3** 处：枕头 / 循环里的 `g` / 凳子
+    //     · `world/house/shell.js` **2** 处：`function regMagic` 的**定义本体** + 路牌那条调用
+    //     · `props/cup.js` 1 处 · `world/floor2/chandelier.js` 1 处 · `world/floor1/junkBoxes.js` 1 处
+    //   其余 **52** 处在 `J3`/`J4` 各批搬迁中随实现一起删除（逐批记录见各任务实施结果 §5）。
+    //   ⚠️ 判据强度**不变**：它守的仍是"有没有人**偷偷加** `regMagic`"——
+    //   真调用一旦新增，计数上升、当场变红；而"合法下降"仍不必让门禁变红。
+    'regMagic(': -52,
   }
-  // ★ J3：计数前先**剥掉块注释**。
+  // ★ J3 起：计数前先**剥掉注释**（`J4.46` 起块注释与行注释都剥 —— 见下方 `stripComments`）。
   //
   // 搬迁对照表会大量提到这些名字 —— 每个 `defineProp` 模块的文件头都有一张
   // 「原来住哪 → 现在住哪」的表，里面写着 `regMagic(chest, …)`、`addEventListener('pointerup', …)`、
   // `Math.random()` 这类**字面量**。把它们算进计数，「注释写得越清楚，门禁越红」——
   // 而这条判据真正要守的是**代码里**的调用点数（`regMagic` 是否真被 `interactables` 取代、
   // 是否有人偷偷加了裸随机）。两边用同一套剥离规则，判据因此**不放松**，只是不再被文字干扰。
-  const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+  // ★ J4.46：从「只剥块注释」改为**块注释 + 行注释都剥**，实现从正则换成**逐字符状态机**。
+  //   两个理由都是实测出来的（见 `docs/实施结果/J4.46-实施结果.md`）：
+  //
+  //   ① 行注释里的字面量此前照样计入 ⇒ 两种失真，本阶段都真实发生过：
+  //      · **正向抵平**：删掉 1 处真实调用、又在行注释里写出同名字面量 ⇒ 计数看起来没变（共 9 次：
+  //        `J4.19`/`J4.21`/`J4.36`/`J4.39`/`J4.41`/`J4.43`/`J4.45`…）；
+  //      · **负向多减**：整段删除时，该段行注释里原有的字面量一并消失 ⇒ 文本差 ≠ 真实差（`J4.43`）。
+  //      实测：`src/cabin/**` 里 `regMagic(` 命中 **84 行**，其中 **17 处**在行注释里
+  //      （各 `defineProp` 模块文件头的搬迁对照表）⇒ 剥掉行注释后该项期望值 −35 → **−52**
+  //      （逐项分解见 `KNOWN_DELTA`）。其余 7 项的行注释命中数为 **0**，期望值因此不变。
+  //
+  //   ② 旧正则**不只是粒度粗，它已经在误删真实代码**：`/\*[\s\S]*?\*\//g` 不认识字符串与行注释，
+  //      于是两处**行注释里**的路径通配被当成块注释开头，各自一路剥到下一个 `*/`：
+  //        · `core/geometry/propTools.js` 的 `// 搬出 \`world/**\` 的物件…` → 剥到
+  //          `core/geometry/roundBox.js` 的 JSDoc 结尾 —— 误删 **813 字符**；
+  //        · `app/EventBus.js` 的 `// \`mount\` 是给 \`features/**\` 认领的接口…` → 剥到同文件后面的
+  //          事件总线 JSDoc —— 误删 **1119 字符**。
+  //      另有 `core/materials/fill.frag.glsl.js` 里 **GLSL 模板串**内的 3 处 `/* ---- 分区 ---- */`
+  //      被误剥（那是着色器源码的注释，不是 JS 的）。行注释里的 `http://` 同理会被误伤。
+  //      ⇒ 只能按 JS 词法逐字符走：字符串 / 模板串（含 `${}`）/ 正则 / 注释，**只有注释被剥**。
+  //
+  //   ⚠️ 判据强度**不变**：两侧（源文件与当前 src）用同一套剥离规则，守的仍是"**代码里**的调用点数"。
+  const REGEX_PUNCT = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '^', '~', '<', '>'])
+  const REGEX_KEYWORD = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'case', 'do', 'else', 'yield', 'await'])
+  function stripComments(src) {
+    const n = src.length
+    let out = ''
+    let i = 0
+    let prev = '' // 上一个非空白代码字符（判断 `/` 是正则开头还是除法）
+    let word = '' // 紧邻上一个标识符（`return /re/` 这类关键字后允许正则）
+    let inWord = false
+    let mode = 'code' // 'code' | 'tpl'
+    const stack = [] // 模板串 `${` 的花括号深度栈
+    while (i < n) {
+      const c = src[i]
+      const d = src[i + 1]
+      if (mode === 'tpl') {
+        // 模板串内部：只认转义、结束反引号与 `${`
+        if (c === '\\') { out += src.slice(i, i + 2); i += 2; continue }
+        if (c === '`') { out += c; i += 1; mode = 'code'; prev = '`'; word = ''; inWord = false; continue }
+        if (c === '$' && d === '{') { out += '${'; i += 2; stack.push(1); mode = 'code'; prev = '{'; word = ''; inWord = false; continue }
+        out += c
+        i += 1
+        continue
+      }
+      // 注释**优先于**除法/正则判断（`//`、`/*` 在代码位置一定是注释）
+      if (c === '/' && d === '/') {
+        while (i < n && src[i] !== '\n') i += 1
+        continue
+      }
+      if (c === '/' && d === '*') {
+        i += 2
+        while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i += 1
+        i = Math.min(i + 2, n)
+        continue
+      }
+      if (c === '"' || c === "'") {
+        const j = i
+        i += 1
+        while (i < n) {
+          if (src[i] === '\\') { i += 2; continue }
+          if (src[i] === c) { i += 1; break }
+          if (src[i] === '\n') break // 容错：未闭合字符串不跨行
+          i += 1
+        }
+        out += src.slice(j, i)
+        prev = c
+        word = ''
+        inWord = false
+        continue
+      }
+      if (c === '`') { out += c; i += 1; mode = 'tpl'; prev = '`'; word = ''; inWord = false; continue }
+      if (c === '{') {
+        if (stack.length) stack[stack.length - 1] += 1
+        out += c; i += 1; prev = c; word = ''; inWord = false
+        continue
+      }
+      if (c === '}') {
+        out += c
+        i += 1
+        if (stack.length && (stack[stack.length - 1] -= 1) === 0) { stack.pop(); mode = 'tpl' }
+        prev = c; word = ''; inWord = false
+        continue
+      }
+      if (c === '/' && (prev === '' || REGEX_PUNCT.has(prev) || REGEX_KEYWORD.has(word))) {
+        // 正则字面量（启发式；解析失败就退回普通字符 —— 保守：宁可漏剥，不可误删）
+        let k = i + 1
+        let inClass = false
+        let closed = false
+        while (k < n) {
+          const ch = src[k]
+          if (ch === '\\') { k += 2; continue }
+          if (ch === '\n') break
+          if (ch === '[') inClass = true
+          else if (ch === ']') inClass = false
+          else if (ch === '/' && !inClass) { k += 1; closed = true; break }
+          k += 1
+        }
+        if (closed) {
+          while (k < n && /[a-z]/i.test(src[k])) k += 1
+          out += src.slice(i, k)
+          i = k; prev = '/'; word = ''; inWord = false
+          continue
+        }
+      }
+      out += c
+      i += 1
+      if (/[A-Za-z0-9_$]/.test(c)) { word = inWord ? word + c : c; inWord = true; prev = c }
+      else { inWord = false; if (!/\s/.test(c)) { prev = c; word = '' } }
+    }
+    return out
+  }
   const srcCode = stripComments(srcText)
   const curCode = stripComments(restored)
   for (const [label, re] of [
