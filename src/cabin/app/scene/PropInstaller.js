@@ -54,6 +54,13 @@ export function installPropInstaller(ctx, app) {
             propTool('regWobble', () => ctx.regWobble);
             // 火焰工具（炉火 / 坩埚 / 蜡烛 / 吊灯共用）
             propTool('makeWavyFlame', () => ctx.makeWavyFlame); propTool('updateWavyFlame', () => ctx.updateWavyFlame);
+            // ★ J4.39：火焰**材质**也交给物件 —— `floor2/candle` 的两支小火苗与壁炉共用
+            //   **同一对材质实例**（定义在 `world/house/shell.js` L244–245）。
+            //   `J4.34` §2.1 的 `D2R` 先例是"在模块里自造同值常量"，但那条处置会**复制色值**
+            //   （`shell.js` 改火焰颜色时物件不会跟着变）⇒ 这里把**材质本身**作为共享工具注入。
+            //   对照：`floor1/cauldron.js` 自造了三个材质，但那是**另一套颜色**（坩埚的蓝色魔法火），
+            //   并非重复常量 —— 两种情况不要混为一谈。
+            propTool('fireMid', () => ctx.fireMid); propTool('fireIn', () => ctx.fireIn);
             // 材质（共享 uniform：物件只能"用"，不能改 shader）
             propTool('MAT', () => ctx.MAT); propTool('DASHMAT', () => ctx.DASHMAT); propTool('IN_MAT', () => ctx.IN_MAT);
             propTool('FILL', () => ctx.FILL); propTool('LITMAT', () => ctx.LITMAT); propTool('HITMAT', () => ctx.HITMAT);

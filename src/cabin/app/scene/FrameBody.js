@@ -263,22 +263,24 @@ ctx.kotatsuApi.tick(dt, time);
                 }
   })
 
-  // L543–L543（1 行）
-  F('frame/35', (dt, time) => {
-for (const f of ctx.candleWavy) {
-                    f.obj.visible = true;
-                    ctx.updateWavyFlame(f, time, 0.9 + 0.1 * Math.sin(time * 11));
-                }
-  })
-
   // ★ J4.38：原 L806 的 `frame/72`、L816 的 `frame/75`、L820 的 `frame/76` **三条已合并**
   //   进 `floor2/astro.js` 的 `update`（`magicP` 积分 + 两圈环自转 + 三颗辉光脉动）。
-  //   登记位置按 `J4.37` §3.3 的决定**前移到这里** —— 目的是让 `magicP` 的写入
-  //   **早于**它的全部读者（`veil` 的 `frame/73`、`candle` 的 `frame/74`、
+  //   登记位置按 `J4.37` §3.3 的决定**前移到这里**（即原 `frame/35` 的位置）—— 目的是让
+  //   `magicP` 的写入**早于**它的全部读者（`candle` 的 `frame/74`、`veil` 的 `frame/73`、
   //   `star-particles` 的 `frame/77`、以及 `frame/97` 里槽 6 光源的强度回调）
   //   ⇒ 读者拿到的仍是**本帧**值，与原实现逐帧等价（`J4.37` §3.4 判据 ①）。
   F('prop/astro', (dt, time) => {
 ctx.astroApi.tick(dt, time);
+  })
+
+  // ★ J4.39：蜡烛的四条帧任务（原 `frame/35` / `frame/70` / `frame/71` / `frame/74`）**已合并**
+  //   进 `floor2/candle.js` 的 `update`，登记在 `astro` 之后（`J4.37` §3.3 的组 9 顺序：
+  //   astro → candle → veil → star-particles），内部顺序保持 35 → 70 → 71 → 74 不变。
+  //   ⚠️ 本件是任务 D 到目前为止**帧任务最分散**的一件：`frame/35` 与 `frame/70` 相隔 **35 个**
+  //      帧任务。合并可行的依据：`candleWavy` 的**全部**读者都在本件内部（已 grep 全仓）。
+  //   它同时接管了光源**槽位 5**（`world/lights.js` 里那一行已随之删除）。
+  F('prop/candle', (dt, time) => {
+ctx.candleApi.tick(dt, time);
   })
 
   // L548–L548（1 行）
@@ -533,21 +535,8 @@ ctx.updateWobblers(dt);
 ctx.witchHatApi.tick(dt, time);
   })
 
-  // L797–L797（1 行）
-  F('frame/70', (dt, time) => {
-ctx.candleP += ((ctx.candleLit ? 1 : 0) - ctx.candleP) * 0.03;
-  })
-
-  // L798–L799（2 行）
-  F('frame/71', (dt, time) => {
-const candleVisible = ctx.candleP > 0.02;
-for (const f of ctx.candleWavy) {
-                    f.obj.visible = candleVisible;
-                    if (candleVisible) {
-                        ctx.updateWavyFlame(f, time, ctx.candleP * (0.9 + 0.1 * Math.sin(time * 9)));
-                    }
-                }
-  })
+  // L797–L797：原 `ctx.candleP += ((ctx.candleLit ? 1 : 0) - ctx.candleP) * 0.03;` —— J4.39 已移入 `prop/candle`
+  // L798–L799：原 `frame/71`（按 `candleP` 决定火苗可见性 + 强度）—— 同上
 
   // L806–L806：原 `ctx.magicP += ((ctx.magicOn ? 1 : 0) - ctx.magicP) * 0.012;`
   // J4.38 已移入 `prop/astro`（见上，登记点前移到 `frame/35` 之后）
@@ -555,17 +544,7 @@ for (const f of ctx.candleWavy) {
 ctx.veil.material.opacity = ctx.astroApi.state.magicP * 0.28;
   })
 
-  // L808–L808（1 行）
-  F('frame/74', (dt, time) => {
-{
-                    const flick = 0.9 + 0.1 * Math.sin(time * 9) + 0.04 * Math.sin(time * 23);
-                    const boost = 0.30 + 0.50 * ctx.astroApi.state.magicP;
-                    for (const cg of ctx.candleGlows) {
-                        cg.m.material.opacity = cg.maxOp * ctx.candleP * boost * flick;
-                        cg.m.scale.setScalar(1 + 0.05 * Math.sin(time * 9 + cg.maxOp * 10));
-                    }
-                }
-  })
+  // L808–L808：原 `frame/74`（三层辉光 + `boost = 0.30 + 0.50 * magicP`）—— J4.39 已移入 `prop/candle`
 
   // L816–L816：原 `if (ctx.magicP > 0.01) { spinG… innerG… }` —— J4.38 已移入 `prop/astro`
   // L820–L821：原 `glows[i].material.opacity = … * ctx.magicP * pulse` —— 同上
