@@ -23,6 +23,7 @@ import deskHourglass from './deskHourglass.js'
 import junkBoxes from './junkBoxes.js'
 import magicBook from './magicBook.js'
 import magicClock from './magicClock.js'
+import magicVeil from './magicVeil.js'
 import mirror from './mirror.js'
 import nightstand from './nightstand.js'
 import picture from './picture.js'
@@ -176,22 +177,15 @@ export function installFloor2(ctx, app) {
             /* ========================================================== */
             /* 18.6 二楼夜幕 */
             /* ========================================================== */
-            const veilShape = new THREE.Shape();
-            ctx.veilShape = veilShape;
-            veilShape.moveTo(-3.8, 0);
-            veilShape.lineTo(3.8, 0);
-            veilShape.lineTo(3.8, 1.35);
-            veilShape.lineTo(0.0, 3.20);
-            veilShape.lineTo(-3.8, 1.35);
-            veilShape.closePath();
-            const veilGeo = new THREE.ExtrudeGeometry(veilShape, { depth: 7.6, bevelEnabled: false });
-            ctx.veilGeo = veilGeo;
-            veilGeo.translate(0, 0, -3.8);
-            veilGeo.translate(0, ctx.FLOOR_TOP, 0);
-            const veil = new THREE.Mesh(veilGeo, new THREE.MeshBasicMaterial({ color: 0x5f5480, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
-            ctx.veil = veil;
-            veil.renderOrder = 4;
-            ctx.scene.add(veil);
+            /* 18.6 二楼夜幕（光源槽 6）*/
+            // J4.40：几何（五边形轮廓 + ExtrudeGeometry 挤出的大罩子）已搬入
+            // src/cabin/world/floor2/magicVeil.js，此处只留装配调用。
+            // ★ 本件没有交互（原 18.6 段没有任何 regMagic）—— 它随星象仪的开关一起明暗。
+            // ★ 它的唯一帧任务 frame/73 读 `magicP`（owner = astro）；本件在 18.6 装配，
+            //   晚于 18.5 的 astro ⇒ **直接注入 `astroApi`** 即可（不需要 candle 那种回填容器）。
+            // ★ 它同时接管了光源**槽位 6** —— world/lights.js 里那一行已随之删除，
+            //   那个文件从此**不再持有任何 register 调用**（批 2 收尾）。
+            ctx.magicVeilApi = ctx.installProp(magicVeil, { ctx: { astroApi } });
 
             /* ========================================================== */
             /* 18.7 宇宙星空粒子系统 */
