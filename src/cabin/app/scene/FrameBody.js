@@ -552,51 +552,13 @@ ctx.magicVeilApi.tick(dt, time);
   // L816–L816：原 `if (ctx.magicP > 0.01) { spinG… innerG… }` —— J4.38 已移入 `prop/astro`
   // L820–L821：原 `glows[i].material.opacity = … * ctx.magicP * pulse` —— 同上
 
-  // L825–L826（2 行）
-  F('frame/77', (dt, time) => {
-const partsOn = ctx.astroApi.state.magicP > 0.02;
-for (const g of ctx.magicParts) {
-                    g.visible = partsOn;
-                    if (!partsOn) continue;
-                    const b = g.userData.p;
-                    const th = time * b.sp + b.ph;
-                    g.position.set(
-                        b.cx + Math.sin(th * 0.6) * 0.15,
-                        b.y0 + Math.sin(th) * b.bob,
-                        b.cz + Math.cos(th * 0.5) * 0.12
-                    );
-                    g.rotation.y += b.rs;
-                    let tw;
-                    if (g.userData.vivid) {
-                        tw = Math.max(0.05, Math.pow(Math.abs(Math.sin(time * 3.4 + b.ph * 11)), 2.5) * 1.25);
-                    } else if (g.userData.sharp) {
-                        tw = Math.max(0.12, Math.pow(Math.abs(Math.sin(time * 2.2 + b.ph * 7)), 3) * 1.15);
-                    } else if (g.userData.nebula) {
-                        tw = 0.75 + 0.25 * Math.sin(time * 0.8 + b.ph * 3);
-                    } else {
-                        tw = 0.7 + 0.4 * Math.sin(time * 2.0 + b.ph * 5);
-                    }
-                    g.scale.setScalar(Math.max(0.001, ctx.astroApi.state.magicP * (0.8 + 0.35 * tw)));
-                    if (g.userData.halo) {
-                        g.userData.halo.h1.material.opacity = g.userData.halo.opIn * tw * ctx.astroApi.state.magicP;
-                        g.userData.halo.h2.material.opacity = g.userData.halo.opOut * tw * ctx.astroApi.state.magicP;
-                    }
-                    if (g.userData.spikes) {
-                        g.userData.spikes.opacity = 0.85 * tw * ctx.astroApi.state.magicP;
-                    }
-                    if (g.userData.cluster) {
-                        for (const c of g.userData.cluster) {
-                            const a = time * 0.5 + c.ph;
-                            c.g.position.set(Math.cos(a) * 0.030, Math.sin(a * 0.8) * 0.008, Math.sin(a) * 0.030);
-                        }
-                    }
-                    if (g.userData.tails) {
-                        for (const tl of g.userData.tails) {
-                            tl.m.material.opacity = (0.5 / tl.s) * tw * ctx.astroApi.state.magicP;
-                            tl.m.position.set(-Math.sin(th) * 0.045 * tl.s, -Math.cos(th * 0.5) * 0.018 * tl.s, 0);
-                        }
-                    }
-                }
+  // ★ J4.41：原 `frame/77`（96 颗星的位置/自转/闪烁/`halo`/`spikes`/`cluster`/`tails`，
+  //   约 45 行）已并入 `floor2/starParticles.js` 的 `update`。登记在 `prop/magicVeil` 之后
+  //   （`J4.37` §3.3 的组 9 顺序 astro → candle → veil → star-particles）；
+  //   它读的 `magicP` 由最前面的 `prop/astro` 写入 ⇒ 拿到的是**本帧**值（判据 ①）。
+  //   ⇒ ★ 组 9 的四件到此全部就位。
+  F('prop/starParticles', (dt, time) => {
+ctx.starParticlesApi.tick(dt, time);
   })
 
   // L868–L868（1 行）
