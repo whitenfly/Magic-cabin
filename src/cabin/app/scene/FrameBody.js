@@ -271,6 +271,16 @@ for (const f of ctx.candleWavy) {
                 }
   })
 
+  // ★ J4.38：原 L806 的 `frame/72`、L816 的 `frame/75`、L820 的 `frame/76` **三条已合并**
+  //   进 `floor2/astro.js` 的 `update`（`magicP` 积分 + 两圈环自转 + 三颗辉光脉动）。
+  //   登记位置按 `J4.37` §3.3 的决定**前移到这里** —— 目的是让 `magicP` 的写入
+  //   **早于**它的全部读者（`veil` 的 `frame/73`、`candle` 的 `frame/74`、
+  //   `star-particles` 的 `frame/77`、以及 `frame/97` 里槽 6 光源的强度回调）
+  //   ⇒ 读者拿到的仍是**本帧**值，与原实现逐帧等价（`J4.37` §3.4 判据 ①）。
+  F('prop/astro', (dt, time) => {
+ctx.astroApi.tick(dt, time);
+  })
+
   // L548–L548（1 行）
   // J4.19：左墙书架已升格为 `world/floor1/bookshelf.js`，那段 `for (const b of shelfBooks)` 搬进它的
   //   `update()`。这里**在原位置**调用（登记顺序 = 原执行顺序，帧顺序一个字节没变）。
@@ -539,21 +549,17 @@ for (const f of ctx.candleWavy) {
                 }
   })
 
-  // L806–L806（1 行）
-  F('frame/72', (dt, time) => {
-ctx.magicP += ((ctx.magicOn ? 1 : 0) - ctx.magicP) * 0.012;
-  })
-
-  // L807–L807（1 行）
+  // L806–L806：原 `ctx.magicP += ((ctx.magicOn ? 1 : 0) - ctx.magicP) * 0.012;`
+  // J4.38 已移入 `prop/astro`（见上，登记点前移到 `frame/35` 之后）
   F('frame/73', (dt, time) => {
-ctx.veil.material.opacity = ctx.magicP * 0.28;
+ctx.veil.material.opacity = ctx.astroApi.state.magicP * 0.28;
   })
 
   // L808–L808（1 行）
   F('frame/74', (dt, time) => {
 {
                     const flick = 0.9 + 0.1 * Math.sin(time * 9) + 0.04 * Math.sin(time * 23);
-                    const boost = 0.30 + 0.50 * ctx.magicP;
+                    const boost = 0.30 + 0.50 * ctx.astroApi.state.magicP;
                     for (const cg of ctx.candleGlows) {
                         cg.m.material.opacity = cg.maxOp * ctx.candleP * boost * flick;
                         cg.m.scale.setScalar(1 + 0.05 * Math.sin(time * 9 + cg.maxOp * 10));
@@ -561,26 +567,12 @@ ctx.veil.material.opacity = ctx.magicP * 0.28;
                 }
   })
 
-  // L816–L816（1 行）
-  F('frame/75', (dt, time) => {
-if (ctx.magicP > 0.01) {
-                    ctx.spinG.rotation.y += 0.020 * ctx.magicP;
-                    ctx.innerG.rotation.y -= 0.008 * ctx.magicP;
-                }
-  })
-
-  // L820–L821（2 行）
-  F('frame/76', (dt, time) => {
-const pulse = 0.8 + 0.2 * Math.sin(time * 2.4);
-for (let i = 0; i < ctx.glows.length; i++) {
-                    ctx.glows[i].material.opacity = ctx.glows[i].userData.maxOp * ctx.magicP * pulse;
-                    ctx.glows[i].scale.setScalar(1 + 0.06 * Math.sin(time * 2.4 + i * 1.1));
-                }
-  })
+  // L816–L816：原 `if (ctx.magicP > 0.01) { spinG… innerG… }` —— J4.38 已移入 `prop/astro`
+  // L820–L821：原 `glows[i].material.opacity = … * ctx.magicP * pulse` —— 同上
 
   // L825–L826（2 行）
   F('frame/77', (dt, time) => {
-const partsOn = ctx.magicP > 0.02;
+const partsOn = ctx.astroApi.state.magicP > 0.02;
 for (const g of ctx.magicParts) {
                     g.visible = partsOn;
                     if (!partsOn) continue;
@@ -602,13 +594,13 @@ for (const g of ctx.magicParts) {
                     } else {
                         tw = 0.7 + 0.4 * Math.sin(time * 2.0 + b.ph * 5);
                     }
-                    g.scale.setScalar(Math.max(0.001, ctx.magicP * (0.8 + 0.35 * tw)));
+                    g.scale.setScalar(Math.max(0.001, ctx.astroApi.state.magicP * (0.8 + 0.35 * tw)));
                     if (g.userData.halo) {
-                        g.userData.halo.h1.material.opacity = g.userData.halo.opIn * tw * ctx.magicP;
-                        g.userData.halo.h2.material.opacity = g.userData.halo.opOut * tw * ctx.magicP;
+                        g.userData.halo.h1.material.opacity = g.userData.halo.opIn * tw * ctx.astroApi.state.magicP;
+                        g.userData.halo.h2.material.opacity = g.userData.halo.opOut * tw * ctx.astroApi.state.magicP;
                     }
                     if (g.userData.spikes) {
-                        g.userData.spikes.opacity = 0.85 * tw * ctx.magicP;
+                        g.userData.spikes.opacity = 0.85 * tw * ctx.astroApi.state.magicP;
                     }
                     if (g.userData.cluster) {
                         for (const c of g.userData.cluster) {
@@ -618,7 +610,7 @@ for (const g of ctx.magicParts) {
                     }
                     if (g.userData.tails) {
                         for (const tl of g.userData.tails) {
-                            tl.m.material.opacity = (0.5 / tl.s) * tw * ctx.magicP;
+                            tl.m.material.opacity = (0.5 / tl.s) * tw * ctx.astroApi.state.magicP;
                             tl.m.position.set(-Math.sin(th) * 0.045 * tl.s, -Math.cos(th * 0.5) * 0.018 * tl.s, 0);
                         }
                     }

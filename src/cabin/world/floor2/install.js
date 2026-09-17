@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import bag from './bag.js'
 import bin from './bin.js'
+import astro from './astro.js'
 import calendar from './calendar.js'
 import cardDeck from './cardDeck.js'
 import coinTowers from './coinTowers.js'
@@ -46,7 +47,9 @@ export function installFloor2(ctx, app) {
             // ★ J4.36：`getGlyphTex` / `spawnGlyphs` / `updateGlyphs` / `updateBook` 四项已从本行**移除** ——
             //   它们随 18.4 魔法书本整段搬进了 `floor2/magicBook.js`（成为该物件 `update` 的内部实现），
             //   搬前已 grep 全仓确认**无任何外部读者**（`FrameBody.js` 的两处 tick 改走本物件的 `update`）。
-            ctx.makeCandleGlow = makeCandleGlow; ctx.glowBall = glowBall;
+            // ★ J4.38：`glowBall` 也已从本行**移除** —— 它是 18.5 星象仪的局部工厂，
+            //   已随该段搬进 `floor2/astro.js` 的 `build` 闭包。搬前已 grep 全仓确认无外部读者。
+            ctx.makeCandleGlow = makeCandleGlow;
             ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
@@ -167,50 +170,15 @@ export function installFloor2(ctx, app) {
             const magicBookApi = ctx.installProp(magicBook);
             ctx.magicBookApi = magicBookApi;
 
-            /* ========================================================== */
             /* 18.5 星象仪 */
-            /* ========================================================== */
-            ctx.magicOn = false, ctx.magicP = 0;
-            const GOLD = new THREE.LineBasicMaterial({ color: 0xc9a227 });
-            ctx.GOLD = GOLD;
-            const GOLDL = new THREE.LineBasicMaterial({ color: 0xb8912a });
-            ctx.GOLDL = GOLDL;
-            const astro = new THREE.Group();
-            ctx.astro = astro;
-            astro.position.set(1.75, ctx.TBL_TOP, -2.72);
-            ctx.scene.add(astro);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.15, 0.19, 0.09, 10)), 0, 0.045, 0, 0, 0, 0, astro);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.085, 0.16, 8)), 0, 0.17, 0, 0, 0, 0, astro);
-            ctx.put(ctx.edge(new THREE.SphereGeometry(0.04, 8, 6)), 0, 0.265, 0, 0, 0, 0, astro);
-            const tiltG = new THREE.Group();
-            ctx.tiltG = tiltG;
-            tiltG.position.y = 0.30;
-            tiltG.rotation.z = 0.41;
-            astro.add(tiltG);
-            const spinG = new THREE.Group();
-            ctx.spinG = spinG;
-            spinG.position.y = 0.16;
-            tiltG.add(spinG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.011, 0.011, 0.60, 6)), 0, 0, 0, 0, 0, 0, spinG);
-            ctx.put(ctx.edge(new THREE.SphereGeometry(0.062, 10, 8), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
-            ctx.put(ctx.edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, Math.PI / 2, spinG);
-            ctx.put(ctx.edge(new THREE.TorusGeometry(0.27, 0.011, 6, 34), 1, GOLD), 0, 0, 0, 0, 0, 0, spinG);
-            const innerG = new THREE.Group();
-            ctx.innerG = innerG;
-            spinG.add(innerG);
-            ctx.put(ctx.edge(new THREE.TorusGeometry(0.21, 0.009, 6, 28), 1, GOLDL), 0, 0, 0, Math.PI / 3, 0, Math.PI / 4, innerG);
-            ctx.put(ctx.edge(new THREE.TorusGeometry(0.15, 0.008, 6, 24), 1, GOLDL), 0, 0, 0, Math.PI / 2, 0.8, 0, innerG);
-
-            function glowBall(r, op) {
-                const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-                m.renderOrder = 9;
-                m.userData.maxOp = op;
-                spinG.add(m);
-                return m;
-            }
-            const glows = [glowBall(0.10, 0.55), glowBall(0.20, 0.28), glowBall(0.34, 0.12)];
-            ctx.glows = glows;
-            ctx.regMagic(astro, () => { ctx.magicOn = !ctx.magicOn; });
+            // J4.38：几何已搬入 src/cabin/world/floor2/astro.js，此处只留装配调用。
+            // ★ 本件是组 9 的 **`magicP` owner** —— `veil`（frame/73）与 `candle`（frame/74）
+            //   经装配选项注入取用它（`installProp(veil, { ctx: { astroApi } })`），
+            //   手法与 J4.34 的 `installProp(teapot, { ctx: { cupFactory } })` 一致。
+            //   本件原有三条**不相邻**的帧任务（frame/72 / 75 / 76）已合并进它的 `update`，
+            //   并登记在组 9 的**最前**（J4.37 §3.3 决定的顺序 astro → candle → veil → stars）。
+            const astroApi = ctx.installProp(astro);
+            ctx.astroApi = astroApi;
 
             /* ========================================================== */
             /* 18.6 二楼夜幕 */
