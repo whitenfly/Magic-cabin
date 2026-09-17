@@ -87,7 +87,9 @@ ctx.lightField = lightField;
 // ★ J4.25：槽位 4（`floor1/crystal-ball`）**已搬走** —— 由 `world/floor1/crystalBall.js`
 //   的 `lights()` 声明（`slot: 4` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
-lightField.register(createPointLightSource({ id: 'floor2/candle', slot: 5, position: [ctx.NSX, ctx.FY + 1.00, ctx.NSZ], color: 0xffc06a, radius: 3.6, strength: () => ctx.candleP, yMin: 3.02, yMax: 6.9 }));
+// ★ J4.39：槽位 5（`floor2/candle`）**已搬走** —— 由 `world/floor2/candle.js` 的 `lights()` 声明
+//   （`slot: 5` + 同样的位置/颜色/半径/yMin/yMax/id），强度读物件自己的 `state.candleP`。
+//   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // ★ J4.23：槽位 7（`floor1/moon-plant`）**已搬走** —— 同样由 `world/floor1/moonPlant.js`
 //   的 `lights()` 声明（`slot: 7` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。

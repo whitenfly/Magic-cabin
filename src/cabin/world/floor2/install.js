@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import bag from './bag.js'
 import bin from './bin.js'
 import astro from './astro.js'
+import candle from './candle.js'
 import calendar from './calendar.js'
 import cardDeck from './cardDeck.js'
 import coinTowers from './coinTowers.js'
@@ -49,7 +50,12 @@ export function installFloor2(ctx, app) {
             //   搬前已 grep 全仓确认**无任何外部读者**（`FrameBody.js` 的两处 tick 改走本物件的 `update`）。
             // ★ J4.38：`glowBall` 也已从本行**移除** —— 它是 18.5 星象仪的局部工厂，
             //   已随该段搬进 `floor2/astro.js` 的 `build` 闭包。搬前已 grep 全仓确认无外部读者。
-            ctx.makeCandleGlow = makeCandleGlow;
+            // ★ J4.39：`ctx.makeCandleGlow` 也已**移除** —— 它是 18.3 蜡烛的局部工厂，已随该段
+            //   搬进 `floor2/candle.js` 的 `build` 闭包。搬前已 grep 全仓确认无外部读者。
+            //   ⇒ ★ **这几行原有的 6 项悬空导出已全部清空**
+            //     （J4.36 删 4 项 · J4.38 删 `glowBall` · 本件删 `makeCandleGlow`）
+            //     —— 这一类"段导出悬空"的存量债**首次归零**：从此每搬一件只减不增。
+            //   （下方仍保留的是**其它段**的导出 —— 与已搬走的物件无关。）
             ctx.addHalo = addHalo; ctx.drawBoardFace = drawBoardFace; ctx.drawNote = drawNote; ctx.openNoteEditor = openNoteEditor; ctx.drawGlyphSet = drawGlyphSet; ctx.updateChalk = updateChalk;
             ctx.scrollRoll = scrollRoll; ctx.woodPart = woodPart; ctx.wandGlowSphere = wandGlowSphere; ctx.ringPts2 = ringPts2; ctx.polyPts2 = polyPts2; ctx.starPts2 = starPts2;
             // ⚠️ J4.31：原来的 `ctx.hash01 = hash01; ctx.jitterGeo = jitterGeo;` 两个分句已删除 ——
@@ -93,38 +99,23 @@ export function installFloor2(ctx, app) {
             /* ---- 18.2 床头柜 + 可拉开抽屉 ---- */
             // J3（B2）：几何已搬入 src/cabin/world/floor2/nightstand.js，此处只留装配调用。
             ctx.installProp(nightstand);
-            /* ---- 18.3 蜡烛 ---- */
-            ctx.candleLit = true, ctx.candleP = 1;
-            const candleG = new THREE.Group();
-            ctx.candleG = candleG;
-            candleG.position.set(ctx.NSX, ctx.FY + 0.60, ctx.NSZ);
-            ctx.scene.add(candleG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.055, 0.075, 0.05, 10)), 0, 0.025, 0, 0, 0, 0, candleG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.016, 0.016, 0.09, 8)), 0, 0.09, 0, 0, 0, 0, candleG);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.05, 0.06, 0.035, 10)), 0, 0.155, 0, 0, 0, 0, candleG);
-            const candleBody = ctx.edge(new THREE.CylinderGeometry(0.035, 0.038, 0.20, 10));
-            ctx.candleBody = candleBody;
-            candleBody.position.set(0, 0.27, 0);
-            candleG.add(candleBody);
-            ctx.put(ctx.edge(new THREE.CylinderGeometry(0.006, 0.006, 0.035, 6)), 0, 0.385, 0, 0, 0, 0, candleG);
-            const candleWavy = [];
-            ctx.candleWavy = candleWavy;
-            ctx.makeWavyFlame(ctx.NSX, ctx.NSZ, ctx.FY + 1.00, 0.12, 0.034, ctx.fireMid, 0.0, 3.2, candleWavy);
-            ctx.makeWavyFlame(ctx.NSX, ctx.NSZ, ctx.FY + 1.02, 0.07, 0.016, ctx.fireIn, 2.0, 3.8, candleWavy);
-            ctx.regMagic(candleG, () => { ctx.candleLit = !ctx.candleLit; });
-            const candleGlows = [];
-            ctx.candleGlows = candleGlows;
+            /* ---- 18.3 蜡烛（光源槽 5）---- */
+            // ★ J4.39：`astroRef` 是**可变引用容器** —— 本件（18.3）的装配位置在星象仪（18.5）
+            //   **之前**，此处还拿不到 `astroApi`；而装配位置**不能移**（它会决定 candle 几何
+            //   的 `scene.add` 次序，进而影响渲染顺序 ⇒ 画面会变）。
+            //   ⇒ 先给一个空容器，等 18.5 装好 astro 之后再回填 `astroRef.api`
+            //     （`update` 每帧才读它，第一帧时两件都已装配完毕）。
+            const astroRef = { api: null };
+            // J4.39：几何 + 两支火苗 + 三层辉光 + 四条帧任务已全部搬入
+            // src/cabin/world/floor2/candle.js，此处只留装配调用。
+            // ★ 本件是任务 D 到目前为止**帧任务最分散**的一件：原 frame/35（L266）与
+            //   frame/70（L528）相隔 **35 个帧任务**（另有 frame/71、frame/74），
+            //   四条已合并进它的 `update`，登记在 `astro` 之后（J4.37 §3.3 的组 9 顺序）。
+            // ★ 它同时接管了光源**槽位 5** —— world/lights.js 里那一行已随之删除。
+            // ⚠️ `frame/74` 的 `boost` 读组 9 的共享状态轴 `magicP`（owner = astro）⇒
+            //   经**装配选项**注入 `astroApi`（与 J4.34 的 cupFactory 同一手法）。
+            ctx.candleApi = ctx.installProp(candle, { ctx: { astroRef } });
 
-            function makeCandleGlow(r, op, col) {
-                const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-                m.position.set(ctx.NSX, ctx.FY + 1.02, ctx.NSZ);
-                m.renderOrder = 8;
-                ctx.scene.add(m);
-                candleGlows.push({ m: m, maxOp: op });
-            }
-            makeCandleGlow(0.045, 0.55, 0xfff0c0);
-            makeCandleGlow(0.10, 0.28, 0xffc06a);
-            makeCandleGlow(0.18, 0.12, 0xff9a3c);
 
             /* ---- 18.4 书桌 + 椅子 + 桌面玩具 ---- */
             // J3（B5）：几何已搬入 src/cabin/world/floor2/desk.js，此处只留装配调用。
@@ -179,6 +170,8 @@ export function installFloor2(ctx, app) {
             //   并登记在组 9 的**最前**（J4.37 §3.3 决定的顺序 astro → candle → veil → stars）。
             const astroApi = ctx.installProp(astro);
             ctx.astroApi = astroApi;
+            // ★ J4.39：回填 18.3 蜡烛那个可变容器 —— `candle` 的 `frame/74` 要读 `magicP`（本件的 state）
+            astroRef.api = astroApi;
 
             /* ========================================================== */
             /* 18.6 二楼夜幕 */
