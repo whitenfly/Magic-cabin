@@ -680,7 +680,22 @@ ctx.renderer.render(ctx.scene, ctx.camera);
   })
 
   // L907–L907（1 行）
+  // ★ J4.50（R4a）：**两条驱动路径合并到这一处** —— 装饰循环（时钟 / 镜子涟漪 / 挂画 GIF / 纸箱）
+  //   原来有两条：realtime 走 `world/floor2/install.js` 里自驱动的 `decorLoop()`（rAF），
+  //   manual 走这里。现在统一由 `UpdateScheduler` 的 `frame/101` 驱动，`decorLoop()` 已删除。
   F('frame/101', (dt, time) => {
-if (clock.mode === 'manual') ctx.updateNewDecor(time, dt);
+if (clock.mode === 'manual') {
+  // manual：逐帧定格（像素回归靠它）—— 与合并前**一字不变**
+  ctx.updateNewDecor(time, dt);
+} else {
+  // realtime：**逐字沿用**原 `decorLoop` 的节流语义 —— `dt` 仍取自 `performance.now()` 差值
+  //   （与 `clock.dt` 解耦、下限 0.001、上限 0.05）。这是 `J4.27` §6.3 定的合并条件之一。
+  // ⚠️ 不能直接用调度器给的 `dt`/`time`：那是 `clock.dt` / `clock.now`，**没有 0.001 下限**，
+  //    且与装饰循环原来的时间源不同源 —— 直接换会改变每帧推进量。
+  const t = performance.now() * 0.001;
+  const d = Math.min(0.05, Math.max(0.001, t - ctx.decorLastT));
+  ctx.decorLastT = t;
+  ctx.updateNewDecor(t, d);
+}
   })
 }

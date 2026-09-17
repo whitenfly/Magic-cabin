@@ -36,7 +36,8 @@ import wand from './wand.js'
 import tissueBox from './tissueBox.js'
 import wardrobe from './wardrobe.js'
 import witchHat from './witchHat.js'
-import { clock } from '../../app/clock.js'
+// ★ J4.50：`import { clock }` 已删除 —— 删掉 `decorLoop()` 之后，本文件不再有 `clock` 的使用者
+// （原来只有 `decorLoop` 里那处 `clock.mode === 'manual'` 判断，现已搬进 `FrameBody` 的 `frame/101`）。
 import { runtime, scene } from '../../app/rng.js'
 // ★ J4.31：`smooth` / `hash01` / `jitterGeo` 原先**定义在本文件的两个分区里**
 //   （18.8 计划板 / 18.9 魔法杖），已提取到 `core/`（见 core/math/easing.js 与
@@ -447,21 +448,10 @@ export function installFloor2(ctx, app) {
             //    `verify-f03.mjs` 的断言对象（那条约束**已过时**：该脚本第 ⑥ 项检查的是
             //    **F0.3 完成时的快照**，不是当前文件 —— 实测本任务全程 `verify` 全绿）。
             ctx.mirrorDirtyT = 0;
-            // F0.3：装饰循环（时钟 / 镜子涟漪 / 挂画 GIF / 纸箱）
-            //   realtime：沿用 performance.now()，行为与改动前完全一致
-            //   manual  ：读 clock.now / clock.dt，跟随手动步进（由主循环驱动，见 tickOnce 末尾）
-            // ★ J4.27：**这两条路径是有意保留的，不是遗漏** —— realtime 下 `dt` 来自
-            //   `performance.now()` 差值（与 `clock.dt` 解耦，是节流语义的一部分），
-            //   manual 下由 `FrameBody` 的 `frame/101` 驱动（逐帧定格，像素回归靠它）。
-            //   合并成一条路径需要同时满足"realtime 节流不变"与"manual 定格不变"，
-            //   属于**主循环收口的剩余项**，与 `magic-clock` 的升格耦合（见 J4.27 §6）。
-            (function decorLoop() {
-                requestAnimationFrame(decorLoop);
-                if (clock.mode === 'manual') return;   // 手动模式由 tickOnce 负责调用
-                const t = performance.now() * 0.001;
-                const dt = Math.min(0.05, Math.max(0.001, t - ctx.decorLastT));
-                ctx.decorLastT = t;
-                updateNewDecor(t, dt);
-            })();
+            // ★ J4.50（R4a）：原来这里的 `decorLoop()`（rAF 自驱动）**已删除** —— 两条驱动路径
+            //   现在合并到 `app/scene/FrameBody.js` 的 `frame/101`，即 `UpdateScheduler` 的档位。
+            //   搬迁时**逐字保留**了 realtime 的节流语义（`performance.now()` 差值 / 下限 0.001 /
+            //   上限 0.05）与 manual 的逐帧语义 ⇒ `J4.27` §6.3 定的两个合并条件都满足。
+            //   `ctx.decorLastT`（上面一行）仍由 realtime 分支使用，故保留。
             /* ============ 便签编辑器（二楼计划板） ============ */
 }
