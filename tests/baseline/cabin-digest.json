@@ -5,9 +5,9 @@
   "recordedAt": "2026-09-17",
   "totals": {
     "files": 118,
-    "lines": 20381
+    "lines": 20386
   },
-  "combined": "f9d35d3568c52d8123f807ed8c7ecee2cf5ee8ec4bc89ae202be28b66338ba1e",
+  "combined": "2701c4bc59cd7aa4ae2433b92e314daf9055f2543fb8a04f849ead9688965a7d",
   "files": {
     "app/App.js": "c142ba42c121d29d",
     "app/clock.js": "bf08267716714873",
@@ -20,7 +20,7 @@
     "app/Registry.js": "f5581edbda888fc2",
     "app/rng.js": "94de1f9a190259dd",
     "app/scene/Env.js": "024ab5e8b80745f9",
-    "app/scene/FrameBody.js": "831325ed2761b53e",
+    "app/scene/FrameBody.js": "e6b4f66d1f2a8efc",
     "app/scene/installCabin.js": "afcfbe7e73fbe813",
     "app/scene/PropInstaller.js": "823db08626a503af",
     "app/scene/SceneCore.js": "908bb049d736ec30",
@@ -104,7 +104,7 @@
     "world/floor2/desk.js": "3812a993d0dad740",
     "world/floor2/deskChair.js": "688ca1eb4509fcb2",
     "world/floor2/deskHourglass.js": "1feabafaac6c450c",
-    "world/floor2/install.js": "2bf0d57fadde5a90",
+    "world/floor2/install.js": "ea02faba6435049f",
     "world/floor2/junkBoxes.js": "d65dea2078e7c424",
     "world/floor2/magicBook.js": "a9280261f4de49fb",
     "world/floor2/magicClock.js": "28646b2b723e10f1",
