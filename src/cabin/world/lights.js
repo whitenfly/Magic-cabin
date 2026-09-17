@@ -93,11 +93,13 @@ ctx.lightField = lightField;
 // ★ J4.23：槽位 7（`floor1/moon-plant`）**已搬走** —— 同样由 `world/floor1/moonPlant.js`
 //   的 `lights()` 声明（`slot: 7` + 同样的位置/颜色/半径/yMin/yMax），强度读物件自己的 `state.pt`。
 //   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
-// ★ J4.38：槽位 6 的强度改读 **物件自己的 state** —— `magicP` 已随 18.5 星象仪搬进
-//   `world/floor2/astro.js`（它是组 9 的 `magicP` owner，见该模块文件头与 J4.37 §1.1）。
-//   ⚠️ 本行仍在 `lights.js` 里（`veil` 尚未搬走）；等 `floor2/magic-veil` 升格时，
-//      本行会收进它的 `lights()` 声明（`slot: 6` + 同样的位置/颜色/半径/yMin/yMax）。
-lightField.register(createPointLightSource({ id: 'floor2/magic-veil', slot: 6, position: [1.75, ctx.TBL_TOP + 0.52, -2.72], color: 0xffe08a, radius: 4.6, strength: () => ctx.astroApi.state.magicP, yMin: 3.02, yMax: 6.9 }));
+// ★ J4.40：槽位 6（`floor2/magic-veil`）**已搬走** —— 这是本文件里**最后一行** `register`。
+//   现在全部 8 个槽位（0–7）都由各自的物件经 `lights()` 声明：
+//     slot 0 floor1/hanging-lantern · 1 floor1/cauldron-fire · 2 floor1/magic-circle
+//     slot 3 floor1/kotatsu        · 4 floor1/crystal-ball  · 5 floor2/candle
+//     slot 6 floor2/magic-veil     · 7 floor1/moon-plant
+//   ⇒ ★ **批 2（六件含光源件）到此收尾**：本文件不再持有任何 `lightField.register` 调用。
+//   ⚠️ 不要在这里补回 —— 会与物件声明的槽位冲突。
 // 同步登记到应用内核（J2.5 的注册中心）—— 进度可视化的「已登记 PointLightSource 数 ≥ 8」读它
 // `if (src)`：注销会**留洞**（`unregister` 用 delete 而非 splice，见 LightField.js），洞要跳过
 for (const src of lightField.sources) if (src) registry.registerLight(src);

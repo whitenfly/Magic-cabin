@@ -538,10 +538,13 @@ ctx.witchHatApi.tick(dt, time);
   // L797–L797：原 `ctx.candleP += ((ctx.candleLit ? 1 : 0) - ctx.candleP) * 0.03;` —— J4.39 已移入 `prop/candle`
   // L798–L799：原 `frame/71`（按 `candleP` 决定火苗可见性 + 强度）—— 同上
 
-  // L806–L806：原 `ctx.magicP += ((ctx.magicOn ? 1 : 0) - ctx.magicP) * 0.012;`
-  // J4.38 已移入 `prop/astro`（见上，登记点前移到 `frame/35` 之后）
-  F('frame/73', (dt, time) => {
-ctx.veil.material.opacity = ctx.astroApi.state.magicP * 0.28;
+  // ★ J4.40：原 `frame/73`（`ctx.veil.material.opacity = magicP * 0.28`）已并入
+  //   `floor2/magicVeil.js` 的 `update`。登记在 `prop/candle` 之后（`J4.37` §3.3 的组 9 顺序
+  //   astro → candle → veil → star-particles）；它读的 `magicP` 由更前面的 `prop/astro` 写入
+  //   ⇒ 拿到的是**本帧**值（判据 ①）。
+  //   ★ 本件同时接管了光源**槽位 6** ⇒ `world/lights.js` 从此**不再持有任何 register 调用**。
+  F('prop/magicVeil', (dt, time) => {
+ctx.magicVeilApi.tick(dt, time);
   })
 
   // L808–L808：原 `frame/74`（三层辉光 + `boost = 0.30 + 0.50 * magicP`）—— J4.39 已移入 `prop/candle`
